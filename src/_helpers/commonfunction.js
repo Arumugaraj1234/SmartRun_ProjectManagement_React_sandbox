@@ -1,0 +1,25 @@
+const dateformatter = date => {
+  let today = new Date(date)
+  let dd = today.getDate()
+
+  let mm = today.getMonth() + 1
+  const yyyy = today.getFullYear()
+  if (dd < 10) {
+    dd = `0${dd}`
+  }
+
+  if (mm < 10) {
+    mm = `0${mm}`
+  }
+  today = `${yyyy}-${mm}-${dd}`
+
+  return today
+}
+export default dateformatter
+
+const formatWithTwoDigit = inputNum => {
+  return !Number.isNaN(Number(inputNum))
+    ? Number(inputNum).toLocaleString(undefined, { maximumFractionDigits: 2 })
+    : inputNum
+}
+export { formatWithTwoDigit }

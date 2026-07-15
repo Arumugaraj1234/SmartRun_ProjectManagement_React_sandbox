@@ -1,0 +1,22 @@
+.custom-card .ant-card-body {
+  padding: 8px;
+}
+.ant-input:disabled,
+.ant-input-disabled,
+.ant-select:disabled .ant-select-selector,
+.ant-select-disabled .ant-select-selector,
+.ant-picker-disabled .ant-picker-input,
+.ant-picker-disabled .ant-picker-input > input,
+.ant-select-disabled .ant-input-affix-wrapper .ant-input {
+  color: black !important;
+}
+.ant-select-disabled .ant-select-selector .ant-select-selection-placeholder {
+  color: black !important;
+}
+
+.ant-select-disabled .ant-select-selector input[disabled] {
+  color: black !important;
+}
+input[disabled] {
+  color: black !important;
+}

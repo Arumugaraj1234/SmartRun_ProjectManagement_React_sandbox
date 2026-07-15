@@ -1,0 +1,7 @@
+@import 'components/mixins.scss';
+
+@media (max-width: 375px) {
+  .Chart {
+    width: 100%;
+  }
+}

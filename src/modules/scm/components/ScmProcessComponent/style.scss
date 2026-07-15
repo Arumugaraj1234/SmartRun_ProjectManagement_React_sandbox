@@ -1,0 +1,15 @@
+@media (max-width: 766px) {
+  .Project_Details {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .Project_Details div {
+    display: inline-block;
+    margin-right: 10px;
+    white-space: normal;
+    vertical-align: top;
+  }
+}

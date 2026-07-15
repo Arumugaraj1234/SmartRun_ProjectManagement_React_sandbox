@@ -1,0 +1,138 @@
+.app {
+    text-align: center;
+    padding: 0px;
+    font-family: Arial, sans-serif;
+  }
+  
+  .dashboard-metrics {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 20px;
+    height:9rem
+  }
+
+  
+  
+  .dashboard-metric {
+    background-color: #ccc;
+    color: black;
+    padding: 20px;
+    width: 300px;
+    border-radius: 5px;
+    text-align: center;
+    box-shadow: rgba(0, 0, 0, 0.25) 0px 14px 28px, rgba(0, 0, 0, 0.22) 0px 10px 10px;
+  }
+  
+  .metric-title {
+    font-size: 14px;
+    margin-bottom: 10px;
+  }
+
+  .metric-icon {
+    font-size: 70px;
+    margin-right: 10px;
+  }
+  
+  .metric-value {
+    font-size: 24px;
+    font-weight: bold;
+  }
+  
+  .metric-unit {
+    font-size: 14px;
+    margin-top: 5px;
+  }
+  
+  .dashboard-tables {
+    display: flex;
+    justify-content: space-around;
+  }
+  
+  .dashboard-table {
+    width: 45%;
+    text-align: left;
+  }
+  
+  .dashboard-metric .box2 {
+    background-image: linear-gradient( 135deg, #2AFADF 10%, #4C83FF 100%);
+  }
+  
+  .dashboard-metric .box3 {
+    background-image: linear-gradient( 135deg, #FFD3A5 10%, #FD6585 100%);
+  }
+  
+  .dashboard-metric .box4 {
+    background-image: linear-gradient( 135deg, #EE9AE5 10%, #5961F9 100%);
+  }
+
+  .table-title {
+    background-color: #002060;
+    color: white;
+    padding: 10px;
+    font-size: 18px;
+    text-align: center;
+  }
+  
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  th, td {
+    border: 1px solid #ccc;
+    padding: 8px;
+  }
+  
+  .ant-table-thead > tr > th {
+    color: black !important;
+    font-weight: bold !important;
+    padding: 8px 12px !important;
+    font-size: 15px !important;
+    height: 30px !important;
+    line-height: 1 !important;
+  }
+
+  .tableheight {
+    height: 320px;
+  }
+
+  .tableheight {
+    margin-top: 10px;
+    width: 100%;
+  
+    .ant-table-content > table {
+      height: 300px;
+    }
+  }
+
+  .ant-table-body {
+    overflow-x: auto !important;
+  }
+  .App {
+    font-family: sans-serif;
+    text-align: center;
+  }
+  .InputButton {
+    background-color: #eeeeee !important;
+  }
+  
+  .InputButton:hover {
+    background-color: #08b3aa !important;
+    color: #fff;
+    outline: 1px solid #08b3aa;
+  }
+  .InputButton:focus {
+    background-color: #08b3aa !important;
+    color: #fff;
+    outline: 1px solid #08b3aa;
+  }
+  
+  .search-input-box {
+    background-color: #ffffff !important;
+  }
+  
+  .search-input-box,
+  .InputButton {
+    outline: 1px solid rgb(179, 179, 179);
+  }
+  

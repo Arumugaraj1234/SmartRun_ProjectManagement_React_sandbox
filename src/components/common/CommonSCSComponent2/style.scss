@@ -1,0 +1,24 @@
+.custom-form-container .ant-form-item {
+  margin-bottom: 5px;
+  label {
+    text-align: left;
+  }
+}
+
+.custom_antd_Table .ant-table-cell {
+  font-size: 13px;
+  padding: 6px !important;
+
+  .ant-table-thead {
+    font-weight: bold;
+  }
+}
+
+.custom_antd_Table {
+  margin-top: 10px;
+  width: 100%;
+
+  .ant-form-item {
+    margin-bottom: 1px;
+  }
+}

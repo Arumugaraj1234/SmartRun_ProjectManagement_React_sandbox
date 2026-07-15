@@ -1,0 +1,46 @@
+.dashboard {
+  padding: 40px;
+  background-color: #f0f0f0;
+}
+
+.card {
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  width: 200px;
+  padding: 10px;
+  text-align: center;
+  display: flex;
+  position: relative;
+  margin-bottom: 20px;
+}
+
+.card .icon {
+  background-color: #7B796F;
+  width: 75px;
+  height: 70px;
+  position: absolute;
+  top: -30px;
+  left: 15px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 34px;
+  color: white;
+}
+
+.card .label {
+  font-size: 15px;
+  color: black;
+}
+
+.card .value {
+  font-size: 24px; /* Adjusted font size for better fit */
+  font-weight: bold;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 20px;
+}

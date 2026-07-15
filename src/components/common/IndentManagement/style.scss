@@ -1,0 +1,17 @@
+.indent_header {
+  display: flex;
+  justify-content: space-between;
+}
+.indent_header_btns {
+  display: flex;
+  justify-content: space-between;
+  gap: 3px;
+}
+@media screen and (max-width: 768px) {
+  .indent_header {
+    flex-direction: column;
+  }
+  .indent_header_btns {
+    justify-content: end;
+  }
+}

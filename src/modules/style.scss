@@ -1,0 +1,43 @@
+.ant-input:disabled,
+.ant-input-disabled,
+.ant-select:disabled .ant-select-selector,
+.ant-select-disabled .ant-select-selector,
+.ant-picker-disabled .ant-picker-input,
+.ant-picker-disabled .ant-picker-input > input,
+.ant-select-disabled .ant-input-affix-wrapper .ant-input {
+  color: black !important;
+}
+.ant-select-disabled .ant-select-selector .ant-select-selection-placeholder {
+  color: black !important;
+}
+
+.ant-select-disabled .ant-select-selector input[disabled] {
+  color: black !important;
+}
+input[disabled] {
+  color: black !important;
+}
+
+.custom_antd_Table .ant-table-cell {
+  font-size: 13px;
+  padding: 6px !important;
+
+  .ant-table-thead {
+    font-weight: bold;
+  }
+}
+.tob_details {
+  display: flex;
+  gap: 10px;
+  justify-content: start;
+  align-items: baseline;
+}
+.top_detail {
+  display: flex;
+  gap: 10px;
+  justify-content: start;
+  align-items: baseline;
+  .tob_label {
+    width: 103px;
+  }
+}

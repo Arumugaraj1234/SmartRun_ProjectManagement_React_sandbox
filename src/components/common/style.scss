@@ -1,0 +1,91 @@
+.custom_antd_Table .ant-table-cell {
+  font-size: 13px;
+  padding: 6px !important;
+
+  .ant-table-thead {
+    font-weight: bold;
+  }
+}
+
+.custom_antd_Table {
+  margin-top: 10px;
+  width: 100%;
+
+  .ant-form-item {
+    margin-bottom: 1px;
+  }
+}
+@media only screen and (max-width: 600px) {
+  .custom_antd_Table .ant-table-wrapper {
+    overflow-x: auto;
+  }
+
+  .custom_antd_Table .ant-table {
+    width: 100%;
+    text-wrap: nowrap;
+    overflow-x: auto;
+  }
+
+  .ant-table table {
+    min-width: 600px;
+  }
+
+  .ant-table td,
+  .ant-table th {
+    white-space: nowrap;
+    font-size: 7px;
+    padding: 1px;
+  }
+}
+
+.ant-form {
+  display: flex;
+  gap: 20px;
+}
+
+.form_indent {
+  width: 100%;
+  margin-left: 10px;
+}
+
+.ant-picker {
+  width: 100%;
+}
+
+.form_datas {
+  width: 100%;
+
+  .ant-form-item {
+    padding: 1px 7px;
+  }
+}
+
+.ant-upload {
+  width: 100%;
+
+  .ant-btn {
+    width: 100%;
+  }
+}
+
+.ant-upload-select {
+  width: 100%;
+}
+
+.highlighted-row {
+  background-color: #d4d3d3;
+  font-weight: bold;
+}
+.budget-card .ant-form-item {
+  margin-bottom: 1px;
+}
+.tob_details {
+  display: flex;
+  gap: 10px;
+  justify-content: start;
+  align-items: baseline;
+}
+.tob_label {
+  font-weight: 600;
+  text-wrap: nowrap;
+}

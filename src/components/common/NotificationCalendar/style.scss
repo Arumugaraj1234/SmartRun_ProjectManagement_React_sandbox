@@ -1,0 +1,27 @@
+.ant-timeline-item-content {
+  transition: all 0.3s ease;
+}
+
+.timeline-enter {
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: opacity 0.3s ease, max-height 0.3s ease;
+}
+
+.timeline-enter-active {
+  opacity: 1;
+  max-height: 1000px; /* Adjust according to your content height */
+}
+
+.timeline-exit {
+  opacity: 1;
+  max-height: 1000px; /* Adjust according to your content height */
+  overflow: hidden;
+  transition: opacity 0.3s ease, max-height 0.3s ease;
+}
+
+.timeline-exit-active {
+  opacity: 0;
+  max-height: 0;
+}

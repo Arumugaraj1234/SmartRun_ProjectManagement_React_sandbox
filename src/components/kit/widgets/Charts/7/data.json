@@ -1,0 +1,31 @@
+{
+  "table": [
+    {
+      "key": "1",
+      "actionName": "New Users",
+      "location": "New York",
+      "capacity": "+1 800 364 4774",
+      "pr": "+3,125",
+      "specificYield": "+3,125",
+      "power": "+3,125"
+    },
+    {
+      "key": "2",
+      "actionName": "New Reports",
+      "location": "Palo Alto",
+      "capacity": "+1 800 364 4774",
+      "pr": "+643",
+      "specificYield": "+3,125",
+      "power": "+3,125"
+    },
+    {
+      "key": "3",
+      "actionName": "Quote Submits",
+      "location": "Las Vegas",
+      "capacity": "+1 800 364 4774",
+      "pr": "+982",
+      "specificYield": "+3,125",
+      "power": "+3,125"
+    }
+  ]
+}

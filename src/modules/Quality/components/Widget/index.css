@@ -1,0 +1,126 @@
+@media (max-width: 320px) {
+  .dashboard .card {
+    width: 100%;
+  }
+}  
+@media (max-width: 375px) {
+  .dashboard .card {
+    width: 100%;
+  }
+}  
+@media (max-width: 425px) {
+  .card {
+    margin-top: 10px;
+  }
+}  
+
+.dashboard {
+  padding: 10px 10px 0px 10px;
+}
+.widget{
+  margin-top: 20px
+}
+
+.card {
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  padding: 10px;
+  text-align: center;
+  display: flex;
+  position: relative;
+  margin-bottom: 20px;
+}
+
+.card .icon1 {
+  background-color:#729762;
+  width: 70px;
+  height: 65px;
+  position: absolute;
+  top: -30px;
+  left: 15px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 34px;
+  color: white;
+}
+.card .icon2 {
+  background-color:#758694;
+  width: 70px;
+  height: 65px;
+  position: absolute;
+  top: -30px;
+  left: 15px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 34px;
+  color: white;
+}
+.card .icon3 {
+  background-color:#D2D180;
+  width: 70px;
+  height: 65px;
+  position: absolute;
+  top: -30px;
+  left: 15px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 34px;
+  color: white;
+}
+.card .icon4 {
+  background-color:#B3A398;
+  width: 70px;
+  height: 65px;
+  position: absolute;
+  top: -30px;
+  left: 15px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 34px;
+  color: white;
+}
+.card .icon5 {
+  background-color:#B19470;
+  width: 70px;
+  height: 65px;
+  position: absolute;
+  top: -30px;
+  left: 15px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 34px;
+  color: white;
+}
+.card .icon6 {
+  background-color:#9EC8B9;
+  width: 70px;
+  height: 65px;
+  position: absolute;
+  top: -30px;
+  left: 15px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 34px;
+  color: white;
+}
+
+.card .label {
+  font-size: 14px;
+  color: black;
+  /* font-weight: bold; */
+}
+
+.card .value {
+  font-size: 24px; /* Adjusted font size for better fit */
+  font-weight: bold;
+}
+
+

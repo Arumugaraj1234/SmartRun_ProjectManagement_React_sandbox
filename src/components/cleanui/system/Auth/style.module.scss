@@ -1,0 +1,29 @@
+@import 'components/mixins.scss';
+
+.container {
+  padding: rem(50) rem(30);
+  margin-top: -22%;
+  margin-left: 100%;
+  background-color: black;
+}
+
+@media (max-width: 768px) {
+  .container {
+    position: absolute;
+    transform: translate(-50%, 10%);
+    padding: 50px 30px;
+  }
+}
+@media (max-width: 425px) {
+  .container {
+    position: absolute;
+    // left: 50%;
+    margin-top: 1%;
+    // width: 300px;
+    transform: translate(-70%, -5%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 1px 1px;
+  }
+}

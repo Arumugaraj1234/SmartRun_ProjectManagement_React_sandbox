@@ -1,0 +1,80 @@
+.address {
+  display: flex;
+  justify-content: space-between;
+  padding: 1px 15px;
+}
+.custom-form-container .ant-form-item {
+  margin-bottom: 1px;
+  label {
+    text-align: left;
+  }
+}
+
+.customize {
+  .ant-form {
+    display: block !important;
+  }
+}
+.costom-form-body {
+  display: flex;
+  justify-content: space-between;
+}
+
+@media only screen and (max-width: 768px) {
+  .costom-form-body {
+    display: block;
+  }
+}
+.amount_words {
+  padding: 10px 1px 10px 5px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: center;
+  flex-direction: column-reverse;
+  span {
+    font-weight: bold;
+  }
+}
+
+.hide-column {
+  display: none !important;
+}
+
+.ant-input {
+  .custom-input {
+    border: none;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+  }
+}
+.default_table {
+  border-collapse: collapse;
+  width: 100%;
+  th,
+  td {
+    padding: 1px;
+    text-align: left;
+  }
+  thead {
+    th,
+    td {
+      font-weight: bold;
+    }
+  }
+}
+.shipping_section {
+  // border: 1px solid #e4e9f0;
+  // height: 8rem;
+  // margin-top: 15px;
+  h5 {
+    padding: 5px 2px 2px 5px;
+    // border-bottom: 1px solid #e4e9f0;
+  }
+}
+
+.custom-input {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}

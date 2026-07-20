@@ -231,6 +231,9 @@ const SubAssembly = () => {
           <AutoComplete
             style={{ width: 400 }}
             options={subassydata}
+            filterOption={(inputValue, option) =>
+              option.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
+            }
             onSearch={(value, code) => handlesubassyChange(value, code, index)}
             onSelect={(value, code) => handlekeyAreaChange(value, code, index)}
           />

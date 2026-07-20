@@ -93,6 +93,7 @@ const IndentManagement = ({ componentdata }) => {
   const [saveButton, setSaveButton] = useState(false)
   const [indentID, setIndentId] = useState(null)
   const [singleIndent, setSingleIndent] = useState(null)
+  const [costFlowType, setCostFlowType] = useState('LEGACY')
   // const [BudgetList, setBudgetList] = useState([])
   // const [visible, setVisible] = useState(false)
   // const [selectedIndex, setSelectedIndex] = useState(null)
@@ -397,6 +398,7 @@ const IndentManagement = ({ componentdata }) => {
           setDtlListCount(count)
         }
         setSeqNum(response?.responseData[0]?.seq)
+        setCostFlowType(response?.responseData[0]?.costFlowType || 'LEGACY')
         // getBudgetcost(response ?.responseData[0] ?.dtlList[0] ?.indentId)
         dueDateForm.setFieldsValue({
           availableValue:
@@ -471,26 +473,34 @@ const IndentManagement = ({ componentdata }) => {
           docLifeList?.[0].docStatusDesc === 'Finance Accepted')) &&
       docLifeList?.length > 0
     ) {
-      if (
-        (availablevalue > 0 && budgetvalue == 0) ||
-        budgetvalue === NaN ||
-        budgetvalue === undefined
-      ) {
-        messageReturn(612) // Error code for target should not be zero if allocated exists
-        dueDateForm.setFieldsValue({ budgetvalue: '' })
-        return
-      }
+      if (costFlowType === 'NEW') {
+        if (!dueDateForm.getFieldValue('dueDate')) {
+          messageReturn(405)
+          return
+        }
+        SaveDueDate(2)
+      } else {
+        if (
+          (availablevalue > 0 && budgetvalue == 0) ||
+          budgetvalue === NaN ||
+          budgetvalue === undefined
+        ) {
+          messageReturn(612) // Error code for target should not be zero if allocated exists
+          dueDateForm.setFieldsValue({ budgetvalue: '' })
+          return
+        }
 
-      if (
-        !dueDateForm.getFieldValue('allocatedValue') ||
-        !dueDateForm.getFieldValue('targetValue') ||
-        // dueDateForm.getFieldValue('targetValue') === '0' ||
-        !dueDateForm.getFieldValue('dueDate')
-      ) {
-        messageReturn(405)
-        return
+        if (
+          !dueDateForm.getFieldValue('allocatedValue') ||
+          !dueDateForm.getFieldValue('targetValue') ||
+          // dueDateForm.getFieldValue('targetValue') === '0' ||
+          !dueDateForm.getFieldValue('dueDate')
+        ) {
+          messageReturn(405)
+          return
+        }
+        SaveDueDate(1)
       }
-      SaveDueDate(1)
     }
     const formValues = form.getFieldsValue()
     const keyareaobj = {
@@ -2408,11 +2418,14 @@ const IndentManagement = ({ componentdata }) => {
         const dueDate = dueDateForm.getFieldValue('dueDate')
 
         // Check for required fields
-        if (budgetValue && dueDate && (type === 2 || (type === 1 && targetValue))) {
+        if (
+          dueDate &&
+          (costFlowType === 'NEW' || (budgetValue && (type === 2 || (type === 1 && targetValue))))
+        ) {
           const reqobj = {
             tenantId: tenantid,
             indentId: indentID,
-            budgetValue: budgetValue.replace(/,/g, '') || '',
+            budgetValue: budgetValue ? budgetValue.replace(/,/g, '') : '0',
             targetValue: targetValue ? targetValue.replace(/,/g, '') : undefined,
             date: moment(dueDate).format('YYYY-MM-DD') || '',
           }
@@ -3271,8 +3284,9 @@ const IndentManagement = ({ componentdata }) => {
                     </Form.Item>
                   </div>
                 ) : null}
-                {componentdata.module === 'project' ||
-                (componentdata.module === 'common' && depCode === 'D10') ? (
+                {costFlowType !== 'NEW' &&
+                (componentdata.module === 'project' ||
+                  (componentdata.module === 'common' && depCode === 'D10')) ? (
                   <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3 tob_details">
                     <p className="tob_label">
                       Allocated Budget {Menulistdata[0].currency}
@@ -3283,8 +3297,9 @@ const IndentManagement = ({ componentdata }) => {
                     </Form.Item>
                   </div>
                 ) : null}
-                {componentdata.module === 'project' ||
-                (componentdata.module === 'common' && depCode === 'D10') ? (
+                {costFlowType !== 'NEW' &&
+                (componentdata.module === 'project' ||
+                  (componentdata.module === 'common' && depCode === 'D10')) ? (
                   <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3 tob_details">
                     <p className="tob_label">
                       Budget Cost {Menulistdata[0].currency}
@@ -3314,8 +3329,9 @@ const IndentManagement = ({ componentdata }) => {
                     </div>
                   </div>
                 ) : null}
-                {componentdata.module === 'project' ||
-                (componentdata.module === 'common' && depCode === 'D10') ? (
+                {costFlowType !== 'NEW' &&
+                (componentdata.module === 'project' ||
+                  (componentdata.module === 'common' && depCode === 'D10')) ? (
                   <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3 tob_details">
                     <p className="tob_label">
                       Target Cost {Menulistdata[0].currency}

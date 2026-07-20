@@ -70,6 +70,7 @@ const ScmIndentManagement = ({ isTailview }) => {
   const [openedsinglebudget, setOpenedsinglebudget] = useState(null)
   const [singleIndent, setSingleIndent] = useState('')
   const [fieldsvalue, setFieldsvalue] = useState(null)
+  const [costFlowType, setCostFlowType] = useState('LEGACY')
   const [teamMembersList, setTeamMembersList] = useState([])
   const [selectedRowKeys, setSelectedRowKeys] = useState([])
   const [allowtoAssign, setAllowtoAssign] = useState('')
@@ -256,6 +257,7 @@ const ScmIndentManagement = ({ isTailview }) => {
     if (response?.responseData?.length > 0 && response?.responseData[0]) {
       setDetailTable(response?.responseData[0]?.dtlList)
       setDocLifeList(response?.responseData[0]?.docLifeCycleMstList)
+      setCostFlowType(response?.responseData[0]?.costFlowType || 'LEGACY')
       form.setFieldsValue({
         targetValue:
           parseFloat(response?.responseData[0]?.targetValue).toLocaleString('en-IN') || '0',
@@ -1399,17 +1401,19 @@ const ScmIndentManagement = ({ isTailview }) => {
                 </p>
               </div>
 
-              <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3 tob_details">
-                <p className="tob_label">
-                  Target Cost {Menulistdata[0].currency}
-                  <span style={{ color: 'red' }}>*</span> :{' '}
-                </p>
-                <Form form={form}>
-                  <Form.Item name="targetValue" style={{ color: 'black' }}>
-                    <Input type="text" disabled />
-                  </Form.Item>
-                </Form>
-              </div>
+              {costFlowType !== 'NEW' ? (
+                <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3 tob_details">
+                  <p className="tob_label">
+                    Target Cost {Menulistdata[0].currency}
+                    <span style={{ color: 'red' }}>*</span> :{' '}
+                  </p>
+                  <Form form={form}>
+                    <Form.Item name="targetValue" style={{ color: 'black' }}>
+                      <Input type="text" disabled />
+                    </Form.Item>
+                  </Form>
+                </div>
+              ) : null}
             </div>
             {detailTable && detailTable.length > 0 ? (
               <div style={{ marginBottom: '-32px', marginLeft: '155px' }}>

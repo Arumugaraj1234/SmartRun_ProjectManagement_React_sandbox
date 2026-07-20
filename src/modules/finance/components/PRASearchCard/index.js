@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Form, Select, Card, Button, Input, message, Table } from 'antd'
 import { CommentOutlined, PlusCircleOutlined, DownloadOutlined } from '@ant-design/icons'
 // import { Table } from 'ant-table-extensions'
@@ -34,6 +34,9 @@ const PRASearchCardComp = () => {
   const [popupresp, setPopupResp] = useState([])
   const [popupRespPre, setPopupRespPre] = useState([])
   const [popupGrnDtl, setPopupGrnDtl] = useState([])
+  const [isDetailLoading, setIsDetailLoading] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const latestPraIdRef = useRef(null)
   // const [isApproval, setIsApproval] = useState(true)
   const [docuLifeMst, setDocuLifeMst] = useState([])
   const [detailCard, setdetailCard] = useState(false)
@@ -151,6 +154,9 @@ const PRASearchCardComp = () => {
 
   const saveData = async () => {
     console.log(fieldForm.getFieldsValue())
+    if (isSaving) {
+      return
+    }
     if (
       ['retention', 'ld', 'tds', 'amountPayable'].every(
         field =>
@@ -158,32 +164,37 @@ const PRASearchCardComp = () => {
       )
     ) {
       const formData = fieldForm.getFieldsValue()
-      const response = await indentFileUpload({
-        requestPath: 'InsertPRA',
-        requestData: {
-          invoiceDate: popupresp?.[0]?.invoiceDate,
-          transportValue: formData.transportValue,
-          pfValue: formData.pfValue,
-          insuranceValue: formData.insuranceValue,
-          otherValue: formData.otherValue,
-          tds: formData.tds,
-          amountPayable: Number(removeCommas(formData.amountPayable)),
-          remarks: formData.remarks,
-          retention: formData.retention,
-          ld: formData.ld,
-          others: formData.others,
-          praId,
-          tenantId,
-          empId: employeeId,
-        },
-      })
+      setIsSaving(true)
+      try {
+        const response = await indentFileUpload({
+          requestPath: 'InsertPRA',
+          requestData: {
+            invoiceDate: popupresp?.[0]?.invoiceDate,
+            transportValue: formData.transportValue,
+            pfValue: formData.pfValue,
+            insuranceValue: formData.insuranceValue,
+            otherValue: formData.otherValue,
+            tds: formData.tds,
+            amountPayable: Number(removeCommas(formData.amountPayable)),
+            remarks: formData.remarks,
+            retention: formData.retention,
+            ld: formData.ld,
+            others: formData.others,
+            praId,
+            tenantId,
+            empId: employeeId,
+          },
+        })
 
-      if (response.responseCode === '200') {
-        message.success(response.responseMessage)
-        handleCancelDtlsBtnInward()
-        getDetailData()
-      } else {
-        message.error(response.responseMessage)
+        if (response.responseCode === '200') {
+          message.success(response.responseMessage)
+          handleCancelDtlsBtnInward()
+          getDetailData()
+        } else {
+          message.error(response.responseMessage)
+        }
+      } finally {
+        setIsSaving(false)
       }
     } else {
       messageReturn(405)
@@ -230,6 +241,10 @@ const PRASearchCardComp = () => {
   }
 
   const handleDetail = async data => {
+    // Tag this click so a slower, earlier request can't overwrite a newer one when it resolves later
+    latestPraIdRef.current = data.praId
+    setPopupResp([])
+    setIsDetailLoading(true)
     try {
       // Assuming these are state setters from useState
       setRecords(data)
@@ -276,6 +291,13 @@ const PRASearchCardComp = () => {
         setDocuLifeMst([])
       }
 
+      // A cancelled PRA has no further lifecycle to advance through — hide the
+      // "Purchase approved"/next-stage button regardless of what docStatusMst says
+      if (data.isLatest === '0') {
+        setBtnDisplay(false)
+        setDocuLifeMst([])
+      }
+
       // Setting form fields
       fieldForm.setFieldsValue({
         invoiceNumber: data.invoiceNumber,
@@ -313,6 +335,10 @@ const PRASearchCardComp = () => {
 
       // Handling response
       console.log(response, 'response for PRA')
+      if (latestPraIdRef.current !== data.praId) {
+        // A newer PRA was opened while this request was still in flight — discard this stale response
+        return
+      }
       setCurrentStatus(response?.responseData[0].statusDesc)
       setRmkDetaillist(response?.responseData[0].praStatusList)
       setPopupResp(response?.responseData || [])
@@ -322,6 +348,10 @@ const PRASearchCardComp = () => {
       setSequenceDesc(response?.responseData[0].docStatusMst[0]?.docStatus)
     } catch (error) {
       console.error('Error in handleDetail:', error)
+    } finally {
+      if (latestPraIdRef.current === data.praId) {
+        setIsDetailLoading(false)
+      }
     }
   }
   const remarksColumns = [
@@ -399,7 +429,7 @@ const PRASearchCardComp = () => {
     return revisionDate1.push(h.revisionDate)
   })
   detailResp.map(h => {
-    return statusDesc1.push(h.statusDesc)
+    return statusDesc1.push(h.isLatest === '0' ? 'PRA Cancelled' : h.statusDesc)
   })
   // detailResp.map(h => {
   //   return vendorName1.push(h.vendorName)
@@ -743,14 +773,17 @@ const PRASearchCardComp = () => {
       width: '7%',
       filters: statusDesc3,
       filteredValue: filtersinfo.statusDesc,
-      onFilter: (value, record) => record?.statusDesc === value,
+      onFilter: (value, record) =>
+        (record?.isLatest === '0' ? 'PRA Cancelled' : record?.statusDesc) === value,
       render: (text, record) => ({
         props: {
           style: {
             backgroundColor: record.verCheck === '1' ? '#FFFF00' : 'transparent',
           },
         },
-        children: <span>{text !== null ? text : ''}</span>,
+        children: (
+          <span>{record.isLatest === '0' ? 'PRA Cancelled' : text !== null ? text : ''}</span>
+        ),
       }),
     },
 
@@ -766,13 +799,15 @@ const PRASearchCardComp = () => {
               Detail
             </Button>
           </div>
-          <div>
-            <Button
-              type="primary"
-              icon={<DownloadOutlined />}
-              onClick={() => downloadreport(record)}
-            />
-          </div>
+          {record.isLatest !== '0' && (
+            <div>
+              <Button
+                type="primary"
+                icon={<DownloadOutlined />}
+                onClick={() => downloadreport(record)}
+              />
+            </div>
+          )}
         </div>
       ),
     },
@@ -845,9 +880,11 @@ const PRASearchCardComp = () => {
   }
   // disabled={isApproval} it is form disable code
   const disabled =
-    popupresp.length > 0
-      ? popupresp[0].isCompleted === '1' || popupresp[0].isEditable === '0'
-      : false
+    isDetailLoading || popupresp.length === 0
+      ? true
+      : popupresp[0].isCompleted === '1' ||
+        popupresp[0].isEditable === '0' ||
+        popupresp[0].isLatest === '0'
 
   const GRNDtl = [
     {
@@ -948,7 +985,11 @@ const PRASearchCardComp = () => {
             <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
               <p>Status</p>
               <p style={{ fontWeight: 'bold' }}>
-                {popupresp.length > 0 ? popupresp[0].statusDesc : ''}
+                {popupresp.length > 0
+                  ? popupresp[0].isLatest === '0'
+                    ? 'PRA Cancelled'
+                    : popupresp[0].statusDesc
+                  : ''}
               </p>
             </div>
           </div>
@@ -1433,7 +1474,8 @@ const PRASearchCardComp = () => {
 
           <div style={{ display: 'flex', justifyContent: 'center' }}>
             <h6 style={{ marginBottom: '0px', marginTop: '10px' }}>
-              <span style={{ fontWeight: 'bold' }}> Current Status : </span> {currentStatus}
+              <span style={{ fontWeight: 'bold' }}> Current Status : </span>{' '}
+              {popupresp[0]?.isLatest === '0' ? 'PRA Cancelled' : currentStatus}
             </h6>
           </div>
           {/* Button Row */}
@@ -1497,18 +1539,20 @@ const PRASearchCardComp = () => {
             />
             <Button
               type="primary"
-              disabled={disabled}
+              disabled={disabled || isSaving}
               style={{
                 display:
-                  popupresp.length > 0
-                    ? popupresp[0].isCompleted === '1' || popupresp[0].isEditable === '0'
-                      ? 'none'
-                      : 'block'
+                  isDetailLoading || popupresp.length === 0
+                    ? 'none'
+                    : popupresp[0].isCompleted === '1' ||
+                      popupresp[0].isEditable === '0' ||
+                      popupresp[0].isLatest === '0'
+                    ? 'none'
                     : 'block',
               }}
               onClick={saveData}
             >
-              Save
+              {isSaving ? 'Saving...' : 'Save'}
             </Button>
             <Button type="primary" disabled={false} onClick={handleCancelButton}>
               Cancel
@@ -1516,7 +1560,12 @@ const PRASearchCardComp = () => {
 
             <Button
               type="danger"
-              style={{ display: praCancelBtn ? 'block' : 'none' }}
+              style={{
+                display:
+                  praCancelBtn && !isDetailLoading && popupresp[0]?.isLatest !== '0'
+                    ? 'block'
+                    : 'none',
+              }}
               htmlType="submit"
               onClick={() => praCancelSubmit()}
             >
@@ -1677,7 +1726,8 @@ const PRASearchCardComp = () => {
     const props = {
       tenantId,
       praId,
-      poId: popupresp[0].poId,
+      poId: popupresp[0]?.poId,
+      empId: employeeId,
     }
     // if (insertCheck) {
     const httpapprovals = await indentFileUpload({

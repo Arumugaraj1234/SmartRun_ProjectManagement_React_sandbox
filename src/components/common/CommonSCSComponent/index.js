@@ -3843,32 +3843,36 @@ const CommonSupCompState = ({
                     <p style={{ marginBottom: '0' }}>{subAssy}</p>
                   </div>
                 </div>
-                <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
-                      Budget Cost (Rs.) :
-                    </p>
+                {scmHdrdata?.[0]?.costFlowType !== 'NEW' ? (
+                  <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
+                        Budget Cost (Rs.) :
+                      </p>
 
-                    <p style={{ marginBottom: '0' }}>
-                      {parseFloat(parseFloat(totalcost).toFixed(2)).toLocaleString('en-IN')}
-                    </p>
+                      <p style={{ marginBottom: '0' }}>
+                        {parseFloat(parseFloat(totalcost).toFixed(2)).toLocaleString('en-IN')}
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
-                      Budget Consumed (Rs.) :
-                    </p>
+                ) : null}
+                {scmHdrdata?.[0]?.costFlowType !== 'NEW' ? (
+                  <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
+                        Budget Consumed (Rs.) :
+                      </p>
 
-                    <p style={{ marginBottom: '0' }}>
-                      {scmHdrdata && scmHdrdata.length > 0 && scmHdrdata[0].totalBudgetConsumed
-                        ? parseFloat(
-                            parseFloat(scmHdrdata[0].totalBudgetConsumed).toFixed(2),
-                          ).toLocaleString('en-IN')
-                        : ''}
-                    </p>
+                      <p style={{ marginBottom: '0' }}>
+                        {scmHdrdata && scmHdrdata.length > 0 && scmHdrdata[0].totalBudgetConsumed
+                          ? parseFloat(
+                              parseFloat(scmHdrdata[0].totalBudgetConsumed).toFixed(2),
+                            ).toLocaleString('en-IN')
+                          : ''}
+                      </p>
+                    </div>
                   </div>
-                </div>
+                ) : null}
               </div>
 
               <Divider orientation="left" style={{ margin: '0px' }}>

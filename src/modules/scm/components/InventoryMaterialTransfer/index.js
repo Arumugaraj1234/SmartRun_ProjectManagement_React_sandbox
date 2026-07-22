@@ -32,7 +32,12 @@ const formatProjectLabel = item => [item.projectCode, item.customerName].filter(
 const InventoryMaterialTransfer = () => {
   const [form] = Form.useForm()
   const [itemsForm] = Form.useForm()
-  const itemsFormValues = Form.useWatch([], itemsForm) || {}
+  // Used only as a re-render trigger on every keystroke/value change in itemsForm.
+  // Do NOT read values off this watch's return value directly (see itemsFormValues below) -
+  // Form.useWatch's `preserve` option is unreliable in this antd/rc-field-form version and
+  // was found (2026-07-22 debugging) to permanently return an empty object.
+  Form.useWatch([], itemsForm)
+  const itemsFormValues = itemsForm.getFieldsValue(true)
   const { Option } = Select
   const [materialTable, setmaterialTable] = useState([])
   const [material, setmaterial] = useState(null)
@@ -915,7 +920,7 @@ const InventoryMaterialTransfer = () => {
             </div>
           </div>
         </Form>
-        <Form form={itemsForm}>
+        <Form form={itemsForm} preserve>
           <div style={{ maxHeight: '550px', overflowX: 'auto', overflowY: 'auto' }}>
             <Table
               columns={getTransferItemsCol}
@@ -924,7 +929,7 @@ const InventoryMaterialTransfer = () => {
               bordered
               loading={loadingItems}
               pagination={{
-                pageSize: 20,
+                defaultPageSize: 20,
                 showSizeChanger: true,
                 pageSizeOptions: ['10', '20', '50', '100'],
               }}

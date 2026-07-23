@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react'
 import store from 'store'
 import moment from 'moment'
 import { useHistory } from 'react-router-dom'
-import { Card, Row, Divider, message, Form, Select, Button, Input } from 'antd'
+import { Card, Row, Divider, message, Form, Select, Button, Input, Skeleton } from 'antd'
 import { PlusOutlined, FileExcelOutlined } from '@ant-design/icons'
 
 import ButtonComponent from 'components/shared/ButtonComponent'
@@ -34,6 +34,7 @@ const IndentGroupComponent = ({ isTailview }) => {
   const [detailCard, setDetailCard] = useState(false)
   const [dtlretrievedata, setDtlretrievedata] = useState([])
   const [hdretrievedata, setHdretrievedata] = useState([])
+  const [loading, setLoading] = useState(false)
   const [hdrdata, setHdrdata] = useState([])
   const [addmodalvisible, setAddmodalvisible] = useState(false)
   const [scsmodalvisible, setScsmodalvisible] = useState(false)
@@ -1177,12 +1178,13 @@ const IndentGroupComponent = ({ isTailview }) => {
       processCode: isInternal == 1 ? '8' : '5',
     }
 
+    setIndentDtldisplay(true)
+    setLoading(true)
     const httpgetdetails = await IndentGroupgetDetails({
       requestPath: 'getIndentGroupHdr',
       requestData: props,
     })
     if (httpgetdetails.responseCode === '200') {
-      setIndentDtldisplay(true)
       const updatedData =
         httpgetdetails.responseData &&
         httpgetdetails.responseData.map((data, ind) => {
@@ -1195,9 +1197,9 @@ const IndentGroupComponent = ({ isTailview }) => {
       console.log('refreshed data::', updatedData)
     } else {
       setHdretrievedata([])
-      setIndentDtldisplay(true)
       messageReturn(619)
     }
+    setLoading(false)
   }
 
   const handleGetDetails = () => {
@@ -1224,12 +1226,13 @@ const IndentGroupComponent = ({ isTailview }) => {
         processCode: isInternal == 1 ? '8' : '5',
       }
 
+      setIndentDtldisplay(true)
+      setLoading(true)
       const httpgetdetails = await IndentGroupgetDetails({
         requestPath: 'getIndentGroupHdr',
         requestData: props,
       })
       if (httpgetdetails.responseCode === '200') {
-        setIndentDtldisplay(true)
         // message.success(httpgetdetails.responseMessage)
         const updatedData =
           httpgetdetails.responseData &&
@@ -1242,9 +1245,9 @@ const IndentGroupComponent = ({ isTailview }) => {
         setHdretrievedata(updatedData)
       } else {
         setHdretrievedata([])
-        setIndentDtldisplay(true)
         messageReturn(619)
       }
+      setLoading(false)
     } else {
       onloadretrive()
       // setIndentDtldisplay(false)
@@ -1263,12 +1266,13 @@ const IndentGroupComponent = ({ isTailview }) => {
       processCode: isInternal == 1 ? '8' : '5',
     }
 
+    setIndentDtldisplay(true)
+    setLoading(true)
     const httpgetdetails = await IndentGroupgetDetails({
       requestPath: 'getIndentGroupHdr',
       requestData: props,
     })
     if (httpgetdetails.responseCode === '200') {
-      setIndentDtldisplay(true)
       // message.success(httpgetdetails.responseMessage)
       const updatedData =
         httpgetdetails.responseData &&
@@ -1281,9 +1285,9 @@ const IndentGroupComponent = ({ isTailview }) => {
       setHdretrievedata(updatedData)
     } else {
       setHdretrievedata([])
-      setIndentDtldisplay(true)
       messageReturn(619)
     }
+    setLoading(false)
   }
 
   const handleGetIndentDetails = async () => {
@@ -1300,12 +1304,13 @@ const IndentGroupComponent = ({ isTailview }) => {
         processCode: isInternal == 1 ? '8' : '5',
       }
 
+      setIndentDtldisplay(true)
+      setLoading(true)
       const httpgetdetails = await IndentGroupgetDetails({
         requestPath: 'getIndentGroupHdr',
         requestData: props,
       })
       if (httpgetdetails.responseCode === '200') {
-        setIndentDtldisplay(true)
         const updatedData =
           httpgetdetails.responseData &&
           httpgetdetails.responseData.map((data, ind) => {
@@ -1317,9 +1322,9 @@ const IndentGroupComponent = ({ isTailview }) => {
         setHdretrievedata(updatedData)
       } else {
         setHdretrievedata([])
-        setIndentDtldisplay(true)
         messageReturn(619)
       }
+      setLoading(false)
     } else {
       // setIndentDtldisplay(false)
       // message.error('Select Fields (*) Marked Mandatory')
@@ -1406,37 +1411,39 @@ const IndentGroupComponent = ({ isTailview }) => {
               <Row>
                 <Divider orientation="left">Indent Group Detail</Divider>
               </Row>
-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <Input.Search
-                  placeholder="Search..."
-                  allowClear
-                  enterButton
-                  onChange={e => setSearchText(e.target.value)}
-                  style={{ width: 450 }}
-                />
-              </div>
-              <div>
-                <Table
-                  columns={columns}
-                  dataSource={searchedData}
-                  scroll={{ y: 500, x: 800 }}
-                  onChange={handleChange}
-                  exportableProps={{
-                    fileName: `IndentGroup_${currentDateTime}`,
-                    btnProps: {
-                      type: 'primary',
-                      icon: <FileExcelOutlined />,
-                      children: <span>Export to CSV</span>,
-                    },
-                  }}
-                  pagination={{
-                    pageSizeOptions: ['10', '20', '30', '50', [hdretrievedata.length]],
-                    showSizeChanger: true,
-                    defaultPageSize: 10,
-                  }}
-                  bordered
-                />
-              </div>
+              <Skeleton loading={loading} active>
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <Input.Search
+                    placeholder="Search..."
+                    allowClear
+                    enterButton
+                    onChange={e => setSearchText(e.target.value)}
+                    style={{ width: 450 }}
+                  />
+                </div>
+                <div>
+                  <Table
+                    columns={columns}
+                    dataSource={searchedData}
+                    scroll={{ y: 500, x: 800 }}
+                    onChange={handleChange}
+                    exportableProps={{
+                      fileName: `IndentGroup_${currentDateTime}`,
+                      btnProps: {
+                        type: 'primary',
+                        icon: <FileExcelOutlined />,
+                        children: <span>Export to CSV</span>,
+                      },
+                    }}
+                    pagination={{
+                      pageSizeOptions: ['10', '20', '30', '50', [hdretrievedata.length]],
+                      showSizeChanger: true,
+                      defaultPageSize: 10,
+                    }}
+                    bordered
+                  />
+                </div>
+              </Skeleton>
             </div>
           </>
         ) : null}

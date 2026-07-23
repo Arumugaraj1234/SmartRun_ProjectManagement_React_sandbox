@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react'
 import { Table } from 'ant-table-extensions'
 import store from 'store'
-import { Input } from 'antd'
+import { Input, Skeleton } from 'antd'
 import moment from 'moment'
 import { useHistory } from 'react-router-dom'
 import ModalPopup from 'components/shared/ModalPopupComponent'
@@ -40,6 +40,7 @@ const CommonPJSComponent = () => {
   const [searchText, setSearchText] = useState('')
   const [filtersinfo, setfilterinfo] = useState(defaultfilterData)
   const [hdrdata, setHdrdata] = useState([])
+  const [loading, setLoading] = useState(false)
   const tenantid = store.get('tenantId')
   const isInternal = store.get('isInternal')
 
@@ -54,6 +55,7 @@ const CommonPJSComponent = () => {
       processCode: isInternal == 1 ? '8' : '5',
       // hdrId: '1',
     }
+    setLoading(true)
     const response = await indentFileUpload({
       requestPath: 'getIndentGroupDtlsForSCS',
       requestData: keyareaobj,
@@ -67,6 +69,7 @@ const CommonPJSComponent = () => {
       })
       setPJSCompTablData(updatedData)
     }
+    setLoading(false)
   }
   const handleChange = (pagination, filters) => {
     setfilterinfo(filters)
@@ -609,35 +612,37 @@ const CommonPJSComponent = () => {
   }
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <Input.Search
-          placeholder="Search..."
-          allowClear
-          enterButton
-          onChange={e => setSearchText(e.target.value)}
-          style={{ width: 450 }}
+      <Skeleton loading={loading} active>
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <Input.Search
+            placeholder="Search..."
+            allowClear
+            enterButton
+            onChange={e => setSearchText(e.target.value)}
+            style={{ width: 450 }}
+          />
+        </div>
+        <Table
+          dataSource={searchedData}
+          columns={columns}
+          bordered
+          exportableProps={{
+            fileName: `IndentGroup_${currentDateTime}`,
+            btnProps: {
+              type: 'primary',
+              icon: <FileExcelOutlined />,
+              children: <span>Export to CSV</span>,
+            },
+          }}
+          pagination={{
+            pageSizeOptions: ['10', '20', '30', '50', [pJSCompTablData?.length]],
+            showSizeChanger: true,
+            defaultPageSize: 10,
+          }}
+          onChange={handleChange}
+          scroll={{ y: 400 }}
         />
-      </div>
-      <Table
-        dataSource={searchedData}
-        columns={columns}
-        bordered
-        exportableProps={{
-          fileName: `IndentGroup_${currentDateTime}`,
-          btnProps: {
-            type: 'primary',
-            icon: <FileExcelOutlined />,
-            children: <span>Export to CSV</span>,
-          },
-        }}
-        pagination={{
-          pageSizeOptions: ['10', '20', '30', '50', [pJSCompTablData?.length]],
-          showSizeChanger: true,
-          defaultPageSize: 10,
-        }}
-        onChange={handleChange}
-        scroll={{ y: 400 }}
-      />
+      </Skeleton>
 
       {poModalvisible ? (
         <ViewPoModal

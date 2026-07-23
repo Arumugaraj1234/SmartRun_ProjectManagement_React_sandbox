@@ -254,7 +254,10 @@ const InventoryMaterialTransfer = () => {
       return
     }
 
-    const itemsFormData = itemsForm.getFieldsValue()
+    // getFieldsValue() alone only returns values for currently-mounted Form.Items - pagination unmounts
+    // off-page rows, so a selection spanning multiple pages needs getFieldsValue(true) to include them
+    // (same rc-field-form quirk already worked around for itemsFormValues above).
+    const itemsFormData = itemsForm.getFieldsValue(true)
     const items = []
     for (let i = 0; i < selectedRows.length; i += 1) {
       const row = selectedRows[i]

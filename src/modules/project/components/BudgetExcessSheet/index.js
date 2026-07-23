@@ -1250,7 +1250,7 @@ const ProjectBExcessSheet = () => {
   }
   return (
     <div>
-      <Skeleton loading={loading && tableData && tableData.length > 0} active>
+      <Skeleton loading={loading} active>
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <Input.Search
             placeholder="Search..."

@@ -104,7 +104,8 @@ const ProjectCostAnalysis = ({ cumulative }) => {
       )
       setEmployeeCost(totalCost)
     } else {
-      message.error(response?.responseMessage)
+      // A "not ok" response here just means this project has no timesheet entries yet in range -
+      // that's a normal empty state, not an error, so don't show an error toast for it.
       setTimeSheetDetails([])
     }
   }

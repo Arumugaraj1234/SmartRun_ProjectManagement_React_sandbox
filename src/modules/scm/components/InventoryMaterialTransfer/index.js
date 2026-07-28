@@ -51,14 +51,15 @@ const InventoryMaterialTransfer = () => {
   const [transferItems, setTransferItems] = useState([])
   const [loadingItems, setLoadingItems] = useState(false)
   const [selectedRowKeys, setSelectedRowKeys] = useState([])
+  const [itemsTablePagination, setItemsTablePagination] = useState({ current: 1, pageSize: 20 })
   const [qtyCheckedKeys, setQtyCheckedKeys] = useState([])
+  const [itemSearchText, setItemSearchText] = useState('')
+  const [showSelectedOnly, setShowSelectedOnly] = useState(false)
   const selectedProject = Form.useWatch('Project', form)
   const selectedToProject = Form.useWatch('ToProject', form)
   const selectedFromLocation = Form.useWatch('Fromlocation', form)
   const selectedToLocation = Form.useWatch('Tolocation', form)
   const selectedRemarks = Form.useWatch('Remarks', form)
-  const sameProjectSelected =
-    !!selectedProject && !!selectedToProject && selectedProject === selectedToProject
   const isMobile = useMediaQuery({ query: '(max-width: 769px)' })
   const [tableWidth, setTableWidth] = useState('300px')
   const tenantID = store.get('tenantId')
@@ -167,6 +168,8 @@ const InventoryMaterialTransfer = () => {
       setTransferItems([])
       setSelectedRowKeys([])
       setQtyCheckedKeys([])
+      setItemSearchText('')
+      setShowSelectedOnly(false)
       return
     }
     setLoadingItems(true)
@@ -203,10 +206,14 @@ const InventoryMaterialTransfer = () => {
       setTransferItems(rows)
       setSelectedRowKeys([])
       setQtyCheckedKeys([])
+      setItemSearchText('')
+      setShowSelectedOnly(false)
     } else {
       setTransferItems([])
       setSelectedRowKeys([])
       setQtyCheckedKeys([])
+      setItemSearchText('')
+      setShowSelectedOnly(false)
     }
   }
   const getlocationdropdown = async () => {
@@ -243,11 +250,6 @@ const InventoryMaterialTransfer = () => {
       return
     }
 
-    if (formData.Project === formData.ToProject && formData.Fromlocation === formData.Tolocation) {
-      messageReturn(688)
-      return
-    }
-
     const selectedRows = transferItems.filter(row => selectedRowKeys.includes(row.key))
     if (selectedRows.length === 0) {
       messageReturn(405)
@@ -277,6 +279,22 @@ const InventoryMaterialTransfer = () => {
       }
       if (Number(rowAvailableQty) < Number(rowTransferQty)) {
         messageReturn(669)
+        return
+      }
+      if (sameProjectAndLocation && (rowToBin === undefined || rowToBin === '')) {
+        messageReturn(689)
+        return
+      }
+      if (sameProjectAndLocation && rowToBin === rowFromBin) {
+        messageReturn(691)
+        return
+      }
+      if (
+        sameProjectAndLocation &&
+        rowToBin !== rowFromBin &&
+        Number(rowTransferQty) !== Number(rowAvailableQty)
+      ) {
+        messageReturn(690)
         return
       }
 
@@ -313,11 +331,64 @@ const InventoryMaterialTransfer = () => {
       setTransferItems([])
       setSelectedRowKeys([])
       setQtyCheckedKeys([])
+      setItemSearchText('')
+      setShowSelectedOnly(false)
       setmaterialTable([])
     } else {
       message.error(response?.responseMessage)
     }
   }
+
+  const sameProjectAndLocation =
+    !!selectedProject &&
+    !!selectedToProject &&
+    selectedProject === selectedToProject &&
+    !!selectedFromLocation &&
+    !!selectedToLocation &&
+    selectedFromLocation === selectedToLocation
+
+  // A bin-to-bin move within the same Project+Location: product_mst only stores one Bin
+  // value per product, so a partial qty move here would mislabel the leftover qty as
+  // having moved too. Full qty is auto-locked for these rows (see the effect below);
+  // same From/To Bin is a no-op and is blocked outright.
+  const isBinToBinRow = record => {
+    if (!sameProjectAndLocation) return false
+    const rowFromBin = itemsFormValues[`fromBin_${record.key}`]
+    const rowToBin = itemsFormValues[`toBin_${record.key}`]
+    return !!rowToBin && rowToBin !== rowFromBin
+  }
+  const isSameBinRow = record => {
+    if (!sameProjectAndLocation) return false
+    const rowFromBin = itemsFormValues[`fromBin_${record.key}`]
+    const rowToBin = itemsFormValues[`toBin_${record.key}`]
+    return !!rowToBin && rowToBin === rowFromBin
+  }
+
+  useEffect(() => {
+    if (!sameProjectAndLocation) return
+    const fieldsToSet = {}
+    let keysChanged = false
+    const newQtyCheckedKeys = [...qtyCheckedKeys]
+
+    selectedRowKeys.forEach(key => {
+      const rowFromBin = itemsFormValues[`fromBin_${key}`]
+      const rowToBin = itemsFormValues[`toBin_${key}`]
+      const rowAvailableQty = itemsFormValues[`availableQty_${key}`]
+      const isBinToBin = !!rowToBin && rowToBin !== rowFromBin
+
+      if (isBinToBin && !newQtyCheckedKeys.includes(key)) {
+        newQtyCheckedKeys.push(key)
+        keysChanged = true
+        fieldsToSet[`transferQuantity_${key}`] = rowAvailableQty
+      }
+    })
+
+    if (keysChanged) {
+      setQtyCheckedKeys(newQtyCheckedKeys)
+      itemsForm.setFieldsValue(fieldsToSet)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sameProjectAndLocation, selectedRowKeys, itemsFormValues])
 
   const isSubmitDisabled =
     !selectedProject ||
@@ -334,6 +405,12 @@ const InventoryMaterialTransfer = () => {
         if (!row.productId || rowTransferQty === undefined || rowTransferQty === '') return true
         if (Number(rowTransferQty) === 0 || rowAvailableQty === undefined) return true
         if (Number(rowAvailableQty) < Number(rowTransferQty)) return true
+        if (sameProjectAndLocation) {
+          const rowToBin = itemsFormValues[`toBin_${row.key}`]
+          if (rowToBin === undefined || rowToBin === '') return true
+          if (isSameBinRow(row)) return true
+          if (isBinToBinRow(row) && Number(rowTransferQty) !== Number(rowAvailableQty)) return true
+        }
         return false
       })
 
@@ -343,11 +420,24 @@ const InventoryMaterialTransfer = () => {
   }, [selectedProject, selectedFromLocation])
 
   useEffect(() => {
-    if (sameProjectSelected && selectedToLocation && selectedToLocation === selectedFromLocation) {
-      form.setFieldsValue({ Tolocation: undefined })
+    setItemsTablePagination(prev => ({ ...prev, current: 1 }))
+  }, [transferItems, itemSearchText, showSelectedOnly])
+
+  useEffect(() => {
+    if (selectedRowKeys.length === 0 && showSelectedOnly) {
+      setShowSelectedOnly(false)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sameProjectSelected, selectedFromLocation])
+  }, [selectedRowKeys, showSelectedOnly])
+
+  const handleClearSelection = () => {
+    const fieldsToSet = {}
+    selectedRowKeys.forEach(key => {
+      fieldsToSet[`transferQuantity_${key}`] = ''
+    })
+    itemsForm.setFieldsValue(fieldsToSet)
+    setSelectedRowKeys([])
+    setQtyCheckedKeys([])
+  }
 
   const handleGetDetails = formData => {
     getMaterialdtl(formData)
@@ -367,6 +457,8 @@ const InventoryMaterialTransfer = () => {
     setTransferItems([])
     setSelectedRowKeys([])
     setQtyCheckedKeys([])
+    setItemSearchText('')
+    setShowSelectedOnly(false)
   }
   const showModal = record => {
     setshowMaterialDtl(true)
@@ -584,7 +676,29 @@ const InventoryMaterialTransfer = () => {
     },
   ]
 
-  const eligibleQtyKeys = transferItems
+  const filteredTransferItems = transferItems
+    .filter(row => !showSelectedOnly || selectedRowKeys.includes(row.key))
+    .filter(row => {
+      if (!itemSearchText) return true
+      const q = itemSearchText.toLowerCase()
+      return (
+        (row.productCode || '').toLowerCase().includes(q) ||
+        (row.productDesc || '').toLowerCase().includes(q) ||
+        (row.spec || '').toLowerCase().includes(q)
+      )
+    })
+
+  const currentPageStart = (itemsTablePagination.current - 1) * itemsTablePagination.pageSize
+  const currentPageRows = filteredTransferItems.slice(
+    currentPageStart,
+    currentPageStart + itemsTablePagination.pageSize,
+  )
+  const currentPageSelectableRows = currentPageRows.filter(
+    row => !isZeroAvailableQty(itemsFormValues[`availableQty_${row.key}`]),
+  )
+  const currentPageSelectableKeys = currentPageSelectableRows.map(row => row.key)
+
+  const eligibleQtyKeys = currentPageRows
     .filter(
       row =>
         selectedRowKeys.includes(row.key) &&
@@ -603,34 +717,30 @@ const InventoryMaterialTransfer = () => {
         <span>
           <Checkbox
             checked={
-              transferItems.length > 0 &&
-              transferItems
-                .filter(row => !isZeroAvailableQty(itemsFormValues[`availableQty_${row.key}`]))
-                .every(row => selectedRowKeys.includes(row.key)) &&
-              transferItems.some(
-                row => !isZeroAvailableQty(itemsFormValues[`availableQty_${row.key}`]),
-              )
+              currentPageSelectableKeys.length > 0 &&
+              currentPageSelectableKeys.every(key => selectedRowKeys.includes(key))
             }
             indeterminate={
-              selectedRowKeys.length > 0 &&
-              !transferItems
-                .filter(row => !isZeroAvailableQty(itemsFormValues[`availableQty_${row.key}`]))
-                .every(row => selectedRowKeys.includes(row.key))
+              currentPageSelectableKeys.some(key => selectedRowKeys.includes(key)) &&
+              !currentPageSelectableKeys.every(key => selectedRowKeys.includes(key))
             }
             onChange={e => {
               if (e.target.checked) {
-                const selectableRows = transferItems.filter(
-                  row => !isZeroAvailableQty(itemsFormValues[`availableQty_${row.key}`]),
+                setSelectedRowKeys(prev =>
+                  Array.from(new Set([...prev, ...currentPageSelectableKeys])),
                 )
-                setSelectedRowKeys(selectableRows.map(row => row.key))
               } else {
                 const fieldsToSet = {}
-                transferItems.forEach(row => {
-                  fieldsToSet[`transferQuantity_${row.key}`] = ''
+                currentPageSelectableKeys.forEach(key => {
+                  fieldsToSet[`transferQuantity_${key}`] = ''
                 })
                 itemsForm.setFieldsValue(fieldsToSet)
-                setSelectedRowKeys([])
-                setQtyCheckedKeys([])
+                setSelectedRowKeys(prev =>
+                  prev.filter(key => !currentPageSelectableKeys.includes(key)),
+                )
+                setQtyCheckedKeys(prev =>
+                  prev.filter(key => !currentPageSelectableKeys.includes(key)),
+                )
               }
             }}
           />
@@ -687,11 +797,8 @@ const InventoryMaterialTransfer = () => {
               eligibleQtyKeys.every(key => qtyCheckedKeys.includes(key))
             }
             indeterminate={
-              qtyCheckedKeys.length > 0 &&
-              !(
-                eligibleQtyKeys.length > 0 &&
-                eligibleQtyKeys.every(key => qtyCheckedKeys.includes(key))
-              )
+              eligibleQtyKeys.some(key => qtyCheckedKeys.includes(key)) &&
+              !eligibleQtyKeys.every(key => qtyCheckedKeys.includes(key))
             }
             disabled={eligibleQtyKeys.length === 0}
             onChange={e => {
@@ -701,13 +808,13 @@ const InventoryMaterialTransfer = () => {
                   fieldsToSet[`transferQuantity_${key}`] = itemsFormValues[`availableQty_${key}`]
                 })
                 itemsForm.setFieldsValue(fieldsToSet)
-                setQtyCheckedKeys(eligibleQtyKeys)
+                setQtyCheckedKeys(prev => Array.from(new Set([...prev, ...eligibleQtyKeys])))
               } else {
                 eligibleQtyKeys.forEach(key => {
                   fieldsToSet[`transferQuantity_${key}`] = ''
                 })
                 itemsForm.setFieldsValue(fieldsToSet)
-                setQtyCheckedKeys([])
+                setQtyCheckedKeys(prev => prev.filter(key => !eligibleQtyKeys.includes(key)))
               }
             }}
           />
@@ -724,7 +831,8 @@ const InventoryMaterialTransfer = () => {
             checked={qtyCheckedKeys.includes(record.key)}
             disabled={
               !selectedRowKeys.includes(record.key) ||
-              isZeroAvailableQty(itemsFormValues[`availableQty_${record.key}`])
+              isZeroAvailableQty(itemsFormValues[`availableQty_${record.key}`]) ||
+              isBinToBinRow(record)
             }
             onChange={e => {
               if (e.target.checked) {
@@ -767,7 +875,12 @@ const InventoryMaterialTransfer = () => {
       ),
     },
     {
-      title: 'To Bin',
+      title: (
+        <span>
+          To Bin
+          {sameProjectAndLocation && <strong style={{ color: 'red' }}> *</strong>}
+        </span>
+      ),
       dataIndex: 'toBin',
       key: 'toBin',
       render: (text, record) => (
@@ -858,22 +971,11 @@ const InventoryMaterialTransfer = () => {
               >
                 <Select style={{ width: '90%' }} placeholder="Select Location">
                   {locationlist
-                    ? locationlist
-                        .filter(
-                          item =>
-                            !(
-                              sameProjectSelected &&
-                              item.inventoryLocationCode === selectedToLocation
-                            ),
-                        )
-                        .map(item => (
-                          <Option
-                            key={item.inventoryLocationCode}
-                            value={item.inventoryLocationCode}
-                          >
-                            {item.inventoryLocationDescription}
-                          </Option>
-                        ))
+                    ? locationlist.map(item => (
+                        <Option key={item.inventoryLocationCode} value={item.inventoryLocationCode}>
+                          {item.inventoryLocationDescription}
+                        </Option>
+                      ))
                     : null}
                 </Select>
               </Form.Item>
@@ -889,22 +991,11 @@ const InventoryMaterialTransfer = () => {
               >
                 <Select style={{ width: '100%' }} placeholder="Select Location">
                   {locationlist
-                    ? locationlist
-                        .filter(
-                          item =>
-                            !(
-                              sameProjectSelected &&
-                              item.inventoryLocationCode === selectedFromLocation
-                            ),
-                        )
-                        .map(item => (
-                          <Option
-                            key={item.inventoryLocationCode}
-                            value={item.inventoryLocationCode}
-                          >
-                            {item.inventoryLocationDescription}
-                          </Option>
-                        ))
+                    ? locationlist.map(item => (
+                        <Option key={item.inventoryLocationCode} value={item.inventoryLocationCode}>
+                          {item.inventoryLocationDescription}
+                        </Option>
+                      ))
                     : null}
                 </Select>
               </Form.Item>
@@ -923,18 +1014,79 @@ const InventoryMaterialTransfer = () => {
             </div>
           </div>
         </Form>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 8,
+            marginBottom: 10,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              flexWrap: 'wrap',
+            }}
+          >
+            <span style={{ fontWeight: 'bold' }}>
+              {selectedRowKeys.length} item{selectedRowKeys.length === 1 ? '' : 's'} selected
+            </span>
+            <Button
+              type="primary"
+              onClick={handleClearSelection}
+              disabled={selectedRowKeys.length === 0}
+            >
+              Clear Selection
+            </Button>
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              width: isMobile ? '100%' : 'auto',
+              flexWrap: 'wrap',
+            }}
+          >
+            <Checkbox
+              checked={showSelectedOnly}
+              disabled={selectedRowKeys.length === 0}
+              onChange={e => setShowSelectedOnly(e.target.checked)}
+            >
+              Show selected only
+            </Checkbox>
+            <Input.Search
+              style={{ width: isMobile ? '100%' : '300px' }}
+              placeholder="Search here..."
+              enterButton
+              allowClear
+              value={itemSearchText}
+              onChange={e => setItemSearchText(e.target.value)}
+            />
+          </div>
+        </div>
         <Form form={itemsForm} preserve>
-          <div style={{ maxHeight: '550px', overflowX: 'auto', overflowY: 'auto' }}>
+          <div style={{ maxHeight: '550px', overflowX: 'auto', overflowY: 'auto', clear: 'both' }}>
             <Table
               columns={getTransferItemsCol}
-              dataSource={transferItems}
+              dataSource={filteredTransferItems}
               rowKey="key"
               bordered
               loading={loadingItems}
               pagination={{
-                defaultPageSize: 20,
+                current: itemsTablePagination.current,
+                pageSize: itemsTablePagination.pageSize,
                 showSizeChanger: true,
                 pageSizeOptions: ['10', '20', '50', '100'],
+                onChange: (page, pageSize) =>
+                  setItemsTablePagination(prev => ({
+                    current: pageSize !== prev.pageSize ? 1 : page,
+                    pageSize,
+                  })),
               }}
             />
           </div>

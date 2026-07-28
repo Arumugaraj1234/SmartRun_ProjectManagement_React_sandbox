@@ -115,6 +115,13 @@ const messageMap = {
   '687': () => message.error('Required Qty cannot be greater than Balance Qty.'),
   '688': () =>
     message.error('From and To Location cannot be same when From and To Project are same'),
+  '689': () =>
+    message.error('To Bin is mandatory for all items when From and To Project & Location are same'),
+  '690': () =>
+    message.error(
+      'Full Available Qty must be transferred for a bin-to-bin transfer within the same Project and Location',
+    ),
+  '691': () => message.error('From Bin and To Bin cannot be the same'),
 }
 
 const messageReturn = (code, content, type) => {

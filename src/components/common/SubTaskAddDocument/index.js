@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import store from 'store'
 import moment from 'moment'
-import { Space, Form, Input, DatePicker, Select, message, AutoComplete, Table } from 'antd'
+import { Space, Form, Input, DatePicker, Select, message, Table } from 'antd'
 import ModalPopup from 'components/shared/ModalPopupComponent'
 import getTaskType from 'services/common/Taskmanagement/Tasktype'
 // import getTaskCategorey from 'services/common/Taskmanagement/TaskCategorey'
@@ -259,13 +259,30 @@ const SubTaskAddDocument = ({
     }
   }
 
-  const handleAssignToChange = (index, value, option) => {
-    const newData = [...retrivaldata]
-    if (option !== undefined) {
-      newData[index].assignTo = option.key
+  const handleAssignToMultiChange = (index, values) => {
+    if (!values || values.length === 0) {
+      const newData = [...retrivaldata]
+      newData[index] = { ...newData[index], assignTo: '', assignToDesc: '' }
+      setRetrivaldata(newData)
+      return
     }
-    newData[index].assignToDesc = value
-    // setRetrivaldata(newData)
+
+    const template = retrivaldata[index]
+    const maxSno = retrivaldata.reduce((max, data) => Math.max(max, data.sno), 0)
+
+    const generatedRows = values.map((empId, i) => {
+      const emp = employeeData.find(item => item.key === empId)
+      return {
+        ...template,
+        assignTo: empId,
+        assignToDesc: emp ? emp.value : '',
+        sno: i === 0 ? template.sno : maxSno + i,
+      }
+    })
+
+    const newData = [...retrivaldata]
+    newData.splice(index, 1, ...generatedRows)
+    setRetrivaldata(newData)
   }
   // const handlePlanStartDateChange = (index, dateString, record) => {
   //   const newData = [...retrivaldata]
@@ -446,12 +463,6 @@ const SubTaskAddDocument = ({
       handlegetdetailsonchange(key)
     }
   }
-  const handleInputChanged = (index, value) => {
-    const newData = [...retrivaldata]
-    newData[index].assignToDesc = value
-    setRetrivaldata(newData)
-  }
-
   const columns = [
     {
       title: (
@@ -493,43 +504,28 @@ const SubTaskAddDocument = ({
       dataIndex: 'assignToDesc',
       key: 'assignToDesc',
       width: '15%',
-      render: (text, record, index) => (
-        // <DropDownComponent
-        //   data={employeeData}
-        //   value={text}
-        //   onChange={() => handleAssignToChange(index, text)}
-        //   onSelect={(value, option) => handleAssignToChange(index, value, option)}
-        // />
-        <Form form={qtyForm}>
-          <Form.Item name={`assignto${record.sno}`} initialValue={record.assignToDesc}>
-            <AutoComplete
-              options={employeeData.map(option => ({
-                ...option,
-                label: (
-                  <div
-                    style={{
-                      backgroundColor: option.isPrimary === '1' ? 'lightgrey' : 'transparent',
-                      borderRadius: '4px',
-                    }}
-                  >
-                    {option.value}
-                  </div>
-                ),
-              }))}
-              value={record.assignToDesc}
-              onSelect={(value, option) => handleAssignToChange(index, value, option)}
-              filterOption={(inputValue, option) =>
-                option.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1
-              }
-            >
-              <Input
-                placeholder="Select here"
-                onBlur={e => handleInputChanged(index, e.target.value)}
-              />
-            </AutoComplete>
-          </Form.Item>
-        </Form>
-      ),
+      render: (text, record, index) =>
+        index === retrivaldata.length - 1 ? (
+          <Select
+            mode="multiple"
+            placeholder="Select here"
+            style={{ width: '100%' }}
+            value={record.assignTo ? [record.assignTo] : []}
+            onChange={values => handleAssignToMultiChange(index, values)}
+            showSearch
+            filterOption={(input, option) =>
+              option.children.toUpperCase().indexOf(input.toUpperCase()) !== -1
+            }
+          >
+            {employeeData.map(item => (
+              <Option key={item.key} value={item.key}>
+                {item.value}
+              </Option>
+            ))}
+          </Select>
+        ) : (
+          text
+        ),
     },
     // {
     //   title: (

@@ -187,7 +187,18 @@ const CommonFields3 = ({
                 </span>
               }
             >
-              <Select style={{ width: '100%' }} onChange={getPONOlist} placeholder="Select Project">
+              <Select
+                style={{ width: '100%' }}
+                onChange={getPONOlist}
+                placeholder="Select Project"
+                showSearch
+                filterOption={(input, option) =>
+                  option.children
+                    .toString()
+                    .toUpperCase()
+                    .indexOf(input.toUpperCase()) !== -1
+                }
+              >
                 {getAllEnable && (
                   <Option key="getAll" value="getAll">
                     Get All
@@ -222,6 +233,13 @@ const CommonFields3 = ({
                   style={{ width: '100%' }}
                   placeholder="Select PO No."
                   onChange={getPONoDtls}
+                  showSearch
+                  filterOption={(input, option) =>
+                    option.children
+                      .toString()
+                      .toUpperCase()
+                      .indexOf(input.toUpperCase()) !== -1
+                  }
                 >
                   <Option key="getAll" value="getAll">
                     Get All
@@ -250,6 +268,13 @@ const CommonFields3 = ({
                       style={{ width: '100%' }}
                       placeholder="Select PO No."
                       onChange={getPONoDtls}
+                      showSearch
+                      filterOption={(input, option) =>
+                        option.children
+                          .toString()
+                          .toUpperCase()
+                          .indexOf(input.toUpperCase()) !== -1
+                      }
                     >
                       {pONoDtlVal?.map(item => (
                         <Option key={item.poId} value={item.poId}>

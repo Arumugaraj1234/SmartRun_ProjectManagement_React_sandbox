@@ -26,7 +26,6 @@ const SubTaskAddDocument = ({
   docFile,
 }) => {
   const { Option } = Select
-  const [inputForm] = Form.useForm()
   const [qtyForm] = Form.useForm()
 
   console.log(dependentTeHdrId)
@@ -62,7 +61,7 @@ const SubTaskAddDocument = ({
     plannedStartDate: moment(planDate).format('YYYY-MM-DD'),
     dueDate: moment(duedDate).format('YYYY-MM-DD'),
     teDtlId: '',
-    qty: '',
+    qty: 1,
     sno: 1,
   }
 
@@ -241,7 +240,6 @@ const SubTaskAddDocument = ({
     setActName(undefined)
     setActNameData([])
     setRetrivaldata([])
-    inputForm.resetFields()
     qtyForm.resetFields()
     const httpRetriveresponse = await TaskDtlRetriveService(retriveprop)
     if (httpRetriveresponse.responseMessage === '200') {
@@ -282,6 +280,13 @@ const SubTaskAddDocument = ({
 
     const newData = [...retrivaldata]
     newData.splice(index, 1, ...generatedRows)
+    setRetrivaldata(newData)
+  }
+
+  const handleAssignToSingleChange = (index, empId) => {
+    const emp = employeeData.find(item => item.key === empId)
+    const newData = [...retrivaldata]
+    newData[index] = { ...newData[index], assignTo: empId, assignToDesc: emp ? emp.value : '' }
     setRetrivaldata(newData)
   }
   // const handlePlanStartDateChange = (index, dateString, record) => {
@@ -357,11 +362,16 @@ const SubTaskAddDocument = ({
     setRetrivaldata([])
   }
 
-  const handleQtyChange = (index, e) => {
+  const handleQtyChange = (index, e, record) => {
     console.log('handleQtyChange------> ')
     const newData = [...retrivaldata]
-    newData[index].qty = e.target.value
+    const { value: rawValue } = e.target
+    const value = rawValue === '' || Number.isNaN(Number(rawValue)) || Number(rawValue) < 1 ? 1 : rawValue
+    newData[index].qty = value
     setRetrivaldata(newData)
+    qtyForm.setFieldsValue({
+      [`qtyfield${record.sno}`]: value,
+    })
   }
 
   const handleAddRow = index => {
@@ -383,12 +393,11 @@ const SubTaskAddDocument = ({
         plannedStartDate: moment(planDate).format('YYYY-MM-DD'),
         dueDate: moment(duedDate).format('YYYY-MM-DD'),
         teDtlId: '',
-        qty: '',
+        qty: 1,
         sno: maxSno + 1,
       }
 
       setRetrivaldata([...retrivaldata, emptyTemps])
-      inputForm.resetFields()
     } else {
       messageReturn(405)
     }
@@ -404,9 +413,14 @@ const SubTaskAddDocument = ({
   const handleinsertSubmit = async () => {
     setSubmitBtnDisable(true)
     console.log('handleinsertSubmit---> ', retrivaldata)
-    const filteredData = retrivaldata.filter(
-      entry => entry.activityName !== '' || entry.assignTo !== '',
-    )
+    // Only the trailing, never-touched row (the "add next entry" placeholder) is dropped
+    // silently. Any other row - including one a user cleared out after it was filled in -
+    // is kept so the mandatory-field check below can flag it instead of losing it.
+    const lastIndex = retrivaldata.length - 1
+    const filteredData = retrivaldata.filter((entry, index) => {
+      const isUntouchedRow = entry.activityName === '' && entry.assignTo === ''
+      return !(index === lastIndex && isUntouchedRow)
+    })
     const hasEmptyValues = filteredData.some(
       entry =>
         entry.activityName === '' ||
@@ -414,9 +428,13 @@ const SubTaskAddDocument = ({
         entry.plannedStartDate === '' ||
         entry.plannedCompletedDate === '' ||
         entry.dueDate === '' ||
-        entry.qty === '',
+        entry.qty === '' ||
+        Number.isNaN(Number(entry.qty)) ||
+        Number(entry.qty) < 1,
     )
-    if (hasEmptyValues) {
+    if (filteredData.length === 0) {
+      messageReturn(680)
+    } else if (hasEmptyValues) {
       messageReturn(405)
     } else {
       const newInsert = {
@@ -474,25 +492,19 @@ const SubTaskAddDocument = ({
       dataIndex: 'activityName',
       key: 'activityName',
       width: '25%',
-      render: (text, record, index) =>
-        index === retrivaldata.length - 1 ? (
-          <Form form={inputForm}>
-            <Form.Item name="inputfield">
-              <Input
-                // value={activityNames[index]}
-                value={text}
-                onBlur={e => handleActivityChange(index, e)}
-                placeholder="Type here..."
-                style={{ width: '300px' }}
-                name="inputfield"
-                maxLength={2056}
-                // type="text"
-              />
-            </Form.Item>
-          </Form>
-        ) : (
-          text
-        ),
+      render: (text, record, index) => (
+        <Form form={qtyForm}>
+          <Form.Item name={`activityName${record.sno}`} initialValue={record.activityName}>
+            <Input
+              value={record.activityName}
+              onBlur={e => handleActivityChange(index, e)}
+              placeholder="Type here..."
+              style={{ width: '300px' }}
+              maxLength={2056}
+            />
+          </Form.Item>
+        </Form>
+      ),
     },
     {
       title: (
@@ -524,7 +536,22 @@ const SubTaskAddDocument = ({
             ))}
           </Select>
         ) : (
-          text
+          <Select
+            placeholder="Select here"
+            style={{ width: '100%' }}
+            value={record.assignTo || undefined}
+            onChange={value => handleAssignToSingleChange(index, value)}
+            showSearch
+            filterOption={(input, option) =>
+              option.children.toUpperCase().indexOf(input.toUpperCase()) !== -1
+            }
+          >
+            {employeeData.map(item => (
+              <Option key={item.key} value={item.key}>
+                {item.value}
+              </Option>
+            ))}
+          </Select>
         ),
     },
     // {
@@ -649,9 +676,10 @@ const SubTaskAddDocument = ({
           <Form.Item name={`qtyfield${record.sno}`} initialValue={record.qty}>
             <Input
               value={record.qty}
-              onBlur={e => handleQtyChange(index, e)}
+              onBlur={e => handleQtyChange(index, e, record)}
               placeholder="Type here..."
               type="number"
+              min={1}
               name="qtyfieldvalue"
             />
           </Form.Item>
@@ -679,7 +707,6 @@ const SubTaskAddDocument = ({
   ]
 
   const clearform = () => {
-    inputForm.resetFields()
     qtyForm.resetFields()
     setRetrivaldata([])
   }

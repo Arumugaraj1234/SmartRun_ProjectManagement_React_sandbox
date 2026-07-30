@@ -150,6 +150,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
     const props = {
       indentId,
       tenantId,
+      processCode: ProcessCode1 === '8' ? ProcessCode1 : '5',
     }
 
     const httpgethdrdetails = await IndentGroupgetDetails({
@@ -3919,7 +3920,23 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
                           </p>
                         </div>
                       </div>
-                    ) : null}
+                    ) : (
+                      <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
+                            Allocated Value (Rs.) :
+                          </p>
+
+                          <p style={{ marginBottom: '0' }}>
+                            {scmHdrdata && scmHdrdata.length > 0 && scmHdrdata[0].allocatedValue
+                              ? parseFloat(
+                                  parseFloat(scmHdrdata[0].allocatedValue).toFixed(2),
+                                ).toLocaleString('en-IN')
+                              : '0'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                     {scmHdrdata?.[0]?.costFlowType !== 'NEW' ? (
                       <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
                         <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -3936,7 +3953,23 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
                           </p>
                         </div>
                       </div>
-                    ) : null}
+                    ) : (
+                      <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
+                            Actual Consumed Value (Rs.) :
+                          </p>
+
+                          <p style={{ marginBottom: '0' }}>
+                            {scmHdrdata && scmHdrdata.length > 0 && scmHdrdata[0].actualConsumedValue
+                              ? parseFloat(
+                                  parseFloat(scmHdrdata[0].actualConsumedValue).toFixed(2),
+                                ).toLocaleString('en-IN')
+                              : '0'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <Divider orientation="left" style={{ margin: '0px' }}>

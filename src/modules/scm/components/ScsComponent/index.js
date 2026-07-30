@@ -16,8 +16,9 @@ import {
   Button,
   Spin,
   Table,
+  Tooltip,
 } from 'antd'
-import { CommentOutlined, DownloadOutlined } from '@ant-design/icons'
+import { CommentOutlined, DownloadOutlined, PlusCircleOutlined } from '@ant-design/icons'
 import TableComponent from 'components/common/TableComponent'
 import ButtonComponent from 'components/shared/ButtonComponent'
 import IndentGroupgetDetails from 'services/common/IndentGroupService'
@@ -26,6 +27,7 @@ import RemoveIcon from 'components/shared/RemoveIconComponent'
 import AddIconButton from 'components/shared/AddIconComponent'
 import Popuptable from 'components/shared/PopuptableComponent'
 import ModalPopup from 'components/shared/ModalPopupComponent'
+import AllocateStationBudgetModal from 'components/common/AllocateStationBudgetModal'
 import { useMediaQuery } from 'react-responsive'
 
 import './style.scss'
@@ -59,7 +61,9 @@ const SupCompState = ({
   const enquiryId = store.get('enquiryId')
   const Menulistdata = store.get('MenuListData')
   const { docTypeCode, mstId, processCode } = Tab
+  const depCode = store.get('depCode')
 
+  const [allocateModalVisible, setAllocateModalVisible] = useState(false)
   const [scmretrievaldata, setScmretrievaldata] = useState([])
   const [vendorQuafylst, setVendorQuafylst] = useState(null)
   const [scmHdrdata, setScmHdrdata] = useState([])
@@ -1148,7 +1152,7 @@ const SupCompState = ({
   // )
 
   const handlescsapproval = async seq => {
-    const insertCheck = await handleinsert()
+    const insertCheck = await handleinsert(true)
     console.log('finalval,,,.....', finalVal)
     const formvalue = inputForm.getFieldValue()
     let isValid = false
@@ -1194,11 +1198,12 @@ const SupCompState = ({
       })
 
       if (httpapprovals.responseCode === '200') {
+        message.success(httpapprovals.responseMessage)
         onmodalCancel()
-        setApproveRemarksCard(false)
       } else {
         message.error(httpapprovals.responseMessage)
       }
+      setApproveRemarksCard(false)
     }
   }
 
@@ -1300,7 +1305,7 @@ const SupCompState = ({
     )
   }
 
-  const handleinsert = async () => {
+  const handleinsert = async (silent = false) => {
     let insertcheck = false
     const formvalues = allPropForm.getFieldValue()
     const paymenttermsArr = [...paymenttermdatal1, ...paymenttermdatal2, ...paymenttermdatal3]
@@ -1617,8 +1622,10 @@ const SupCompState = ({
       })
 
       if (httpgethdrdetails.responseCode === '200') {
-        message.success(httpgethdrdetails.responseMessage)
-        onmodalCancel()
+        if (!silent) {
+          message.success(httpgethdrdetails.responseMessage)
+          onmodalCancel()
+        }
         setIsdisablebtn(false)
         insertcheck = true
       } else {
@@ -3893,6 +3900,14 @@ const SupCompState = ({
                             ).toLocaleString('en-IN')
                           : '0'}
                       </p>
+                      {depCode === 'D03' && scmHdrdata?.[0]?.canAllocateFromSalesBudget === 'true' ? (
+                        <Tooltip title="Allocate budget from Sales Value">
+                          <PlusCircleOutlined
+                            style={{ marginLeft: '8px', color: '#1890ff', cursor: 'pointer' }}
+                            onClick={() => setAllocateModalVisible(true)}
+                          />
+                        </Tooltip>
+                      ) : null}
                     </div>
                   </div>
                 )}
@@ -3929,6 +3944,33 @@ const SupCompState = ({
                     </div>
                   </div>
                 )}
+                {scmHdrdata?.[0]?.costFlowType === 'NEW' ? (
+                  <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
+                        Available Value (Rs.) :
+                      </p>
+                      {(() => {
+                        const allocated = parseFloat(scmHdrdata?.[0]?.allocatedValue) || 0
+                        const consumed = parseFloat(scmHdrdata?.[0]?.actualConsumedValue) || 0
+                        const quote = parseFloat(finalcost) || 0
+                        const available = allocated - consumed
+                        const isShort = available < quote
+                        return (
+                          <p
+                            style={{
+                              marginBottom: '0',
+                              color: isShort ? 'red' : 'inherit',
+                              fontWeight: isShort ? 'bold' : 'normal',
+                            }}
+                          >
+                            {available.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                          </p>
+                        )
+                      })()}
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
               <Divider orientation="left" style={{ margin: '0px' }}>
@@ -5944,6 +5986,15 @@ const SupCompState = ({
                 setPartnumModal(false)
                 setProductCostDetails([])
               }}
+            />
+          ) : null}
+          {allocateModalVisible ? (
+            <AllocateStationBudgetModal
+              visible={allocateModalVisible}
+              onCancel={() => setAllocateModalVisible(false)}
+              pkaId={scmHdrdata?.[0]?.pkaId}
+              stationLabel={station}
+              onSaved={getscshdrleveldata}
             />
           ) : null}
         </div>

@@ -11,6 +11,7 @@ import {
   DatePicker,
   Space,
   Popover,
+  Popconfirm,
   message,
   Skeleton,
   Button,
@@ -1204,6 +1205,31 @@ const SupCompState = ({
         message.error(httpapprovals.responseMessage)
       }
       setApproveRemarksCard(false)
+    }
+  }
+
+  const handleRaiseBudgetExcess = async () => {
+    const props = {
+      empId: employeeId,
+      tenantId,
+      scsFinalCost: finalcost,
+      hdrId: igscpId,
+      pmId: processCode,
+      processCode: ProcessCode1 === '8' ? ProcessCode1 : '5',
+      pmHdrId,
+      enquiryId,
+      docTypeCode,
+      mstId,
+    }
+    const httpresponse = await IndentGroupgetDetails({
+      requestPath: 'raiseBudgetExcess',
+      requestData: props,
+    })
+    if (httpresponse.responseCode === '200') {
+      message.success(httpresponse.responseMessage)
+      onmodalCancel()
+    } else {
+      message.error(httpresponse.responseMessage)
     }
   }
 
@@ -3900,7 +3926,9 @@ const SupCompState = ({
                             ).toLocaleString('en-IN')
                           : '0'}
                       </p>
-                      {depCode === 'D03' && scmHdrdata?.[0]?.canAllocateFromSalesBudget === 'true' ? (
+                      {depCode === 'D03' &&
+                      scmHdrdata?.[0]?.canAllocateFromSalesBudget === 'true' &&
+                      scmHdrdata?.[0]?.hasBudgetExcess !== 'true' ? (
                         <Tooltip title="Allocate budget from Sales Value">
                           <PlusCircleOutlined
                             style={{ marginLeft: '8px', color: '#1890ff', cursor: 'pointer' }}
@@ -3968,6 +3996,20 @@ const SupCompState = ({
                           </p>
                         )
                       })()}
+                      {depCode === 'D03' &&
+                      scmHdrdata?.[0]?.isShortfall === 'true' &&
+                      scmHdrdata?.[0]?.hasBudgetExcess !== 'true' ? (
+                        <Popconfirm
+                          title="Raise a Budget Excess request for this indent?"
+                          onConfirm={handleRaiseBudgetExcess}
+                          okText="Yes"
+                          cancelText="No"
+                        >
+                          <Button type="link" danger style={{ marginLeft: '8px', padding: 0 }}>
+                            Raise Budget Excess
+                          </Button>
+                        </Popconfirm>
+                      ) : null}
                     </div>
                   </div>
                 ) : null}

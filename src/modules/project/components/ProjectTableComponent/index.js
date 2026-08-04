@@ -279,27 +279,35 @@ const ProjectTable = ({ data, onClickfun }) => {
       key: 'indentPlan',
       dataIndex: 'indentPlan',
       className: 'right-align-cell',
-      render: text => currencyFormat(text),
+      render: (text, record) =>
+        record.costFlowType === 'NEW' ? currencyFormat(record.allocatedValue) : currencyFormat(text),
     },
     {
       title: actualValString,
       dataIndex: 'indentActual',
       key: 'indentActual',
       className: 'right-align-cell',
-      render: text => currencyFormat(text),
+      render: (text, record) =>
+        record.costFlowType === 'NEW' ? currencyFormat(record.actualSpent) : currencyFormat(text),
     },
     {
       title: `Target Cost ${currency[0].currency}`,
       dataIndex: 'targetCost',
       key: 'targetCost',
       className: 'right-align-cell',
-      render: text => (text ? currencyFormat(text) : '0'),
+      render: (text, record) =>
+        record.costFlowType === 'NEW' ? '-' : text ? currencyFormat(text) : '0',
     },
     {
       title: balanceString,
       dataIndex: '',
       className: 'right-align-cell',
       render: record => {
+        if (record.costFlowType === 'NEW') {
+          return record.saleValue !== null && record.actualSpent !== null
+            ? currencyFormat(Number(record.saleValue) - Number(record.actualSpent))
+            : '-'
+        }
         return record.indentPlan !== null && record.indentActual !== null
           ? currencyFormat(Number(record.indentPlan) - Number(record.indentActual))
           : '-'

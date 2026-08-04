@@ -28,6 +28,9 @@ const Projectcomponent = () => {
   const actualValString = `Final${currency[0].currency}`
   const balanceString = `Balance${currency[0].currency}`
   const saleValString = `Sale Value${currency[0].currency}`
+  const allocatedValString = `Allocated Value${currency[0].currency}`
+  const actualSpentString = `Actual Spent${currency[0].currency}`
+  const balanceAvailableString = `Balance Available${currency[0].currency}`
 
   const currentYear = moment().year()
   const currentMonth = moment().month()
@@ -183,26 +186,51 @@ const Projectcomponent = () => {
       //   ),
       //   value: moment(e.dueDate).format('DD-MMM-YYYY'),
       // },
-      {
-        key: 7,
-        label: budgetValString,
-        value: currencyFormat(e.indentPlan),
-      },
-      {
-        key: 8,
-        label: actualValString,
-        value: currencyFormat(e.indentActual),
-      },
-      {
-        key: 9,
-        label: balanceString,
-        value: currencyFormat(Number(e.indentPlan) - Number(e.indentActual)),
-      },
-      {
-        key: 10,
-        label: saleValString,
-        value: currencyFormat(e.saleValue),
-      },
+      ...(e.costFlowType === 'NEW'
+        ? [
+            {
+              key: 7,
+              label: saleValString,
+              value: currencyFormat(e.saleValue),
+            },
+            {
+              key: 8,
+              label: allocatedValString,
+              value: currencyFormat(e.allocatedValue),
+            },
+            {
+              key: 9,
+              label: actualSpentString,
+              value: currencyFormat(e.actualSpent),
+            },
+            {
+              key: 10,
+              label: balanceAvailableString,
+              value: currencyFormat(Number(e.saleValue) - Number(e.actualSpent)),
+            },
+          ]
+        : [
+            {
+              key: 7,
+              label: budgetValString,
+              value: currencyFormat(e.indentPlan),
+            },
+            {
+              key: 8,
+              label: actualValString,
+              value: currencyFormat(e.indentActual),
+            },
+            {
+              key: 9,
+              label: balanceString,
+              value: currencyFormat(Number(e.indentPlan) - Number(e.indentActual)),
+            },
+            {
+              key: 10,
+              label: saleValString,
+              value: currencyFormat(e.saleValue),
+            },
+          ]),
     ]
 
     store.set('Enquiry', Enquiry)

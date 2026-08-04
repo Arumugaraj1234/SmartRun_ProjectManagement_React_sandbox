@@ -63,6 +63,7 @@ const ProjectBExcessSheet = () => {
   const pmId = store.get('processDoc')
   const isInternal = store.get('isInternal')
   const [searchText, setSearchText] = useState('')
+  const [costFlowType, setCostFlowType] = useState('LEGACY')
 
   useEffect(() => {
     getRerieveData()
@@ -71,7 +72,22 @@ const ProjectBExcessSheet = () => {
 
   useEffect(() => {
     getLinkStatus()
+    getCostFlowType()
   }, [])
+
+  const getCostFlowType = async () => {
+    try {
+      const response = await indentFileUpload({
+        requestPath: 'getCostFlowTypeByPmHdrId',
+        requestData: { projectID: ProjectID, tenantID: tenantid },
+      })
+      if (response && response.responseDataMessage) {
+        setCostFlowType(response.responseDataMessage)
+      }
+    } catch (error) {
+      console.error('Error fetching cost flow type:', error)
+    }
+  }
 
   const getRerieveData = async () => {
     setLoading(true)
@@ -162,6 +178,9 @@ const ProjectBExcessSheet = () => {
     console.log(rec, 'rec')
     setSingleDetail(rec)
     const matchedCost = linkStatus?.find(item => item.pkDesc === rec.assemblyValue)
+    const allocatedVal = Number(rec.allocatedValue) || 0
+    const spentSoFarVal = Number(rec.actualSpentSoFar) || 0
+    const balanceAvailableVal = allocatedVal - spentSoFarVal
     form.setFieldsValue({
       action: rec.action !== 'null' && rec.action !== '' ? rec.action : '',
       rca: rec.rootCause !== 'null' && rec.rootCause !== '' ? rec.rootCause : '',
@@ -193,6 +212,17 @@ const ProjectBExcessSheet = () => {
           ? formatIndianNumber(rec.actualCost)
           : '',
       station: rec.assemblyValue !== 'null' && rec.assemblyValue !== '' ? rec.assemblyValue : '',
+      subAssemblyValue:
+        rec.subAssemblyValue !== 'null' && rec.subAssemblyValue !== null && rec.subAssemblyValue !== ''
+          ? rec.subAssemblyValue
+          : '',
+      pjsRefNo: rec.pjsRefNo !== 'null' && rec.pjsRefNo !== null && rec.pjsRefNo !== '' ? rec.pjsRefNo : '',
+      allocatedValueDtl: rec.allocatedValue ? formatIndianNumber(rec.allocatedValue) : '',
+      actualSpentSoFarDtl: rec.actualSpentSoFar ? formatIndianNumber(rec.actualSpentSoFar) : '',
+      balanceAvailableDtl: formatIndianNumber(balanceAvailableVal),
+      pjsValueDtl: rec.actualCost ? formatIndianNumber(rec.actualCost) : '',
+      actualExcessDtl: rec.actualExcess ? formatIndianNumber(rec.actualExcess) : '',
+      overallExcessDtl: rec.overallExcessCost ? formatIndianNumber(rec.overallExcessCost) : '',
     })
     setHdrId(rec.beHdrId)
     console.log('Matched Cost:', matchedCost)
@@ -555,7 +585,7 @@ const ProjectBExcessSheet = () => {
         .includes(searchText.toLowerCase()),
     )
   })
-  const columns = [
+  const legacyColumns = [
     {
       title: 'S.No',
       dataIndex: 'serialNumber',
@@ -899,6 +929,226 @@ const ProjectBExcessSheet = () => {
     },
   ]
 
+  // NEW-flow only (see costFlowType gate below): station-level Allocated Value / Actual Spent
+  // So Far / PJS Value / Actual Excess Cost (PJS) / Overall Excess Cost (Station), replacing the
+  // legacy Budget/Target/Actual/Excess Cost columns above which are always 0/meaningless once
+  // TARGET_VALUE stops being written (see project_budget_target_cost_removal memory).
+  const rowHighlightStyle = record => ({
+    backgroundColor: record.verCheck === '1' ? '#FFFF00' : 'transparent',
+  })
+
+  const renderCurrencyCell = (text, record) => ({
+    props: {
+      style: { ...rowHighlightStyle(record), textAlign: 'right' },
+    },
+    children: (
+      <div>
+        {text !== undefined && text !== null && text !== ''
+          ? parseFloat(text).toLocaleString('en-IN')
+          : ''}
+      </div>
+    ),
+  })
+
+  const renderPlainCell = (text, record) => ({
+    props: { style: rowHighlightStyle(record) },
+    children: text,
+  })
+
+  const renderTextCell = (text, record) => ({
+    props: {
+      style: {
+        ...rowHighlightStyle(record),
+        textAlign: text === 'null' || text === null || text === 'NA' ? 'center' : 'left',
+      },
+    },
+    children: text !== 'null' && text !== null && text !== 'NA' ? text : '-',
+  })
+
+  const newFlowColumns = [
+    {
+      title: 'S.No',
+      dataIndex: 'serialNumber',
+      key: 'serialNumber',
+      width: '6%',
+      render: renderPlainCell,
+    },
+    {
+      title: 'Project Number',
+      dataIndex: 'projectCode',
+      key: 'projectCode',
+      width: '8%',
+      filters: projectcode3,
+      filteredValue: filtersInfo.projectCode,
+      onFilter: (value, record) => record?.projectCode === value,
+      render: renderPlainCell,
+    },
+    {
+      title: 'Indent No.',
+      dataIndex: 'indentCode',
+      key: 'indentCode',
+      width: '9%',
+      filters: indentcode3,
+      filteredValue: filtersInfo.indentCode,
+      onFilter: (value, record) => record?.indentCode === value,
+      render: renderPlainCell,
+    },
+    {
+      title: 'Station',
+      dataIndex: 'assemblyValue',
+      key: 'assemblyValue',
+      width: '9%',
+      filters: assyValue3,
+      filteredValue: filtersInfo.assemblyValue,
+      onFilter: (value, record) => record?.assemblyValue === value,
+      render: renderPlainCell,
+    },
+    {
+      title: 'SubAssembly',
+      dataIndex: 'subAssemblyValue',
+      key: 'subAssemblyValue',
+      width: '10%',
+      filters: subAssyValue3,
+      filteredValue: filtersInfo.subAssemblyValue,
+      onFilter: (value, record) => record?.subAssemblyValue === value,
+      render: renderPlainCell,
+    },
+    {
+      title: 'PJS Ref No.',
+      dataIndex: 'pjsRefNo',
+      key: 'pjsRefNo',
+      width: '9%',
+      render: renderPlainCell,
+    },
+    {
+      title: 'Vendor Name',
+      dataIndex: 'vendorName',
+      key: 'vendorName',
+      width: '8%',
+      filters: vendor3,
+      filteredValue: filtersInfo.vendorName,
+      onFilter: (value, record) => record?.vendorName === value,
+      render: renderPlainCell,
+    },
+    {
+      title: `Allocated Value ${Menulistdata[0].currency}`,
+      dataIndex: 'allocatedValue',
+      key: 'allocatedValue',
+      className: 'right-align-cell',
+      width: '9%',
+      render: renderCurrencyCell,
+    },
+    {
+      title: `Actual Spent So Far ${Menulistdata[0].currency}`,
+      dataIndex: 'actualSpentSoFar',
+      key: 'actualSpentSoFar',
+      className: 'right-align-cell',
+      width: '9%',
+      render: renderCurrencyCell,
+    },
+    {
+      title: `PJS Value ${Menulistdata[0].currency}`,
+      dataIndex: 'actualCost',
+      key: 'actualCost',
+      className: 'right-align-cell',
+      width: '9%',
+      render: renderCurrencyCell,
+    },
+    {
+      title: `Actual Excess Cost (PJS) ${Menulistdata[0].currency}`,
+      dataIndex: 'actualExcess',
+      key: 'actualExcess',
+      className: 'right-align-cell',
+      width: '9%',
+      render: renderCurrencyCell,
+    },
+    {
+      title: `Overall Excess Cost (Station) ${Menulistdata[0].currency}`,
+      dataIndex: 'overallExcessCost',
+      key: 'overallExcessCost',
+      className: 'right-align-cell',
+      width: '9%',
+      render: renderCurrencyCell,
+    },
+    {
+      title: 'Reason',
+      dataIndex: 'reason',
+      key: 'reason',
+      width: '10%',
+      filters: reason3,
+      filteredValue: filtersInfo.reason,
+      onFilter: (value, record) => record?.reason === value,
+      render: renderTextCell,
+    },
+    {
+      title: 'RCA',
+      dataIndex: 'rootCause',
+      key: 'rootCause',
+      width: '10%',
+      filters: RCA3,
+      filteredValue: filtersInfo.rootCause,
+      onFilter: (value, record) => record?.rootCause === value,
+      render: renderTextCell,
+    },
+    {
+      title: 'Responsible Department',
+      dataIndex: 'responsibleDesc',
+      key: 'responsibleDesc',
+      width: '10%',
+      filters: department3,
+      filteredValue: filtersInfo.responsibleDesc,
+      onFilter: (value, record) => record?.responsibleDesc === value,
+      render: renderTextCell,
+    },
+    {
+      title: 'Action Planned',
+      dataIndex: 'action',
+      key: 'action',
+      width: '10%',
+      filters: Action3,
+      filteredValue: filtersInfo.action,
+      onFilter: (value, record) => record?.action === value,
+      render: renderTextCell,
+    },
+    {
+      title: 'Current Status',
+      dataIndex: 'statusDesc',
+      key: 'statusDesc',
+      width: '10%',
+      filters: status3,
+      filteredValue: filtersInfo.statusDesc,
+      onFilter: (value, record) => record?.statusDesc === value,
+      render: renderTextCell,
+    },
+    {
+      title: 'Next Status',
+      dataIndex: 'nextSeqDesc',
+      key: 'nextSeqDesc',
+      width: '10%',
+      filters: nextStatus3,
+      filteredValue: filtersInfo.nextSeqDesc,
+      onFilter: (value, record) => record.nextSeqDesc && record.nextSeqDesc.indexOf(value) === 0,
+      render: renderTextCell,
+    },
+    {
+      title: 'Action',
+      dataIndex: 'action',
+      key: 'actionButton',
+      width: 150,
+      render: (text, record, index) => (
+        <div>
+          <ButtonComponent
+            type="primary"
+            text="Details"
+            onClick={() => handleDetails(record, index)}
+          />
+        </div>
+      ),
+    },
+  ]
+
+  const columns = costFlowType === 'NEW' ? newFlowColumns : legacyColumns
+
   const RejectRemarksComponent = () => {
     return (
       <div>
@@ -1065,48 +1315,121 @@ const ProjectBExcessSheet = () => {
                   <InputComponent type="text" disabled={disable} />
                 </Form.Item>
               </div>
-              <div className="col-md-3">
-                <Form.Item
-                  name="indentBudgetCostlat"
-                  label={<span> Station Budget Cost (Rs.) </span>}
-                >
-                  <InputComponent type="text" disabled={disable} />
-                </Form.Item>
-              </div>
-              <div className="col-md-3">
-                <Form.Item name="indentBudgetCost" label={<span>Station Target Cost (Rs.) </span>}>
-                  <InputComponent type="text" disabled={disable} />
-                </Form.Item>
-              </div>
-              <div className="col-md-3">
-                <Form.Item name="indentActualCost" label={<span>Station Actual Cost (Rs.) </span>}>
-                  <InputComponent type="text" disabled={disable} />
-                </Form.Item>
-              </div>
+              {singledetail?.costFlowType === 'NEW' && (
+                <>
+                  <div className="col-md-3">
+                    <Form.Item name="subAssemblyValue" label={<span>Sub Assy. </span>}>
+                      <InputComponent type="text" disabled={disable} />
+                    </Form.Item>
+                  </div>
+                  <div className="col-md-3">
+                    <Form.Item name="pjsRefNo" label={<span>PJS Ref No. </span>}>
+                      <InputComponent type="text" disabled={disable} />
+                    </Form.Item>
+                  </div>
+                </>
+              )}
+              {singledetail?.costFlowType === 'NEW' ? (
+                <>
+                  <div className="col-md-3">
+                    <Form.Item
+                      name="allocatedValueDtl"
+                      label={<span>Allocated Value for the Station (Rs.) </span>}
+                    >
+                      <InputComponent type="text" disabled={disable} />
+                    </Form.Item>
+                  </div>
+                  <div className="col-md-3">
+                    <Form.Item
+                      name="actualSpentSoFarDtl"
+                      label={<span>Actual Consumed So Far in the Station (Rs.) </span>}
+                    >
+                      <InputComponent type="text" disabled={disable} />
+                    </Form.Item>
+                  </div>
+                  <div className="col-md-3">
+                    <Form.Item
+                      name="balanceAvailableDtl"
+                      label={<span>Balance Available Cost in the Station (Rs.) </span>}
+                    >
+                      <InputComponent type="text" disabled={disable} />
+                    </Form.Item>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="col-md-3">
+                    <Form.Item
+                      name="indentBudgetCostlat"
+                      label={<span> Station Budget Cost (Rs.) </span>}
+                    >
+                      <InputComponent type="text" disabled={disable} />
+                    </Form.Item>
+                  </div>
+                  <div className="col-md-3">
+                    <Form.Item name="indentBudgetCost" label={<span>Station Target Cost (Rs.) </span>}>
+                      <InputComponent type="text" disabled={disable} />
+                    </Form.Item>
+                  </div>
+                  <div className="col-md-3">
+                    <Form.Item name="indentActualCost" label={<span>Station Actual Cost (Rs.) </span>}>
+                      <InputComponent type="text" disabled={disable} />
+                    </Form.Item>
+                  </div>
+                </>
+              )}
 
-              <div className="col-md-3">
-                <Form.Item name="budgetCostlat" label={<span>Indent Budget Cost (Rs.) </span>}>
-                  <InputComponent type="text" disabled={disable} />
-                </Form.Item>
-              </div>
-              <div className="col-md-3">
-                <Form.Item name="budgetCost" label={<span>Indent Target Cost (Rs.) </span>}>
-                  <InputComponent type="text" disabled={disable} />
-                </Form.Item>
-              </div>
-              <div className="col-md-3">
-                <Form.Item name="actualCost" label={<span>Indent Actual Cost (Rs.) </span>}>
-                  <InputComponent type="text" disabled={disable} />
-                </Form.Item>
-              </div>
-              <div className="col-md-3">
-                <Form.Item
-                  name="IndentOverallExcessCost"
-                  label={<span>Indent Overall Excess Cost (Rs.) </span>}
-                >
-                  <InputComponent type="text" disabled={disable} />
-                </Form.Item>
-              </div>
+              {singledetail?.costFlowType === 'NEW' ? (
+                <>
+                  <div className="col-md-3">
+                    <Form.Item name="pjsValueDtl" label={<span>PJS Value (Rs.) </span>}>
+                      <InputComponent type="text" disabled={disable} />
+                    </Form.Item>
+                  </div>
+                  <div className="col-md-3">
+                    <Form.Item
+                      name="actualExcessDtl"
+                      label={<span>Actual Excess Cost (PJS) (Rs.) </span>}
+                    >
+                      <InputComponent type="text" disabled={disable} />
+                    </Form.Item>
+                  </div>
+                  <div className="col-md-3">
+                    <Form.Item
+                      name="overallExcessDtl"
+                      label={<span>Overall Excess Cost (Station) (Rs.) </span>}
+                    >
+                      <InputComponent type="text" disabled={disable} />
+                    </Form.Item>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="col-md-3">
+                    <Form.Item name="budgetCostlat" label={<span>Indent Budget Cost (Rs.) </span>}>
+                      <InputComponent type="text" disabled={disable} />
+                    </Form.Item>
+                  </div>
+                  <div className="col-md-3">
+                    <Form.Item name="budgetCost" label={<span>Indent Target Cost (Rs.) </span>}>
+                      <InputComponent type="text" disabled={disable} />
+                    </Form.Item>
+                  </div>
+                  <div className="col-md-3">
+                    <Form.Item name="actualCost" label={<span>Indent Actual Cost (Rs.) </span>}>
+                      <InputComponent type="text" disabled={disable} />
+                    </Form.Item>
+                  </div>
+                  <div className="col-md-3">
+                    <Form.Item
+                      name="IndentOverallExcessCost"
+                      label={<span>Indent Overall Excess Cost (Rs.) </span>}
+                    >
+                      <InputComponent type="text" disabled={disable} />
+                    </Form.Item>
+                  </div>
+                </>
+              )}
               <div className="col-md-3">
                 <Form.Item
                   name="reason"
@@ -1146,7 +1469,8 @@ const ProjectBExcessSheet = () => {
                   name="action"
                   label={
                     <span>
-                      Action<span style={{ color: 'red' }}>*</span>{' '}
+                      {singledetail?.costFlowType === 'NEW' ? 'Action Planned' : 'Action'}
+                      <span style={{ color: 'red' }}>*</span>{' '}
                     </span>
                   }
                 >

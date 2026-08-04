@@ -3996,20 +3996,29 @@ const SupCompState = ({
                           </p>
                         )
                       })()}
-                      {depCode === 'D03' &&
-                      scmHdrdata?.[0]?.isShortfall === 'true' &&
-                      scmHdrdata?.[0]?.hasBudgetExcess !== 'true' ? (
-                        <Popconfirm
-                          title="Raise a Budget Excess request for this indent?"
-                          onConfirm={handleRaiseBudgetExcess}
-                          okText="Yes"
-                          cancelText="No"
-                        >
-                          <Button type="link" danger style={{ marginLeft: '8px', padding: 0 }}>
-                            Raise Budget Excess
-                          </Button>
-                        </Popconfirm>
-                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+                {scmHdrdata?.[0]?.costFlowType === 'NEW' &&
+                depCode === 'D03' &&
+                scmHdrdata?.[0]?.isShortfall === 'true' &&
+                scmHdrdata?.[0]?.hasBudgetExcess !== 'true' ? (
+                  <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <Popconfirm
+                        title="Raise a Budget Excess request for this indent?"
+                        onConfirm={handleRaiseBudgetExcess}
+                        okText="Yes"
+                        cancelText="No"
+                        okButtonProps={{ disabled: false }}
+                        cancelButtonProps={{ disabled: false }}
+                      >
+                        <ButtonComponent
+                          type="primary"
+                          text="Raise Budget Excess"
+                          disable={false}
+                        />
+                      </Popconfirm>
                     </div>
                   </div>
                 ) : null}

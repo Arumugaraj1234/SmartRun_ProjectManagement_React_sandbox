@@ -211,10 +211,14 @@ const ProjectCostAnalysis = ({ cumulative }) => {
           'Sub Assy.': escapeValue(item.pskDesc),
           'Indent Date': moment(item.createdDate).format('DD-MMM-YYYY'),
           'Indent Closed Date': item.closeDate ? moment(item.closeDate).format('DD-MMM-YYYY') : '-',
-          'Budget Cost (Rs.)': parseFloat(item.budgetValue || 0).toFixed(2),
-          'Target Cost (Rs.)': parseFloat(item.targetValue || 0).toFixed(2),
+          ...(costFlowType !== 'NEW' && {
+            'Budget Cost (Rs.)': parseFloat(item.budgetValue || 0).toFixed(2),
+            'Target Cost (Rs.)': parseFloat(item.targetValue || 0).toFixed(2),
+          }),
           'Final Cost (Rs.)': parseFloat(item.scmBudgetAllocated || 0).toFixed(2),
-          'Budget Status (Rs.)': parseFloat(item.budgetStatus || 0).toFixed(2),
+          ...(costFlowType !== 'NEW' && {
+            'Budget Status (Rs.)': parseFloat(item.budgetStatus || 0).toFixed(2),
+          }),
         })),
       ),
     )
@@ -250,25 +254,46 @@ const ProjectCostAnalysis = ({ cumulative }) => {
       'Cost (Rs.)': Number(item.rupees || 0).toFixed(2),
     }))
 
-    const summaryBudgetTable = [
-      { 'Budget for Indented Material (Rs.)': parseFloat(budgetIndent || 0).toFixed(2) },
-      { 'Final Cost (Rs.)': parseFloat(actualCost - matCost || 0).toFixed(2) },
-      { 'RMC Budget Status (Rs.)': parseFloat(budgetstatus || 0).toFixed(2) },
-      { 'Material Transfer Cost (Rs.)': parseFloat(matCost || 0).toFixed(2) },
-      { 'Debit Note Raised Cost (Rs.)': parseFloat(debitCost || 0).toFixed(2) },
-      { 'Employee Cost (Rs.)': parseFloat(employeeCost || 0).toFixed(2) },
-      { 'Actual Spent (Rs.)': parseFloat(actualCost +employeeCost - debitCost || 0).toFixed(2) },
+    const summaryBudgetTable =
+      costFlowType === 'NEW'
+        ? [
+            { 'Allocated Value (Rs.)': parseFloat(allocatedValue || 0).toFixed(2) },
+            { 'Consumed So Far (Rs.)': parseFloat(consumedSoFar || 0).toFixed(2) },
+            { 'Material Transfer Cost (Rs.)': parseFloat(matCost || 0).toFixed(2) },
+            { 'Employee Cost (Rs.)': parseFloat(employeeCost || 0).toFixed(2) },
+            { 'Debit Note Raised Cost (Rs.)': parseFloat(debitCost || 0).toFixed(2) },
+            { 'Budget Excess Approved (Rs.)': parseFloat(budgetExcessApproved || 0).toFixed(2) },
+            { 'Actual Spent (Rs.)': parseFloat(actualSpentNew || 0).toFixed(2) },
+          ]
+        : [
+            { 'Budget for Indented Material (Rs.)': parseFloat(budgetIndent || 0).toFixed(2) },
+            { 'Final Cost (Rs.)': parseFloat(actualCost - matCost || 0).toFixed(2) },
+            { 'RMC Budget Status (Rs.)': parseFloat(budgetstatus || 0).toFixed(2) },
+            { 'Material Transfer Cost (Rs.)': parseFloat(matCost || 0).toFixed(2) },
+            { 'Debit Note Raised Cost (Rs.)': parseFloat(debitCost || 0).toFixed(2) },
+            { 'Employee Cost (Rs.)': parseFloat(employeeCost || 0).toFixed(2) },
+            { 'Actual Spent (Rs.)': parseFloat(actualCost + employeeCost - debitCost || 0).toFixed(2) },
+          ]
 
-    ]
-
-    const summaryOverallTable = [
-      {
-        Description: 'Overall RMC Mechanical & Electrical',
-        'Overall Sales Budget Cost (Rs.)': parseFloat(budgetCost || 0).toFixed(2),
-        'Actual Spent (Rs.)': parseFloat(actualcostvalue).toFixed(2),
-        'Available budget as on date (Rs.)': parseFloat( budgetCost - actualcostvalue).toFixed(2),
-      },
-    ]
+    const summaryOverallTable =
+      costFlowType === 'NEW'
+        ? [
+            {
+              Description: 'Overall RMC Mechanical & Electrical',
+              'Overall Sales Budget Cost (Rs.)': parseFloat(budgetCost || 0).toFixed(2),
+              'Allocated Value (Rs.)': parseFloat(allocatedValue || 0).toFixed(2),
+              'Actual Spent (Rs.)': parseFloat(actualSpentNew || 0).toFixed(2),
+              'Available budget as on date (Rs.)': parseFloat(budgetCost - actualSpentNew || 0).toFixed(2),
+            },
+          ]
+        : [
+            {
+              Description: 'Overall RMC Mechanical & Electrical',
+              'Overall Sales Budget Cost (Rs.)': parseFloat(budgetCost || 0).toFixed(2),
+              'Actual Spent (Rs.)': parseFloat(actualcostvalue).toFixed(2),
+              'Available budget as on date (Rs.)': parseFloat( budgetCost - actualcostvalue).toFixed(2),
+            },
+          ]
 
     const convertToCSV = data => {
       const header = Object.keys(data[0]).join(',')
@@ -306,7 +331,15 @@ const ProjectCostAnalysis = ({ cumulative }) => {
       csvContent += `Timesheet Report Details\n${convertToCSV(cleanedTimesheet)}\n\n\n`
     }
 
-    if (summaryBudgetTable.length) {
+    if (summaryBudgetTable.length && costFlowType === 'NEW') {
+      csvContent += `Allocated Value (Rs.),${parseFloat(allocatedValue || 0).toFixed(2)}\n`
+      csvContent += `Consumed So Far (Rs.),${parseFloat(consumedSoFar || 0).toFixed(2)}\n`
+      csvContent += `Material Transfer Cost (Rs.),${parseFloat(matCost || 0).toFixed(2)}\n`
+      csvContent += `Employee Cost (Rs.),${parseFloat(employeeCost || 0).toFixed(2)}\n`
+      csvContent += `Debit Note Raised Cost (Rs.),${parseFloat(debitCost || 0).toFixed(2)}\n`
+      csvContent += `Budget Excess Approved (Rs.),${parseFloat(budgetExcessApproved || 0).toFixed(2)}\n`
+      csvContent += `Actual Spent (Rs.),${parseFloat(actualSpentNew || 0).toFixed(2)}\n`
+    } else if (summaryBudgetTable.length) {
       csvContent += `Budget for Indented Material (Rs.),${parseFloat(budgetIndent || 0).toFixed(
         2,
       )}\n`
@@ -590,33 +623,37 @@ const ProjectCostAnalysis = ({ cumulative }) => {
                     <Input type="text" disabled />
                   </Form.Item>
                 </div>
-                <div className="col-3 tob_details">
-                  <p className="tob_label">
-                    Allocated Budget {Menulistdata[0].currency}
-                    <span style={{ color: 'red' }}>*</span> :
-                  </p>
-                  <Form.Item name="allocatedValue" style={{ color: 'black' }}>
-                    <Input type="text" disabled />
-                  </Form.Item>
-                </div>
-                <div className="col-3 tob_details">
-                  <p className="tob_label">
-                    Budget Cost {Menulistdata[0].currency}
-                    <span style={{ color: 'red' }}>*</span> :
-                  </p>
-                  <Form.Item name="budgetvalue" style={{ color: 'black' }}>
-                    <Input type="text" disabled />
-                  </Form.Item>
-                </div>
-                <div className="col-3 tob_details">
-                  <p className="tob_label">
-                    Target Cost {Menulistdata[0].currency}
-                    <span style={{ color: 'red' }}>*</span> :
-                  </p>
-                  <Form.Item name="targetValue" style={{ color: 'black' }}>
-                    <Input type="text" disabled />
-                  </Form.Item>
-                </div>
+                {costFlowType !== 'NEW' && (
+                  <>
+                    <div className="col-3 tob_details">
+                      <p className="tob_label">
+                        Allocated Budget {Menulistdata[0].currency}
+                        <span style={{ color: 'red' }}>*</span> :
+                      </p>
+                      <Form.Item name="allocatedValue" style={{ color: 'black' }}>
+                        <Input type="text" disabled />
+                      </Form.Item>
+                    </div>
+                    <div className="col-3 tob_details">
+                      <p className="tob_label">
+                        Budget Cost {Menulistdata[0].currency}
+                        <span style={{ color: 'red' }}>*</span> :
+                      </p>
+                      <Form.Item name="budgetvalue" style={{ color: 'black' }}>
+                        <Input type="text" disabled />
+                      </Form.Item>
+                    </div>
+                    <div className="col-3 tob_details">
+                      <p className="tob_label">
+                        Target Cost {Menulistdata[0].currency}
+                        <span style={{ color: 'red' }}>*</span> :
+                      </p>
+                      <Form.Item name="targetValue" style={{ color: 'black' }}>
+                        <Input type="text" disabled />
+                      </Form.Item>
+                    </div>
+                  </>
+                )}
               </div>
               <Table columns={columns2} dataSource={detailTable} scroll={{ y: 300 }} bordered />
             </div>
@@ -1322,59 +1359,96 @@ const ProjectCostAnalysis = ({ cumulative }) => {
                 className="row"
                 style={{ display: 'flex', justifyContent: 'center', marginBottom: '10px' }}
               >
-                <div
-                  className="col-xl-3 col-lg-3 col-md-6 col-sm-12 col-xs-12"
-                  style={{ display: 'flex' }}
-                >
-                  <p style={{ marginRight: '10px', fontWeight: 'bold' }}>Total Budget Cost (Rs.)</p>
-                  <p>
-                    {catbaseData?.totalBudgetCost !== undefined &&
-                    catbaseData?.totalBudgetCost !== null
-                      ? parseFloat(catbaseData?.totalBudgetCost).toLocaleString('en-IN')
-                      : ''}
-                  </p>
-                </div>
-                <div
-                  className="col-xl-3 col-lg-3 col-md-6 col-sm-12 col-xs-12"
-                  style={{ display: 'flex' }}
-                >
-                  <p style={{ marginLeft: '20px', marginRight: '10px', fontWeight: 'bold' }}>
-                    Total Target Cost (Rs.)
-                  </p>
-                  <p>
-                    {catbaseData?.totalTargetCost !== undefined &&
-                    catbaseData?.totalTargetCost !== null
-                      ? parseFloat(catbaseData?.totalTargetCost).toLocaleString('en-IN')
-                      : ''}
-                  </p>
-                </div>
-                <div
-                  className="col-xl-3 col-lg-3 col-md-6 col-sm-12 col-xs-12"
-                  style={{ display: 'flex' }}
-                >
-                  <p style={{ marginLeft: '20px', marginRight: '10px', fontWeight: 'bold' }}>
-                    Total Actual Cost (Rs.)
-                  </p>
-                  <p>
-                    {catbaseData?.totalPoCost !== undefined && catbaseData?.totalPoCost !== null
-                      ? parseFloat(catbaseData?.totalPoCost).toLocaleString('en-IN')
-                      : ''}
-                  </p>
-                </div>
-                <div
-                  className="col-xl-3 col-lg-3 col-md-6 col-sm-12 col-xs-12"
-                  style={{ display: 'flex' }}
-                >
-                  <p style={{ marginLeft: '20px', marginRight: '10px', fontWeight: 'bold' }}>
-                    Total Budget Status (Rs.)
-                  </p>
-                  <p>
-                    {catbaseData?.finalBudgetStatus !== undefined &&
-                    catbaseData?.finalBudgetStatus !== null
-                      ? parseFloat(catbaseData?.finalBudgetStatus).toLocaleString('en-IN')
-                      : ''}
-                  </p>
-                </div>
+                {costFlowType === 'NEW' ? (
+                  <>
+                    <div
+                      className="col-xl-3 col-lg-3 col-md-6 col-sm-12 col-xs-12"
+                      style={{ display: 'flex' }}
+                    >
+                      <p style={{ marginRight: '10px', fontWeight: 'bold' }}>
+                        Total Consumed So Far (Rs.)
+                      </p>
+                      <p>
+                        {catbaseData?.consumedSoFar !== undefined &&
+                        catbaseData?.consumedSoFar !== null
+                          ? parseFloat(catbaseData?.consumedSoFar).toLocaleString('en-IN')
+                          : ''}
+                      </p>
+                    </div>
+                    <div
+                      className="col-xl-3 col-lg-3 col-md-6 col-sm-12 col-xs-12"
+                      style={{ display: 'flex' }}
+                    >
+                      <p style={{ marginLeft: '20px', marginRight: '10px', fontWeight: 'bold' }}>
+                        Total Budget Excess Approved (Rs.)
+                      </p>
+                      <p>
+                        {catbaseData?.budgetExcessApproved !== undefined &&
+                        catbaseData?.budgetExcessApproved !== null
+                          ? parseFloat(catbaseData?.budgetExcessApproved).toLocaleString('en-IN')
+                          : ''}
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div
+                      className="col-xl-3 col-lg-3 col-md-6 col-sm-12 col-xs-12"
+                      style={{ display: 'flex' }}
+                    >
+                      <p style={{ marginRight: '10px', fontWeight: 'bold' }}>
+                        Total Budget Cost (Rs.)
+                      </p>
+                      <p>
+                        {catbaseData?.totalBudgetCost !== undefined &&
+                        catbaseData?.totalBudgetCost !== null
+                          ? parseFloat(catbaseData?.totalBudgetCost).toLocaleString('en-IN')
+                          : ''}
+                      </p>
+                    </div>
+                    <div
+                      className="col-xl-3 col-lg-3 col-md-6 col-sm-12 col-xs-12"
+                      style={{ display: 'flex' }}
+                    >
+                      <p style={{ marginLeft: '20px', marginRight: '10px', fontWeight: 'bold' }}>
+                        Total Target Cost (Rs.)
+                      </p>
+                      <p>
+                        {catbaseData?.totalTargetCost !== undefined &&
+                        catbaseData?.totalTargetCost !== null
+                          ? parseFloat(catbaseData?.totalTargetCost).toLocaleString('en-IN')
+                          : ''}
+                      </p>
+                    </div>
+                    <div
+                      className="col-xl-3 col-lg-3 col-md-6 col-sm-12 col-xs-12"
+                      style={{ display: 'flex' }}
+                    >
+                      <p style={{ marginLeft: '20px', marginRight: '10px', fontWeight: 'bold' }}>
+                        Total Actual Cost (Rs.)
+                      </p>
+                      <p>
+                        {catbaseData?.totalPoCost !== undefined && catbaseData?.totalPoCost !== null
+                          ? parseFloat(catbaseData?.totalPoCost).toLocaleString('en-IN')
+                          : ''}
+                      </p>
+                    </div>
+                    <div
+                      className="col-xl-3 col-lg-3 col-md-6 col-sm-12 col-xs-12"
+                      style={{ display: 'flex' }}
+                    >
+                      <p style={{ marginLeft: '20px', marginRight: '10px', fontWeight: 'bold' }}>
+                        Total Budget Status (Rs.)
+                      </p>
+                      <p>
+                        {catbaseData?.finalBudgetStatus !== undefined &&
+                        catbaseData?.finalBudgetStatus !== null
+                          ? parseFloat(catbaseData?.finalBudgetStatus).toLocaleString('en-IN')
+                          : ''}
+                      </p>
+                    </div>
+                  </>
+                )}
               </div>
               <Divider style={{ margin: '15px 0' }} />
             </div>

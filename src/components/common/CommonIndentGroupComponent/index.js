@@ -593,15 +593,20 @@ const CommonIndentGroupComponent = ({ isTailview }) => {
       })
     })
 
-  const searchedData = hdretrievedata.filter(item => {
-    if (!searchText) return true
-    return Object.values(item).some(value =>
-      value
-        ?.toString()
-        .toLowerCase()
-        .includes(searchText.toLowerCase()),
-    )
-  })
+  const searchedData = hdretrievedata
+    .filter(item => {
+      if (!searchText) return true
+      return Object.values(item).some(value =>
+        value
+          ?.toString()
+          .toLowerCase()
+          .includes(searchText.toLowerCase()),
+      )
+    })
+    // Target Cost has no real equivalent for NEW-flow (it's always the legacy indent_hdr.TARGET_VALUE,
+    // permanently 0 there) - blank it at the data level, not just in render, so it also disappears
+    // from ant-table-extensions' "Export to CSV" (which reads raw field values, not render output).
+    .map(item => (item.costFlowType === 'NEW' ? { ...item, targetCost: '-' } : item))
 
   const columns = [
     {
@@ -759,7 +764,11 @@ const CommonIndentGroupComponent = ({ isTailview }) => {
           },
         },
         children:
-          text !== undefined && text !== null ? parseFloat(text).toLocaleString('en-IN') : '-',
+          text === '-'
+            ? '-'
+            : text !== undefined && text !== null
+            ? parseFloat(text).toLocaleString('en-IN')
+            : '-',
       }),
     },
     {
@@ -940,7 +949,14 @@ const CommonIndentGroupComponent = ({ isTailview }) => {
         )
       },
     },
-  ]
+    // This list can span multiple projects at once (portfolio-wide view), so only drop the whole
+    // column when every currently-loaded row is NEW-flow; a mixed legacy+NEW list keeps the column
+    // and falls back to per-row blanking (see searchedData above).
+  ].filter(
+    col =>
+      col.key !== 'targetCost' ||
+      !(searchedData.length > 0 && searchedData.every(row => row.costFlowType === 'NEW')),
+  )
 
   const handleRefreshdetails = async (indentid, fromdate, todate, projectcode) => {
     const props = {

@@ -72,11 +72,22 @@ const NotifyApprove = ({ details, modalVisible, onCancel }) => {
           </div>
           <div className="row mb-2">
             <div className="col-sm-6 font-weight-bold d-flex justify-content-between align-items-center">
-              <span> Target Cost & Actual Cost</span> <span>:</span>
+              <span>
+                {details?.indentDtl?.[0]?.costFlowType === 'NEW'
+                  ? 'Actual Cost'
+                  : 'Target Cost & Actual Cost'}
+              </span>{' '}
+              <span>:</span>
             </div>
             <div className="col-sm-6 d-flex align-items-center">
-              {details?.indentDtl?.[0]?.targetValue || '-'} &{' '}
-              {details?.indentDtl?.[0]?.allocatedValue || '-'}
+              {details?.indentDtl?.[0]?.costFlowType === 'NEW' ? (
+                details?.indentDtl?.[0]?.allocatedValue || '-'
+              ) : (
+                <>
+                  {details?.indentDtl?.[0]?.targetValue || '-'} &{' '}
+                  {details?.indentDtl?.[0]?.allocatedValue || '-'}
+                </>
+              )}
             </div>
           </div>
           <div className="row mb-2">

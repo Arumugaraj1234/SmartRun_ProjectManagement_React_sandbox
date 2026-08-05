@@ -152,7 +152,22 @@ const IndentManagement = ({ componentdata }) => {
     addIndentbtn()
     getProductDetails()
     getKeyareas()
+    getCostFlowType()
   }, [])
+
+  const getCostFlowType = async () => {
+    try {
+      const response = await indentFileUpload({
+        requestPath: 'getCostFlowTypeByPmHdrId',
+        requestData: { projectID: ProjectID || commonProjectId, tenantID: tenantid },
+      })
+      if (response && response.responseDataMessage) {
+        setCostFlowType(response.responseDataMessage)
+      }
+    } catch (error) {
+      console.error('Error fetching cost flow type:', error)
+    }
+  }
 
   useEffect(() => {
     const handleResize = () => {
@@ -1171,7 +1186,10 @@ const IndentManagement = ({ componentdata }) => {
         />
       ),
     },
-  ]
+    // This screen is always scoped to one project, so every row shares the same costFlowType -
+    // drop the whole Target Cost column when the project is NEW-flow (always 0 there, no real
+    // equivalent), matching the same fields already hidden in this file's Update Budget Dtl dialog.
+  ].filter(col => col.key !== 'targetCost' || costFlowType !== 'NEW')
   const UpdateindentDetails = async () => {
     setSaveButton(true)
     const formValues = indentDetailForm.getFieldsValue()

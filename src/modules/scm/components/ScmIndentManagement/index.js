@@ -86,7 +86,22 @@ const ScmIndentManagement = ({ isTailview }) => {
 
   useEffect(() => {
     onloadgetallIndent()
+    getCostFlowType()
   }, [])
+
+  const getCostFlowType = async () => {
+    try {
+      const response = await indentFileUpload({
+        requestPath: 'getCostFlowTypeByPmHdrId',
+        requestData: { projectID: ProjectID, tenantID: tenantId },
+      })
+      if (response && response.responseDataMessage) {
+        setCostFlowType(response.responseDataMessage)
+      }
+    } catch (error) {
+      console.error('Error fetching cost flow type:', error)
+    }
+  }
 
   // useEffect(() => {
   //   setFilteringData(criticalTabData)
@@ -872,7 +887,10 @@ const ScmIndentManagement = ({ isTailview }) => {
         </div>
       ),
     },
-  ]
+    // This screen is always scoped to one project, so every row shares the same costFlowType -
+    // drop the whole Target Cost column when the project is NEW-flow (always 0 there, no real
+    // equivalent), matching the field already hidden in this file's own detail dialog.
+  ].filter(col => col.key !== 'targetCost' || costFlowType !== 'NEW')
   const columns2 = [
     {
       title: 'S.No',

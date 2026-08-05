@@ -84,6 +84,30 @@ const ProjectTable = ({ data, onClickfun }) => {
     })
   }
 
+  // NEW-flow rows get their cost fields swapped to the real replacement values here (not just in
+  // render) so ant-table-extensions' "Export to CSV" - which reads raw dataIndex values, not
+  // render output - shows the same numbers as the on-screen table.
+  const displayData = data?.map(record =>
+    record.costFlowType === 'NEW'
+      ? {
+          ...record,
+          indentPlan: record.allocatedValue,
+          indentActual: record.actualSpent,
+          targetCost: '-',
+          balanceComputed:
+            record.saleValue !== null && record.actualSpent !== null
+              ? Number(record.saleValue) - Number(record.actualSpent)
+              : null,
+        }
+      : {
+          ...record,
+          balanceComputed:
+            record.indentPlan !== null && record.indentActual !== null
+              ? Number(record.indentPlan) - Number(record.indentActual)
+              : null,
+        },
+  )
+
   const distinct = (value, index, self) => {
     return self.indexOf(value) === index
   }
@@ -279,39 +303,27 @@ const ProjectTable = ({ data, onClickfun }) => {
       key: 'indentPlan',
       dataIndex: 'indentPlan',
       className: 'right-align-cell',
-      render: (text, record) =>
-        record.costFlowType === 'NEW' ? currencyFormat(record.allocatedValue) : currencyFormat(text),
+      render: text => currencyFormat(text),
     },
     {
       title: actualValString,
       dataIndex: 'indentActual',
       key: 'indentActual',
       className: 'right-align-cell',
-      render: (text, record) =>
-        record.costFlowType === 'NEW' ? currencyFormat(record.actualSpent) : currencyFormat(text),
+      render: text => currencyFormat(text),
     },
     {
       title: `Target Cost ${currency[0].currency}`,
       dataIndex: 'targetCost',
       key: 'targetCost',
       className: 'right-align-cell',
-      render: (text, record) =>
-        record.costFlowType === 'NEW' ? '-' : text ? currencyFormat(text) : '0',
+      render: text => (text === '-' ? '-' : text ? currencyFormat(text) : '0'),
     },
     {
       title: balanceString,
-      dataIndex: '',
+      dataIndex: 'balanceComputed',
       className: 'right-align-cell',
-      render: record => {
-        if (record.costFlowType === 'NEW') {
-          return record.saleValue !== null && record.actualSpent !== null
-            ? currencyFormat(Number(record.saleValue) - Number(record.actualSpent))
-            : '-'
-        }
-        return record.indentPlan !== null && record.indentActual !== null
-          ? currencyFormat(Number(record.indentPlan) - Number(record.indentActual))
-          : '-'
-      },
+      render: text => (text !== null && text !== undefined ? currencyFormat(text) : '-'),
     },
     {
       title: 'Completion (%)',
@@ -361,7 +373,7 @@ const ProjectTable = ({ data, onClickfun }) => {
         <div className="table" style={{ marginTop: '15px' }}>
           <Table
             columns={ProjectColumns}
-            dataSource={data}
+            dataSource={displayData}
             exportableProps={{
               fileName: `Project${currentDateTime}`,
               btnProps: {
@@ -371,7 +383,7 @@ const ProjectTable = ({ data, onClickfun }) => {
               },
             }}
             pagination={{
-              pageSizeOptions: ['10', '20', '30', '50', [data?.length]],
+              pageSizeOptions: ['10', '20', '30', '50', [displayData?.length]],
               showSizeChanger: true,
               defaultPageSize: 10,
             }}

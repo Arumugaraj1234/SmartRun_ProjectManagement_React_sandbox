@@ -219,15 +219,19 @@ const CommonPJSComponent = () => {
     })
   })
 
-  const searchedData = (pJSCompTablData ?? []).filter(item => {
-    if (!searchText) return true
-    return Object.values(item).some(value =>
-      value
-        ?.toString()
-        .toLowerCase()
-        .includes(searchText.toLowerCase()),
-    )
-  })
+  const searchedData = (pJSCompTablData ?? [])
+    .filter(item => {
+      if (!searchText) return true
+      return Object.values(item).some(value =>
+        value
+          ?.toString()
+          .toLowerCase()
+          .includes(searchText.toLowerCase()),
+      )
+    })
+    // Target Cost has no real equivalent for NEW-flow (always the legacy indent_hdr.TARGET_VALUE,
+    // permanently 0 there) - blank it at the data level so it's also correct in any CSV export.
+    .map(item => (item.costFlowType === 'NEW' ? { ...item, targetCost: '-' } : item))
   const columns = [
     {
       title: 'S No.',
@@ -367,7 +371,7 @@ const CommonPJSComponent = () => {
             backgroundColor: record.versionCheck === '1' ? '#FFFF00' : 'transparent',
           },
         },
-        children: text != null ? Number(text).toLocaleString('en-IN') : '-',
+        children: text === '-' ? '-' : text != null ? Number(text).toLocaleString('en-IN') : '-',
       }),
     },
     {
@@ -533,7 +537,10 @@ const CommonPJSComponent = () => {
         )
       },
     },
-  ]
+    // This screen is always scoped to one project (store.get('ProjectID')), so every row shares
+    // the same costFlowType - drop the whole column when the project is NEW-flow instead of just
+    // blanking each cell.
+  ].filter(col => col.key !== 'targetCost' || pJSCompTablData?.[0]?.costFlowType !== 'NEW')
   const OpenScsCard = (HdrId, st, it, sub, id, ind, sts, cost, indentCode, fincst) => {
     setIsModalOpen(true)
     setScsHdrid(HdrId)

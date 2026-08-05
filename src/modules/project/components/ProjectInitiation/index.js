@@ -58,6 +58,7 @@ const ProjectInitiation = () => {
   const history = useHistory()
   const [viewModalOpen, setViewModalOpen] = useState(false)
   const [pkaId, setPkaId] = useState(null)
+  const [costFlowType, setCostFlowType] = useState('LEGACY')
   const [manualProjectId, setManualProjectId] = useState('')
   const setDefaultMileStone = [
     {
@@ -114,13 +115,21 @@ const ProjectInitiation = () => {
       return value
     }
 
-    return dataSource.map(row => ({
-      Station: escapeValue(row.keySubArea),
-      'Budget Cost': escapeValue(row.budgetcost),
-      'Target Cost': escapeValue(row.targetcost),
-      'Actual Cost': escapeValue(row.actualcost),
-      'Allocated Value': escapeValue(row.allocatedVal),
-    }))
+    return dataSource.map(row =>
+      costFlowType === 'NEW'
+        ? {
+            Station: escapeValue(row.keySubArea),
+            'Consumed So Far': escapeValue(row.consumedSoFar),
+            'Allocated Value': escapeValue(row.allocatedVal),
+          }
+        : {
+            Station: escapeValue(row.keySubArea),
+            'Budget Cost': escapeValue(row.budgetcost),
+            'Target Cost': escapeValue(row.targetcost),
+            'Actual Cost': escapeValue(row.actualcost),
+            'Allocated Value': escapeValue(row.allocatedVal),
+          },
+    )
   }
 
   const convertToCSV = data => {
@@ -833,6 +842,7 @@ const ProjectInitiation = () => {
       budgetcost: res.budgetCost,
       actualcost: res.actualCost,
       targetcost: res.targetCost,
+      consumedSoFar: res.consumedSoFar,
     }))
 
     setDatas([...newRows, ...Defaultdata])
@@ -891,6 +901,9 @@ const ProjectInitiation = () => {
 
       if (response && response.responseData) {
         setLinkStatus(response.responseData)
+        if (response.responseData.length > 0) {
+          setCostFlowType(response.responseData[0].costFlowType)
+        }
       } else {
         setLinkStatus([])
       }
@@ -1254,48 +1267,67 @@ const ProjectInitiation = () => {
         )
       },
     },
-    {
-      title: `Budget Cost ${curr}`,
-      dataIndex: 'budgetCost',
-      key: 'budgetCost',
-      className: 'right-align-cell',
-      render: (text, record) => {
-        const budgetCost = record.budgetcost
-        return budgetCost !== '' ? (
-          <span>{parseFloat(budgetCost).toLocaleString('en-IN')}</span>
-        ) : (
-          ''
-        )
-      },
-    },
-    {
-      title: `Target Cost ${curr}`,
-      dataIndex: 'targetCost',
-      key: 'targetCost',
-      className: 'right-align-cell',
-      render: (text, record) => {
-        const targetCost = record.targetcost
-        return targetCost !== '' ? (
-          <span>{parseFloat(targetCost).toLocaleString('en-IN')}</span>
-        ) : (
-          ''
-        )
-      },
-    },
-    {
-      title: `Actual Cost ${curr}`,
-      dataIndex: 'actualCost',
-      key: 'actualCost',
-      className: 'right-align-cell',
-      render: (text, record) => {
-        const actualCost = record.actualcost
-        return actualCost !== '' ? (
-          <span>{parseFloat(actualCost).toLocaleString('en-IN')}</span>
-        ) : (
-          ''
-        )
-      },
-    },
+    ...(costFlowType === 'NEW'
+      ? [
+          {
+            title: `Consumed So Far ${curr}`,
+            dataIndex: 'consumedSoFar',
+            key: 'consumedSoFar',
+            className: 'right-align-cell',
+            render: (text, record) => {
+              const consumedSoFar = record.consumedSoFar
+              return consumedSoFar !== '' && consumedSoFar !== undefined ? (
+                <span>{parseFloat(consumedSoFar).toLocaleString('en-IN')}</span>
+              ) : (
+                ''
+              )
+            },
+          },
+        ]
+      : [
+          {
+            title: `Budget Cost ${curr}`,
+            dataIndex: 'budgetCost',
+            key: 'budgetCost',
+            className: 'right-align-cell',
+            render: (text, record) => {
+              const budgetCost = record.budgetcost
+              return budgetCost !== '' ? (
+                <span>{parseFloat(budgetCost).toLocaleString('en-IN')}</span>
+              ) : (
+                ''
+              )
+            },
+          },
+          {
+            title: `Target Cost ${curr}`,
+            dataIndex: 'targetCost',
+            key: 'targetCost',
+            className: 'right-align-cell',
+            render: (text, record) => {
+              const targetCost = record.targetcost
+              return targetCost !== '' ? (
+                <span>{parseFloat(targetCost).toLocaleString('en-IN')}</span>
+              ) : (
+                ''
+              )
+            },
+          },
+          {
+            title: `Actual Cost ${curr}`,
+            dataIndex: 'actualCost',
+            key: 'actualCost',
+            className: 'right-align-cell',
+            render: (text, record) => {
+              const actualCost = record.actualcost
+              return actualCost !== '' ? (
+                <span>{parseFloat(actualCost).toLocaleString('en-IN')}</span>
+              ) : (
+                ''
+              )
+            },
+          },
+        ]),
     {
       title: `Allocated Value ${curr}`,
       dataIndex: 'allocatedVal',

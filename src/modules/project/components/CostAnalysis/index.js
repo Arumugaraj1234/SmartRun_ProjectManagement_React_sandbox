@@ -28,6 +28,10 @@ const ProjectCostAnalysis = ({ cumulative }) => {
   const [availCost, setAvailCost] = useState('')
   const [budgetIndent, setBudgetIndent] = useState('')
   const [budgetstatus, setBudgetstatus] = useState('')
+  const [costFlowType, setCostFlowType] = useState('LEGACY')
+  const [allocatedValue, setAllocatedValue] = useState(0)
+  const [consumedSoFar, setConsumedSoFar] = useState(0)
+  const [budgetExcessApproved, setBudgetExcessApproved] = useState(0)
   const [detailModalVisible, setDetailmodalVisible] = useState(false)
   // const [showMaterialDtl, setshowMaterialDtl] = useState(false)
   const [singleIndent, setSingleIndent] = useState(null)
@@ -135,6 +139,10 @@ const ProjectCostAnalysis = ({ cumulative }) => {
       setActualCost(httpgethdrdetails.responseData?.[0].poReleased)
       setBudgetIndent(httpgethdrdetails.responseData?.[0].indentedMaterial)
       setBudgetstatus(httpgethdrdetails.responseData?.[0].rmcBudgetStatus)
+      setCostFlowType(httpgethdrdetails.responseData?.[0].costFlowType)
+      setAllocatedValue(httpgethdrdetails.responseData?.[0].allocatedValue)
+      setConsumedSoFar(httpgethdrdetails.responseData?.[0].consumedSoFar)
+      setBudgetExcessApproved(httpgethdrdetails.responseData?.[0].budgetExcessApproved)
     } else {
       setRetrivaldata([])
       setRetrivaldata2([])
@@ -203,10 +211,14 @@ const ProjectCostAnalysis = ({ cumulative }) => {
           'Sub Assy.': escapeValue(item.pskDesc),
           'Indent Date': moment(item.createdDate).format('DD-MMM-YYYY'),
           'Indent Closed Date': item.closeDate ? moment(item.closeDate).format('DD-MMM-YYYY') : '-',
-          'Budget Cost (Rs.)': parseFloat(item.budgetValue || 0).toFixed(2),
-          'Target Cost (Rs.)': parseFloat(item.targetValue || 0).toFixed(2),
+          ...(costFlowType !== 'NEW' && {
+            'Budget Cost (Rs.)': parseFloat(item.budgetValue || 0).toFixed(2),
+            'Target Cost (Rs.)': parseFloat(item.targetValue || 0).toFixed(2),
+          }),
           'Final Cost (Rs.)': parseFloat(item.scmBudgetAllocated || 0).toFixed(2),
-          'Budget Status (Rs.)': parseFloat(item.budgetStatus || 0).toFixed(2),
+          ...(costFlowType !== 'NEW' && {
+            'Budget Status (Rs.)': parseFloat(item.budgetStatus || 0).toFixed(2),
+          }),
         })),
       ),
     )
@@ -242,25 +254,46 @@ const ProjectCostAnalysis = ({ cumulative }) => {
       'Cost (Rs.)': Number(item.rupees || 0).toFixed(2),
     }))
 
-    const summaryBudgetTable = [
-      { 'Budget for Indented Material (Rs.)': parseFloat(budgetIndent || 0).toFixed(2) },
-      { 'Final Cost (Rs.)': parseFloat(actualCost - matCost || 0).toFixed(2) },
-      { 'RMC Budget Status (Rs.)': parseFloat(budgetstatus || 0).toFixed(2) },
-      { 'Material Transfer Cost (Rs.)': parseFloat(matCost || 0).toFixed(2) },
-      { 'Debit Note Raised Cost (Rs.)': parseFloat(debitCost || 0).toFixed(2) },
-      { 'Employee Cost (Rs.)': parseFloat(employeeCost || 0).toFixed(2) },
-      { 'Actual Spent (Rs.)': parseFloat(actualCost +employeeCost - debitCost || 0).toFixed(2) },
+    const summaryBudgetTable =
+      costFlowType === 'NEW'
+        ? [
+            { 'Allocated Value (Rs.)': parseFloat(allocatedValue || 0).toFixed(2) },
+            { 'Consumed So Far (Rs.)': parseFloat(consumedSoFar || 0).toFixed(2) },
+            { 'Material Transfer Cost (Rs.)': parseFloat(matCost || 0).toFixed(2) },
+            { 'Employee Cost (Rs.)': parseFloat(employeeCost || 0).toFixed(2) },
+            { 'Debit Note Raised Cost (Rs.)': parseFloat(debitCost || 0).toFixed(2) },
+            { 'Budget Excess Approved (Rs.)': parseFloat(budgetExcessApproved || 0).toFixed(2) },
+            { 'Actual Spent (Rs.)': parseFloat(actualSpentNew || 0).toFixed(2) },
+          ]
+        : [
+            { 'Budget for Indented Material (Rs.)': parseFloat(budgetIndent || 0).toFixed(2) },
+            { 'Final Cost (Rs.)': parseFloat(actualCost - matCost || 0).toFixed(2) },
+            { 'RMC Budget Status (Rs.)': parseFloat(budgetstatus || 0).toFixed(2) },
+            { 'Material Transfer Cost (Rs.)': parseFloat(matCost || 0).toFixed(2) },
+            { 'Debit Note Raised Cost (Rs.)': parseFloat(debitCost || 0).toFixed(2) },
+            { 'Employee Cost (Rs.)': parseFloat(employeeCost || 0).toFixed(2) },
+            { 'Actual Spent (Rs.)': parseFloat(actualCost + employeeCost - debitCost || 0).toFixed(2) },
+          ]
 
-    ]
-
-    const summaryOverallTable = [
-      {
-        Description: 'Overall RMC Mechanical & Electrical',
-        'Overall Sales Budget Cost (Rs.)': parseFloat(budgetCost || 0).toFixed(2),
-        'Actual Spent (Rs.)': parseFloat(actualcostvalue).toFixed(2),
-        'Available budget as on date (Rs.)': parseFloat( budgetCost - actualcostvalue).toFixed(2),
-      },
-    ]
+    const summaryOverallTable =
+      costFlowType === 'NEW'
+        ? [
+            {
+              Description: 'Overall RMC Mechanical & Electrical',
+              'Overall Sales Budget Cost (Rs.)': parseFloat(budgetCost || 0).toFixed(2),
+              'Allocated Value (Rs.)': parseFloat(allocatedValue || 0).toFixed(2),
+              'Actual Spent (Rs.)': parseFloat(actualSpentNew || 0).toFixed(2),
+              'Available budget as on date (Rs.)': parseFloat(budgetCost - actualSpentNew || 0).toFixed(2),
+            },
+          ]
+        : [
+            {
+              Description: 'Overall RMC Mechanical & Electrical',
+              'Overall Sales Budget Cost (Rs.)': parseFloat(budgetCost || 0).toFixed(2),
+              'Actual Spent (Rs.)': parseFloat(actualcostvalue).toFixed(2),
+              'Available budget as on date (Rs.)': parseFloat( budgetCost - actualcostvalue).toFixed(2),
+            },
+          ]
 
     const convertToCSV = data => {
       const header = Object.keys(data[0]).join(',')
@@ -298,7 +331,15 @@ const ProjectCostAnalysis = ({ cumulative }) => {
       csvContent += `Timesheet Report Details\n${convertToCSV(cleanedTimesheet)}\n\n\n`
     }
 
-    if (summaryBudgetTable.length) {
+    if (summaryBudgetTable.length && costFlowType === 'NEW') {
+      csvContent += `Allocated Value (Rs.),${parseFloat(allocatedValue || 0).toFixed(2)}\n`
+      csvContent += `Consumed So Far (Rs.),${parseFloat(consumedSoFar || 0).toFixed(2)}\n`
+      csvContent += `Material Transfer Cost (Rs.),${parseFloat(matCost || 0).toFixed(2)}\n`
+      csvContent += `Employee Cost (Rs.),${parseFloat(employeeCost || 0).toFixed(2)}\n`
+      csvContent += `Debit Note Raised Cost (Rs.),${parseFloat(debitCost || 0).toFixed(2)}\n`
+      csvContent += `Budget Excess Approved (Rs.),${parseFloat(budgetExcessApproved || 0).toFixed(2)}\n`
+      csvContent += `Actual Spent (Rs.),${parseFloat(actualSpentNew || 0).toFixed(2)}\n`
+    } else if (summaryBudgetTable.length) {
       csvContent += `Budget for Indented Material (Rs.),${parseFloat(budgetIndent || 0).toFixed(
         2,
       )}\n`
@@ -441,7 +482,11 @@ const ProjectCostAnalysis = ({ cumulative }) => {
         />
       ),
     },
-  ]
+  ].filter(
+    col =>
+      costFlowType !== 'NEW' ||
+      !['budgetValue', 'targetValue', 'budgetStatus'].includes(col.dataIndex),
+  )
   const columns2 = [
     {
       title: 'S.No',
@@ -578,33 +623,37 @@ const ProjectCostAnalysis = ({ cumulative }) => {
                     <Input type="text" disabled />
                   </Form.Item>
                 </div>
-                <div className="col-3 tob_details">
-                  <p className="tob_label">
-                    Allocated Budget {Menulistdata[0].currency}
-                    <span style={{ color: 'red' }}>*</span> :
-                  </p>
-                  <Form.Item name="allocatedValue" style={{ color: 'black' }}>
-                    <Input type="text" disabled />
-                  </Form.Item>
-                </div>
-                <div className="col-3 tob_details">
-                  <p className="tob_label">
-                    Budget Cost {Menulistdata[0].currency}
-                    <span style={{ color: 'red' }}>*</span> :
-                  </p>
-                  <Form.Item name="budgetvalue" style={{ color: 'black' }}>
-                    <Input type="text" disabled />
-                  </Form.Item>
-                </div>
-                <div className="col-3 tob_details">
-                  <p className="tob_label">
-                    Target Cost {Menulistdata[0].currency}
-                    <span style={{ color: 'red' }}>*</span> :
-                  </p>
-                  <Form.Item name="targetValue" style={{ color: 'black' }}>
-                    <Input type="text" disabled />
-                  </Form.Item>
-                </div>
+                {costFlowType !== 'NEW' && (
+                  <>
+                    <div className="col-3 tob_details">
+                      <p className="tob_label">
+                        Allocated Budget {Menulistdata[0].currency}
+                        <span style={{ color: 'red' }}>*</span> :
+                      </p>
+                      <Form.Item name="allocatedValue" style={{ color: 'black' }}>
+                        <Input type="text" disabled />
+                      </Form.Item>
+                    </div>
+                    <div className="col-3 tob_details">
+                      <p className="tob_label">
+                        Budget Cost {Menulistdata[0].currency}
+                        <span style={{ color: 'red' }}>*</span> :
+                      </p>
+                      <Form.Item name="budgetvalue" style={{ color: 'black' }}>
+                        <Input type="text" disabled />
+                      </Form.Item>
+                    </div>
+                    <div className="col-3 tob_details">
+                      <p className="tob_label">
+                        Target Cost {Menulistdata[0].currency}
+                        <span style={{ color: 'red' }}>*</span> :
+                      </p>
+                      <Form.Item name="targetValue" style={{ color: 'black' }}>
+                        <Input type="text" disabled />
+                      </Form.Item>
+                    </div>
+                  </>
+                )}
               </div>
               <Table columns={columns2} dataSource={detailTable} scroll={{ y: 300 }} bordered />
             </div>
@@ -1017,6 +1066,9 @@ const ProjectCostAnalysis = ({ cumulative }) => {
   ]
   // const avalilablecost = Number(availCost) - Number(employeeCost)
   const actualcostvalue = Number(actualCost) + Number(employeeCost) -Number(debitCost)
+  const actualSpentNew =
+    Number(consumedSoFar) + Number(matCost) + Number(employeeCost) + Number(budgetExcessApproved) -
+    Number(debitCost)
 
   const handleSearch = (index, value) => {
     setSearchindex(index)
@@ -1075,73 +1127,137 @@ const ProjectCostAnalysis = ({ cumulative }) => {
             }}
           >
             <tbody>
-              {/* <tr>
-                <td style={{ border: '1px solid black', padding: '8px' }}>Final Cost (Rs.)</td>
-                <td style={{ border: '1px solid black', padding: '8px' }}>
-                  {actualCost !== undefined &&
-                  matCost !== undefined &&
-                  actualCost !== null &&
-                  matCost !== null
-                    ? (parseFloat(actualCost) - parseFloat(matCost)).toLocaleString('en-IN')
-                    : ''}
-                </td>
-              </tr> */}
-              <tr>
-                <td style={{ border: '1px solid black', padding: '8px' }}>
-                  Budget for Indented Material (Rs.)
-                </td>
-                <td style={{ border: '1px solid black', padding: '8px' }}>
-                  {budgetIndent !== undefined && budgetIndent !== null
-                    ? parseFloat(budgetIndent).toLocaleString('en-IN')
-                    : ''}
-                </td>
-              </tr>
-              <tr>
-                <td style={{ border: '1px solid black', padding: '8px' }}>Final Cost (Rs.)</td>
-                <td style={{ border: '1px solid black', padding: '8px' }}>
-                  {actualCost !== undefined && actualCost !== null
-                    ? (parseFloat(actualCost) - parseFloat(matCost)).toLocaleString('en-IN')
-                    : ''}
-                </td>
-              </tr>
-              <tr>
-                <td style={{ border: '1px solid black', padding: '8px' }}>
-                  RMC Budget Status (Rs.)
-                </td>
-                <td style={{ border: '1px solid black', padding: '8px' }}>
-                  {budgetstatus !== undefined && budgetstatus !== null
-                    ? parseFloat(budgetstatus).toLocaleString('en-IN')
-                    : ''}
-                </td>
-              </tr>
-              <tr>
-                <td style={{ border: '1px solid black', padding: '8px' }}>
-                  Material Transfer Cost (Rs.)
-                </td>
-                <td style={{ border: '1px solid black', padding: '8px' }}>
-                  {matCost !== undefined && matCost !== null
-                    ? parseFloat(matCost).toLocaleString('en-IN')
-                    : ''}
-                </td>
-              </tr>
-              <tr>
-                <td style={{ border: '1px solid black', padding: '8px' }}>
-                  Debit Note Raised Cost (Rs.)
-                </td>
-                <td style={{ border: '1px solid black', padding: '8px' }}>
-                  {debitCost !== undefined && debitCost !== null
-                    ? parseFloat(debitCost).toLocaleString('en-IN')
-                    : 0}
-                </td>
-              </tr>
-              <tr>
-                <td style={{ border: '1px solid black', padding: '8px' }}>Employee Cost (Rs.)</td>
-                <td style={{ border: '1px solid black', padding: '8px' }}>
-                  {employeeCost !== undefined && employeeCost !== null
-                    ? parseFloat(employeeCost).toLocaleString('en-IN')
-                    : ''}
-                </td>
-              </tr>
+              {costFlowType === 'NEW' ? (
+                <>
+                  <tr>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      Allocated Value (Rs.)
+                    </td>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      {allocatedValue !== undefined && allocatedValue !== null
+                        ? parseFloat(allocatedValue).toLocaleString('en-IN')
+                        : ''}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      Consumed So Far (Rs.)
+                    </td>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      {consumedSoFar !== undefined && consumedSoFar !== null
+                        ? parseFloat(consumedSoFar).toLocaleString('en-IN')
+                        : ''}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      Material Transfer Cost (Rs.)
+                    </td>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      {matCost !== undefined && matCost !== null
+                        ? parseFloat(matCost).toLocaleString('en-IN')
+                        : ''}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      Employee Cost (Rs.)
+                    </td>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      {employeeCost !== undefined && employeeCost !== null
+                        ? parseFloat(employeeCost).toLocaleString('en-IN')
+                        : ''}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      Debit Note Raised Cost (Rs.)
+                    </td>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      {debitCost !== undefined && debitCost !== null
+                        ? parseFloat(debitCost).toLocaleString('en-IN')
+                        : 0}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      Budget Excess Approved (Rs.)
+                    </td>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      {budgetExcessApproved !== undefined && budgetExcessApproved !== null
+                        ? parseFloat(budgetExcessApproved).toLocaleString('en-IN')
+                        : ''}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ border: '1px solid black', padding: '8px', fontWeight: 'bold' }}>
+                      Actual Spent (Rs.)
+                    </td>
+                    <td style={{ border: '1px solid black', padding: '8px', fontWeight: 'bold' }}>
+                      {parseFloat(actualSpentNew || 0).toLocaleString('en-IN')}
+                    </td>
+                  </tr>
+                </>
+              ) : (
+                <>
+                  <tr>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      Budget for Indented Material (Rs.)
+                    </td>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      {budgetIndent !== undefined && budgetIndent !== null
+                        ? parseFloat(budgetIndent).toLocaleString('en-IN')
+                        : ''}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>Final Cost (Rs.)</td>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      {actualCost !== undefined && actualCost !== null
+                        ? (parseFloat(actualCost) - parseFloat(matCost)).toLocaleString('en-IN')
+                        : ''}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      RMC Budget Status (Rs.)
+                    </td>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      {budgetstatus !== undefined && budgetstatus !== null
+                        ? parseFloat(budgetstatus).toLocaleString('en-IN')
+                        : ''}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      Material Transfer Cost (Rs.)
+                    </td>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      {matCost !== undefined && matCost !== null
+                        ? parseFloat(matCost).toLocaleString('en-IN')
+                        : ''}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      Debit Note Raised Cost (Rs.)
+                    </td>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      {debitCost !== undefined && debitCost !== null
+                        ? parseFloat(debitCost).toLocaleString('en-IN')
+                        : 0}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>Employee Cost (Rs.)</td>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      {employeeCost !== undefined && employeeCost !== null
+                        ? parseFloat(employeeCost).toLocaleString('en-IN')
+                        : ''}
+                    </td>
+                  </tr>
+                </>
+              )}
             </tbody>
           </table>
 
@@ -1155,8 +1271,13 @@ const ProjectCostAnalysis = ({ cumulative }) => {
                   <th style={{ textAlign: 'center', border: '1px solid #000', padding: '8px' }}>
                     Overall Sales Budget Cost (Rs.)
                   </th>
+                  {costFlowType === 'NEW' && (
+                    <th style={{ textAlign: 'center', border: '1px solid #000', padding: '8px' }}>
+                      Allocated Value (Rs.)
+                    </th>
+                  )}
                   <th style={{ textAlign: 'center', border: '1px solid #000', padding: '8px' }}>
-                    Final Cost (Rs.)
+                    {costFlowType === 'NEW' ? 'Actual Spent (Rs.)' : 'Final Cost (Rs.)'}
                   </th>
                   <th style={{ textAlign: 'center', border: '1px solid #000', padding: '8px' }}>
                     Available budget as on date (Rs.)
@@ -1173,13 +1294,24 @@ const ProjectCostAnalysis = ({ cumulative }) => {
                       ? parseFloat(budgetCost).toLocaleString('en-IN')
                       : ''}
                   </td>
+                  {costFlowType === 'NEW' && (
+                    <td style={{ textAlign: 'center', border: '1px solid #000', padding: '8px' }}>
+                      {allocatedValue !== undefined && allocatedValue !== null
+                        ? parseFloat(allocatedValue).toLocaleString('en-IN')
+                        : ''}
+                    </td>
+                  )}
                   <td style={{ textAlign: 'center', border: '1px solid #000', padding: '8px' }}>
-                    {actualCost !== undefined && actualCost !== null
+                    {costFlowType === 'NEW'
+                      ? parseFloat(actualSpentNew || 0).toLocaleString('en-IN')
+                      : actualCost !== undefined && actualCost !== null
                       ? parseFloat(actualcostvalue).toLocaleString('en-IN')
                       : ''}
                   </td>
                   <td style={{ textAlign: 'center', border: '1px solid #000', padding: '8px' }}>
-                    {availCost !== undefined && availCost !== null
+                    {costFlowType === 'NEW'
+                      ? parseFloat(budgetCost - actualSpentNew || 0).toLocaleString('en-IN')
+                      : availCost !== undefined && availCost !== null
                       ? parseFloat(budgetCost -actualcostvalue).toLocaleString('en-IN')
                       : ''}
                   </td>
@@ -1227,59 +1359,96 @@ const ProjectCostAnalysis = ({ cumulative }) => {
                 className="row"
                 style={{ display: 'flex', justifyContent: 'center', marginBottom: '10px' }}
               >
-                <div
-                  className="col-xl-3 col-lg-3 col-md-6 col-sm-12 col-xs-12"
-                  style={{ display: 'flex' }}
-                >
-                  <p style={{ marginRight: '10px', fontWeight: 'bold' }}>Total Budget Cost (Rs.)</p>
-                  <p>
-                    {catbaseData?.totalBudgetCost !== undefined &&
-                    catbaseData?.totalBudgetCost !== null
-                      ? parseFloat(catbaseData?.totalBudgetCost).toLocaleString('en-IN')
-                      : ''}
-                  </p>
-                </div>
-                <div
-                  className="col-xl-3 col-lg-3 col-md-6 col-sm-12 col-xs-12"
-                  style={{ display: 'flex' }}
-                >
-                  <p style={{ marginLeft: '20px', marginRight: '10px', fontWeight: 'bold' }}>
-                    Total Target Cost (Rs.)
-                  </p>
-                  <p>
-                    {catbaseData?.totalTargetCost !== undefined &&
-                    catbaseData?.totalTargetCost !== null
-                      ? parseFloat(catbaseData?.totalTargetCost).toLocaleString('en-IN')
-                      : ''}
-                  </p>
-                </div>
-                <div
-                  className="col-xl-3 col-lg-3 col-md-6 col-sm-12 col-xs-12"
-                  style={{ display: 'flex' }}
-                >
-                  <p style={{ marginLeft: '20px', marginRight: '10px', fontWeight: 'bold' }}>
-                    Total Actual Cost (Rs.)
-                  </p>
-                  <p>
-                    {catbaseData?.totalPoCost !== undefined && catbaseData?.totalPoCost !== null
-                      ? parseFloat(catbaseData?.totalPoCost).toLocaleString('en-IN')
-                      : ''}
-                  </p>
-                </div>
-                <div
-                  className="col-xl-3 col-lg-3 col-md-6 col-sm-12 col-xs-12"
-                  style={{ display: 'flex' }}
-                >
-                  <p style={{ marginLeft: '20px', marginRight: '10px', fontWeight: 'bold' }}>
-                    Total Budget Status (Rs.)
-                  </p>
-                  <p>
-                    {catbaseData?.finalBudgetStatus !== undefined &&
-                    catbaseData?.finalBudgetStatus !== null
-                      ? parseFloat(catbaseData?.finalBudgetStatus).toLocaleString('en-IN')
-                      : ''}
-                  </p>
-                </div>
+                {costFlowType === 'NEW' ? (
+                  <>
+                    <div
+                      className="col-xl-3 col-lg-3 col-md-6 col-sm-12 col-xs-12"
+                      style={{ display: 'flex' }}
+                    >
+                      <p style={{ marginRight: '10px', fontWeight: 'bold' }}>
+                        Total Consumed So Far (Rs.)
+                      </p>
+                      <p>
+                        {catbaseData?.consumedSoFar !== undefined &&
+                        catbaseData?.consumedSoFar !== null
+                          ? parseFloat(catbaseData?.consumedSoFar).toLocaleString('en-IN')
+                          : ''}
+                      </p>
+                    </div>
+                    <div
+                      className="col-xl-3 col-lg-3 col-md-6 col-sm-12 col-xs-12"
+                      style={{ display: 'flex' }}
+                    >
+                      <p style={{ marginLeft: '20px', marginRight: '10px', fontWeight: 'bold' }}>
+                        Total Budget Excess Approved (Rs.)
+                      </p>
+                      <p>
+                        {catbaseData?.budgetExcessApproved !== undefined &&
+                        catbaseData?.budgetExcessApproved !== null
+                          ? parseFloat(catbaseData?.budgetExcessApproved).toLocaleString('en-IN')
+                          : ''}
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div
+                      className="col-xl-3 col-lg-3 col-md-6 col-sm-12 col-xs-12"
+                      style={{ display: 'flex' }}
+                    >
+                      <p style={{ marginRight: '10px', fontWeight: 'bold' }}>
+                        Total Budget Cost (Rs.)
+                      </p>
+                      <p>
+                        {catbaseData?.totalBudgetCost !== undefined &&
+                        catbaseData?.totalBudgetCost !== null
+                          ? parseFloat(catbaseData?.totalBudgetCost).toLocaleString('en-IN')
+                          : ''}
+                      </p>
+                    </div>
+                    <div
+                      className="col-xl-3 col-lg-3 col-md-6 col-sm-12 col-xs-12"
+                      style={{ display: 'flex' }}
+                    >
+                      <p style={{ marginLeft: '20px', marginRight: '10px', fontWeight: 'bold' }}>
+                        Total Target Cost (Rs.)
+                      </p>
+                      <p>
+                        {catbaseData?.totalTargetCost !== undefined &&
+                        catbaseData?.totalTargetCost !== null
+                          ? parseFloat(catbaseData?.totalTargetCost).toLocaleString('en-IN')
+                          : ''}
+                      </p>
+                    </div>
+                    <div
+                      className="col-xl-3 col-lg-3 col-md-6 col-sm-12 col-xs-12"
+                      style={{ display: 'flex' }}
+                    >
+                      <p style={{ marginLeft: '20px', marginRight: '10px', fontWeight: 'bold' }}>
+                        Total Actual Cost (Rs.)
+                      </p>
+                      <p>
+                        {catbaseData?.totalPoCost !== undefined && catbaseData?.totalPoCost !== null
+                          ? parseFloat(catbaseData?.totalPoCost).toLocaleString('en-IN')
+                          : ''}
+                      </p>
+                    </div>
+                    <div
+                      className="col-xl-3 col-lg-3 col-md-6 col-sm-12 col-xs-12"
+                      style={{ display: 'flex' }}
+                    >
+                      <p style={{ marginLeft: '20px', marginRight: '10px', fontWeight: 'bold' }}>
+                        Total Budget Status (Rs.)
+                      </p>
+                      <p>
+                        {catbaseData?.finalBudgetStatus !== undefined &&
+                        catbaseData?.finalBudgetStatus !== null
+                          ? parseFloat(catbaseData?.finalBudgetStatus).toLocaleString('en-IN')
+                          : ''}
+                      </p>
+                    </div>
+                  </>
+                )}
               </div>
               <Divider style={{ margin: '15px 0' }} />
             </div>
@@ -1336,76 +1505,151 @@ const ProjectCostAnalysis = ({ cumulative }) => {
             }}
           >
             <tbody>
-              <tr>
-                <td style={{ border: '1px solid black', padding: '8px' }}>
-                  Budget for Indented Material (Rs.)
-                </td>
-                <td style={{ border: '1px solid black', padding: '8px' }}>
-                  {budgetIndent !== undefined && budgetIndent !== null
-                    ? parseFloat(budgetIndent).toLocaleString('en-IN')
-                    : ''}
-                </td>
-              </tr>
-              <tr>
-                <td style={{ border: '1px solid black', padding: '8px' }}>Final Cost (Rs.)</td>
-                <td style={{ border: '1px solid black', padding: '8px' }}>
-                  {actualCost !== undefined &&
-                  matCost !== undefined &&
-                  actualCost !== null &&
-                  matCost !== null
-                    ? (parseFloat(actualCost) - parseFloat(matCost)).toLocaleString('en-IN')
-                    : ''}
-                </td>
-              </tr>
-              <tr>
-                <td style={{ border: '1px solid black', padding: '8px' }}>
-                  RMC Budget Status (Rs.)
-                </td>
-                <td style={{ border: '1px solid black', padding: '8px' }}>
-                  {budgetstatus !== undefined && budgetstatus !== null
-                    ? parseFloat(budgetstatus).toLocaleString('en-IN')
-                    : ''}
-                </td>
-              </tr>
-              <tr>
-                <td style={{ border: '1px solid black', padding: '8px' }}>
-                  Material Transfer Cost (Rs.)
-                </td>
-                <td style={{ border: '1px solid black', padding: '8px' }}>
-                  {matCost !== undefined && matCost !== null
-                    ? parseFloat(matCost).toLocaleString('en-IN')
-                    : ''}
-                </td>
-              </tr>
-              <tr>
-                <td style={{ border: '1px solid black', padding: '8px' }}>
-                  Debit Note Raised Cost (Rs.)
-                </td>
-                <td style={{ border: '1px solid black', padding: '8px' }}>
-                  {debitCost !== undefined && debitCost !== null
-                    ? parseFloat(debitCost).toLocaleString('en-IN')
-                    : 0}
-                </td>
-              </tr>
-              <tr>
-                <td style={{ border: '1px solid black', padding: '8px' }}>Employee Cost (Rs.)</td>
-                <td style={{ border: '1px solid black', padding: '8px' }}>
-                  {matCost !== undefined && matCost !== null
-                    ? parseFloat(employeeCost).toLocaleString('en-IN')
-                    : ''}
-                </td>
-              </tr>
-              <tr>
-                <td style={{ border: '1px solid black', padding: '8px' }}>Actual Spent (Rs.)</td>
-                <td style={{ border: '1px solid black', padding: '8px' }}>
-                  {actualCost !== undefined &&
-                  actualCost !== null &&
-                  employeeCost !== undefined &&
-                  employeeCost !== null 
-                    ? (parseFloat(actualCost) + parseFloat(employeeCost) -parseFloat(debitCost)).toLocaleString('en-IN')
-                    : ''}
-                </td>
-              </tr>
+              {costFlowType === 'NEW' ? (
+                <>
+                  <tr>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      Allocated Value (Rs.)
+                    </td>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      {allocatedValue !== undefined && allocatedValue !== null
+                        ? parseFloat(allocatedValue).toLocaleString('en-IN')
+                        : ''}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      Consumed So Far (Rs.)
+                    </td>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      {consumedSoFar !== undefined && consumedSoFar !== null
+                        ? parseFloat(consumedSoFar).toLocaleString('en-IN')
+                        : ''}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      Material Transfer Cost (Rs.)
+                    </td>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      {matCost !== undefined && matCost !== null
+                        ? parseFloat(matCost).toLocaleString('en-IN')
+                        : ''}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      Employee Cost (Rs.)
+                    </td>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      {employeeCost !== undefined && employeeCost !== null
+                        ? parseFloat(employeeCost).toLocaleString('en-IN')
+                        : ''}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      Debit Note Raised Cost (Rs.)
+                    </td>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      {debitCost !== undefined && debitCost !== null
+                        ? parseFloat(debitCost).toLocaleString('en-IN')
+                        : 0}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      Budget Excess Approved (Rs.)
+                    </td>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      {budgetExcessApproved !== undefined && budgetExcessApproved !== null
+                        ? parseFloat(budgetExcessApproved).toLocaleString('en-IN')
+                        : ''}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ border: '1px solid black', padding: '8px', fontWeight: 'bold' }}>
+                      Actual Spent (Rs.)
+                    </td>
+                    <td style={{ border: '1px solid black', padding: '8px', fontWeight: 'bold' }}>
+                      {parseFloat(actualSpentNew || 0).toLocaleString('en-IN')}
+                    </td>
+                  </tr>
+                </>
+              ) : (
+                <>
+                  <tr>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      Budget for Indented Material (Rs.)
+                    </td>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      {budgetIndent !== undefined && budgetIndent !== null
+                        ? parseFloat(budgetIndent).toLocaleString('en-IN')
+                        : ''}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>Final Cost (Rs.)</td>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      {actualCost !== undefined &&
+                      matCost !== undefined &&
+                      actualCost !== null &&
+                      matCost !== null
+                        ? (parseFloat(actualCost) - parseFloat(matCost)).toLocaleString('en-IN')
+                        : ''}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      RMC Budget Status (Rs.)
+                    </td>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      {budgetstatus !== undefined && budgetstatus !== null
+                        ? parseFloat(budgetstatus).toLocaleString('en-IN')
+                        : ''}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      Material Transfer Cost (Rs.)
+                    </td>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      {matCost !== undefined && matCost !== null
+                        ? parseFloat(matCost).toLocaleString('en-IN')
+                        : ''}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      Debit Note Raised Cost (Rs.)
+                    </td>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      {debitCost !== undefined && debitCost !== null
+                        ? parseFloat(debitCost).toLocaleString('en-IN')
+                        : 0}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>Employee Cost (Rs.)</td>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      {matCost !== undefined && matCost !== null
+                        ? parseFloat(employeeCost).toLocaleString('en-IN')
+                        : ''}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>Actual Spent (Rs.)</td>
+                    <td style={{ border: '1px solid black', padding: '8px' }}>
+                      {actualCost !== undefined &&
+                      actualCost !== null &&
+                      employeeCost !== undefined &&
+                      employeeCost !== null
+                        ? (parseFloat(actualCost) + parseFloat(employeeCost) -parseFloat(debitCost)).toLocaleString('en-IN')
+                        : ''}
+                    </td>
+                  </tr>
+                </>
+              )}
             </tbody>
           </table>
         ) : null}
@@ -1422,6 +1666,11 @@ const ProjectCostAnalysis = ({ cumulative }) => {
                 <th style={{ textAlign: 'center', border: '1px solid #000', padding: '8px' }}>
                   Overall Sales Budget Cost (Rs.)
                 </th>
+                {costFlowType === 'NEW' && (
+                  <th style={{ textAlign: 'center', border: '1px solid #000', padding: '8px' }}>
+                    Allocated Value (Rs.)
+                  </th>
+                )}
                 <th style={{ textAlign: 'center', border: '1px solid #000', padding: '8px' }}>
                   Actual Spent (Rs.)
                 </th>
@@ -1444,10 +1693,22 @@ const ProjectCostAnalysis = ({ cumulative }) => {
                       : ''}
                   </p>
                 </td>
+                {costFlowType === 'NEW' && (
+                  <td style={{ textAlign: 'center', border: '1px solid #000', padding: '8px' }}>
+                    <p>
+                      {' '}
+                      {allocatedValue !== undefined && allocatedValue !== null
+                        ? parseFloat(allocatedValue).toLocaleString('en-IN')
+                        : ''}
+                    </p>
+                  </td>
+                )}
                 <td style={{ textAlign: 'center', border: '1px solid #000', padding: '8px' }}>
                   <p>
                     {' '}
-                    {actualCost !== undefined && actualCost !== null
+                    {costFlowType === 'NEW'
+                      ? parseFloat(actualSpentNew || 0).toLocaleString('en-IN')
+                      : actualCost !== undefined && actualCost !== null
                       ? parseFloat(actualcostvalue).toLocaleString(
                           'en-IN',
                         )
@@ -1457,7 +1718,9 @@ const ProjectCostAnalysis = ({ cumulative }) => {
                 <td style={{ textAlign: 'center', border: '1px solid #000', padding: '8px' }}>
                   <p>
                     {' '}
-                    {availCost !== undefined && availCost !== null
+                    {costFlowType === 'NEW'
+                      ? parseFloat(budgetCost - actualSpentNew || 0).toLocaleString('en-IN')
+                      : availCost !== undefined && availCost !== null
                       ? parseFloat(budgetCost -actualcostvalue).toLocaleString('en-IN')
                       : ''}
                   </p>

@@ -84,6 +84,30 @@ const ProjectTable = ({ data, onClickfun }) => {
     })
   }
 
+  // NEW-flow rows get their cost fields swapped to the real replacement values here (not just in
+  // render) so ant-table-extensions' "Export to CSV" - which reads raw dataIndex values, not
+  // render output - shows the same numbers as the on-screen table.
+  const displayData = data?.map(record =>
+    record.costFlowType === 'NEW'
+      ? {
+          ...record,
+          indentPlan: record.allocatedValue,
+          indentActual: record.actualSpent,
+          targetCost: '-',
+          balanceComputed:
+            record.saleValue !== null && record.actualSpent !== null
+              ? Number(record.saleValue) - Number(record.actualSpent)
+              : null,
+        }
+      : {
+          ...record,
+          balanceComputed:
+            record.indentPlan !== null && record.indentActual !== null
+              ? Number(record.indentPlan) - Number(record.indentActual)
+              : null,
+        },
+  )
+
   const distinct = (value, index, self) => {
     return self.indexOf(value) === index
   }
@@ -293,17 +317,13 @@ const ProjectTable = ({ data, onClickfun }) => {
       dataIndex: 'targetCost',
       key: 'targetCost',
       className: 'right-align-cell',
-      render: text => (text ? currencyFormat(text) : '0'),
+      render: text => (text === '-' ? '-' : text ? currencyFormat(text) : '0'),
     },
     {
       title: balanceString,
-      dataIndex: '',
+      dataIndex: 'balanceComputed',
       className: 'right-align-cell',
-      render: record => {
-        return record.indentPlan !== null && record.indentActual !== null
-          ? currencyFormat(Number(record.indentPlan) - Number(record.indentActual))
-          : '-'
-      },
+      render: text => (text !== null && text !== undefined ? currencyFormat(text) : '-'),
     },
     {
       title: 'Completion (%)',
@@ -353,7 +373,7 @@ const ProjectTable = ({ data, onClickfun }) => {
         <div className="table" style={{ marginTop: '15px' }}>
           <Table
             columns={ProjectColumns}
-            dataSource={data}
+            dataSource={displayData}
             exportableProps={{
               fileName: `Project${currentDateTime}`,
               btnProps: {
@@ -363,7 +383,7 @@ const ProjectTable = ({ data, onClickfun }) => {
               },
             }}
             pagination={{
-              pageSizeOptions: ['10', '20', '30', '50', [data?.length]],
+              pageSizeOptions: ['10', '20', '30', '50', [displayData?.length]],
               showSizeChanger: true,
               defaultPageSize: 10,
             }}

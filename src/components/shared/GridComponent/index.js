@@ -156,7 +156,9 @@ const GridComponent = ({
                               data.indentActual != null ? data.indentActual : '0'
                             }`}</p>
                           ) : moduleType !== undefined && moduleType.toLowerCase() === 'project' ? (
-                            <p>{`${currencyFormat(data.indentPlan)}`}</p>
+                            <p>{`${currencyFormat(
+                              data.costFlowType === 'NEW' ? data.allocatedValue : data.indentPlan,
+                            )}`}</p>
                           ) : moduleType !== undefined && moduleType.toLowerCase() === 'sales' ? (
                             <p>{data.projectName}</p>
                           ) : moduleType !== undefined && moduleType.toLowerCase() === 'scm' ? (
@@ -191,7 +193,9 @@ const GridComponent = ({
                               data.taskActual != null ? data.taskActual : '0'
                             }`}</p>
                           ) : moduleType !== undefined && moduleType.toLowerCase() === 'project' ? (
-                            <p>{`${currencyFormat(data.indentActual)}`}</p>
+                            <p>{`${currencyFormat(
+                              data.costFlowType === 'NEW' ? data.actualSpent : data.indentActual,
+                            )}`}</p>
                           ) : moduleType !== undefined && moduleType.toLowerCase() === 'sales' ? (
                             <p>{`${convertToLakhs(data.finalCost)}${rupee}`}</p>
                           ) : moduleType !== undefined && moduleType.toLowerCase() === 'scm' ? (

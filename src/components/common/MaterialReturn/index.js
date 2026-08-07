@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import moment from 'moment'
 import store from 'store'
-import { PlusOutlined } from '@ant-design/icons'
+import { PlusOutlined, InfoCircleOutlined } from '@ant-design/icons'
 import { useMediaQuery } from 'react-responsive'
 import ButtonComponent from 'components/shared/ButtonComponent'
 import { Table } from 'ant-table-extensions'
@@ -19,6 +19,7 @@ import {
   Input,
   Skeleton,
   Checkbox,
+  Popover,
 } from 'antd'
 import { indentFileUpload } from 'services/common/AppeovedDocumentService/adddocumentservice'
 import Popuptable from 'components/shared/PopuptableComponent'
@@ -132,8 +133,9 @@ const MaterialReturn = () => {
   const dateformatter1 = dateStringval => {
     const splitDateandTym = dateStringval.split(' ')
     const datesp = splitDateandTym[0].split('-')
-    const finalStr = `${datesp[2]}-${moment(datesp[1]).format('MMM')}-${datesp[0]} ${splitDateandTym[1]
-      }`
+    const finalStr = `${datesp[2]}-${moment(datesp[1]).format('MMM')}-${datesp[0]} ${
+      splitDateandTym[1]
+    }`
     return finalStr
   }
   const getProjectList = async () => {
@@ -163,15 +165,17 @@ const MaterialReturn = () => {
     setMatrlRetrnDtls(() =>
       data.map(e => ({
         ...e,
-        createdOn: e.createdOn !== null ? dateformatter(e.createdOn) : " ",
-        lastUpdatedBy: e.lastUpdatedBy !== null ? dateformatter(e.lastUpdatedBy) : " "
-      })))
+        createdOn: e.createdOn !== null ? dateformatter(e.createdOn) : ' ',
+        lastUpdatedBy: e.lastUpdatedBy !== null ? dateformatter(e.lastUpdatedBy) : ' ',
+      })),
+    )
     setfilteredmaterial(() =>
       data.map(e => ({
         ...e,
-        createdOn: e.createdOn !== null ? dateformatter(e.createdOn) : " ",
-        lastUpdatedBy: e.lastUpdatedBy !== null ? dateformatter(e.lastUpdatedBy) : " "
-      })))
+        createdOn: e.createdOn !== null ? dateformatter(e.createdOn) : ' ',
+        lastUpdatedBy: e.lastUpdatedBy !== null ? dateformatter(e.lastUpdatedBy) : ' ',
+      })),
+    )
     setMaterialRetrnTableLoader(false)
     setCancelBtnStatus(false)
     setApproveBtnStatus(false)
@@ -223,6 +227,11 @@ const MaterialReturn = () => {
       title: 'No. of Products',
       dataIndex: 'productCount',
       key: 'productCount',
+    },
+    {
+      title: 'Type',
+      dataIndex: 'returnType',
+      key: 'returnType',
     },
     {
       title: 'Last Updated On',
@@ -280,6 +289,33 @@ const MaterialReturn = () => {
   const handleChange = (pagination, filters) => {
     setfilterinfo(filters)
   }
+  const isGroupReturn =
+    materlRetrnDtlPopUpVal.length > 0 && materlRetrnDtlPopUpVal.every(item => item.msHdrId)
+  const groupedDetailRows = (() => {
+    const groupMap = new Map()
+    materlRetrnDtlPopUpVal.forEach(item => {
+      if (!groupMap.has(item.msHdrId)) {
+        groupMap.set(item.msHdrId, {
+          key: item.msHdrId,
+          msHdrId: item.msHdrId,
+          msName: item.msName,
+          qty: 0,
+          uomSet: new Set(),
+          mrdIds: [],
+          items: [],
+        })
+      }
+      const group = groupMap.get(item.msHdrId)
+      group.qty += Number(item.qty) || 0
+      if (item.uomLongDesc) group.uomSet.add(item.uomLongDesc)
+      group.mrdIds.push(item.mrdId)
+      group.items.push(item)
+    })
+    return Array.from(groupMap.values()).map(group => ({
+      ...group,
+      uomLongDesc: Array.from(group.uomSet).join(', ') || '-',
+    }))
+  })()
   const cancelMRCols = [
     {
       title: 'Part Number',
@@ -350,11 +386,18 @@ const MaterialReturn = () => {
         <div>
           {' '}
           <Checkbox
-            style={{ display: approveBtnStatus ? 'block' : (cancelBtnStatus ? 'none' : 'block') }}
+            style={{ display: approveBtnStatus ? 'block' : cancelBtnStatus ? 'none' : 'block' }}
             checked={dtlIdList.length === materlRetrnDtlPopUpVal.length}
             onChange={e => handleMainCheckbox(e)}
-            disabled={filtersinfo.qty >= 0 || filtersinfo.uomLongDesc >= 0 || filtersinfo.subAssy >= 0 || filtersinfo.station >= 0
-              || filtersinfo.make >= 0 || filtersinfo.specification >= 0 || filtersinfo.productDesc >= 0 || filtersinfo.productCode >= 0
+            disabled={
+              filtersinfo.qty >= 0 ||
+              filtersinfo.uomLongDesc >= 0 ||
+              filtersinfo.subAssy >= 0 ||
+              filtersinfo.station >= 0 ||
+              filtersinfo.make >= 0 ||
+              filtersinfo.specification >= 0 ||
+              filtersinfo.productDesc >= 0 ||
+              filtersinfo.productCode >= 0
             }
           />
         </div>
@@ -364,13 +407,100 @@ const MaterialReturn = () => {
       align: 'center',
       render: (text, record) => (
         <Checkbox
-          style={{ display: approveBtnStatus ? 'block' : (cancelBtnStatus ? 'none' : 'block') }}
+          style={{ display: approveBtnStatus ? 'block' : cancelBtnStatus ? 'none' : 'block' }}
           checked={dtlIdList.some(item => item.mrDtlId === record.mrdId)}
           onChange={() => handleCheckboxChange(record)}
         />
       ),
     },
   ]
+  const groupItemsPopoverContent = items => (
+    <Table
+      size="small"
+      pagination={false}
+      dataSource={items}
+      rowKey="mrdId"
+      columns={[
+        { title: 'Part Number', dataIndex: 'productCode', key: 'productCode' },
+        { title: 'Description', dataIndex: 'productDesc', key: 'productDesc' },
+        { title: 'UOM', dataIndex: 'uomLongDesc', key: 'uomLongDesc' },
+        {
+          title: 'Qty.',
+          dataIndex: 'qty',
+          key: 'qty',
+          align: 'right',
+          render: text => Number(text).toFixed(0),
+        },
+      ]}
+    />
+  )
+  const groupMRCols = [
+    {
+      title: 'Material Group',
+      dataIndex: 'msName',
+      key: 'msName',
+      render: (text, record) => (
+        <span>
+          {text}{' '}
+          <Popover
+            content={groupItemsPopoverContent(record.items)}
+            title="Items in this group"
+            trigger="click"
+          >
+            <InfoCircleOutlined
+              style={{ marginLeft: '6px', cursor: 'pointer', color: '#1890ff' }}
+            />
+          </Popover>
+        </span>
+      ),
+    },
+    {
+      title: 'UOM',
+      dataIndex: 'uomLongDesc',
+      key: 'uomLongDesc',
+    },
+    {
+      title: 'Qty.',
+      dataIndex: 'qty',
+      key: 'qty',
+      render: text => Number(text).toFixed(0),
+    },
+    {
+      title: (
+        <div>
+          {' '}
+          <Checkbox
+            style={{ display: approveBtnStatus ? 'block' : cancelBtnStatus ? 'none' : 'block' }}
+            checked={dtlIdList.length === materlRetrnDtlPopUpVal.length}
+            onChange={() => handleMainCheckbox()}
+          />
+        </div>
+      ),
+      dataIndex: 'key',
+      width: '10%',
+      align: 'center',
+      render: (text, record) => (
+        <Checkbox
+          style={{ display: approveBtnStatus ? 'block' : cancelBtnStatus ? 'none' : 'block' }}
+          checked={record.mrdIds.every(id => dtlIdList.some(item => item.mrDtlId === id))}
+          onChange={() => handleGroupCheckboxChange(record)}
+        />
+      ),
+    },
+  ]
+  const handleGroupCheckboxChange = ({ mrdIds }) => {
+    if (IsCanceled !== '1' && IsCompleted !== '1') {
+      const allSelected = mrdIds.every(id => dtlIdList.some(item => item.mrDtlId === id))
+      if (allSelected) {
+        setDtlIdList(dtlIdList.filter(item => !mrdIds.includes(item.mrDtlId)))
+      } else {
+        const toAdd = mrdIds
+          .filter(id => !dtlIdList.some(item => item.mrDtlId === id))
+          .map(id => ({ mrDtlId: id }))
+        setDtlIdList([...dtlIdList, ...toAdd])
+      }
+    }
+  }
   const handleMainCheckbox = () => {
     if (IsCanceled !== '1' && IsCompleted !== '1') {
       if (dtlIdList.length !== materlRetrnDtlPopUpVal.length) {
@@ -429,7 +559,7 @@ const MaterialReturn = () => {
       // setCancelBtnStatus(false)
       // setApproveBtnStatus(true)
       if (record.documentStatusMstList?.[0].currSequence === '2') {
-        if (record.isApprovee === "1") {
+        if (record.isApprovee === '1') {
           setCancelBtnStatus(true)
           setApproveBtnStatus(true)
         } else {
@@ -586,8 +716,8 @@ const MaterialReturn = () => {
         </div>
         <div className="my-3">
           <Table
-            columns={cancelMRCols}
-            dataSource={materlRetrnDtlPopUpVal}
+            columns={isGroupReturn ? groupMRCols : cancelMRCols}
+            dataSource={isGroupReturn ? groupedDetailRows : materlRetrnDtlPopUpVal}
             pagination={
               // pageSizeOptions: ['10', '20', '30', '50', [materlRetrnDtlPopUpVal?.length]],
               // showSizeChanger: true,
@@ -665,7 +795,7 @@ const MaterialReturn = () => {
           style={{ width: '100%', marginTop: '13px' }}
           title="Material Return"
           extra={
-            depCode === "D06" ? (
+            depCode === 'D06' ? (
               <ButtonComponent
                 text="Material Return"
                 type="primary"
@@ -674,7 +804,6 @@ const MaterialReturn = () => {
               />
             ) : null
           }
-
         >
           <div className="row">
             <div className="col-12 col-sm-12 col-md-4 col-lg-3 col-xl-3">

@@ -778,6 +778,13 @@ const InventoryMaster = () => {
                   placeholder="Select Project"
                   style={{ width: '100%' }}
                   // onChange={(value, option) => handleSelectChange(value, option)}
+                  showSearch
+                  filterOption={(input, option) =>
+                    option.children
+                      .toString()
+                      .toUpperCase()
+                      .indexOf(input.toUpperCase()) !== -1
+                  }
                 >
                   <Option value="getall">Get All</Option>
                   {projectDropdown &&
@@ -802,6 +809,13 @@ const InventoryMaster = () => {
                   placeholder="Select Inv. Location"
                   style={{ width: '100%' }}
                   // onChange={(value, option) => handleSelectChange(value, option)}
+                  showSearch
+                  filterOption={(input, option) =>
+                    option.children
+                      .toString()
+                      .toUpperCase()
+                      .indexOf(input.toUpperCase()) !== -1
+                  }
                 >
                   <Option value="getall">Get All</Option>
                   {locdropdowndata &&

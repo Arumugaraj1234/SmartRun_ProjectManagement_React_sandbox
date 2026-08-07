@@ -432,7 +432,17 @@ const LogEntrySearchCard = () => {
                   </span>
                 }
               >
-                <Select onChange={handleProjectChange} placeholder="Select Project">
+                <Select
+                  onChange={handleProjectChange}
+                  placeholder="Select Project"
+                  showSearch
+                  filterOption={(input, option) =>
+                    option.children
+                      .toString()
+                      .toUpperCase()
+                      .indexOf(input.toUpperCase()) !== -1
+                  }
+                >
                   <Option value="">Get All</Option>
                   {projectList?.map(item => (
                     <Option key={item.projectId} value={item.projectId}>
@@ -490,7 +500,17 @@ const LogEntrySearchCard = () => {
                   </span>
                 }
               >
-                <Select placeholder="Select Employee" defaultValue="">
+                <Select
+                  placeholder="Select Employee"
+                  defaultValue=""
+                  showSearch
+                  filterOption={(input, option) =>
+                    option.children
+                      .toString()
+                      .toUpperCase()
+                      .indexOf(input.toUpperCase()) !== -1
+                  }
+                >
                   <Option value="">Get All</Option>
                   {employeeData?.map(item => (
                     <Option key={item.empId} value={item.empId}>

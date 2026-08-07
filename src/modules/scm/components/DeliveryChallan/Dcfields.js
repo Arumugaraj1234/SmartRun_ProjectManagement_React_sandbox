@@ -104,7 +104,17 @@ const DcFields = ({ onGetDetails, onClear, getAllEnable }) => {
                 </span>
               }
             >
-              <Select style={{ width: '100%' }} placeholder="Select Project">
+              <Select
+                style={{ width: '100%' }}
+                placeholder="Select Project"
+                showSearch
+                filterOption={(input, option) =>
+                  option.children
+                    .toString()
+                    .toUpperCase()
+                    .indexOf(input.toUpperCase()) !== -1
+                }
+              >
                 {getAllEnable && (
                   <Option key="getAll" value="getAll">
                     Get All

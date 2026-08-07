@@ -848,6 +848,13 @@ const RequestManagement = () => {
                   style={{ width: '100%' }}
                   onChange={getCreatePrjctNo}
                   placeholder="Select Project"
+                  showSearch
+                  filterOption={(input, option) =>
+                    option.children
+                      .toString()
+                      .toUpperCase()
+                      .indexOf(input.toUpperCase()) !== -1
+                  }
                 >
                   {projectList?.map(item => (
                     <Option key={item.projectId} value={item.projectId}>
@@ -1408,7 +1415,11 @@ const RequestManagement = () => {
                   }
                   initialValue={moment(defaultFromDate)}
                 >
-                  <DatePicker format="DD-MMM-YYYY" style={{ width: '100%' }} onChange={fromdateChange} />
+                  <DatePicker
+                    format="DD-MMM-YYYY"
+                    style={{ width: '100%' }}
+                    onChange={fromdateChange}
+                  />
                 </Form.Item>
               </div>
               <div className="col-12 col-sm-12 col-md-3 col-lg-4 ">
@@ -1421,7 +1432,11 @@ const RequestManagement = () => {
                   }
                   initialValue={moment(defaultToDate)}
                 >
-                  <DatePicker format="DD-MMM-YYYY" style={{ width: '100%' }} onChange={toDateChange} />
+                  <DatePicker
+                    format="DD-MMM-YYYY"
+                    style={{ width: '100%' }}
+                    onChange={toDateChange}
+                  />
                 </Form.Item>
               </div>
               <div className="col-12 col-sm-12 col-md-3 col-lg-4 ">
@@ -1437,6 +1452,13 @@ const RequestManagement = () => {
                     style={{ width: '100%' }}
                     onChange={getProjectVallist}
                     placeholder="Select Project"
+                    showSearch
+                    filterOption={(input, option) =>
+                      option.children
+                        .toString()
+                        .toUpperCase()
+                        .indexOf(input.toUpperCase()) !== -1
+                    }
                   >
                     <Option key="getall" value="getall">
                       Get All

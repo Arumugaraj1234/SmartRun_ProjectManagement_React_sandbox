@@ -741,6 +741,13 @@ const ItemsMaster = () => {
                   placeholder="Select Project"
                   style={{ width: '200px' }}
                   onChange={(value, option) => handleSelectChange(value, option)}
+                  showSearch
+                  filterOption={(input, option) =>
+                    option.children
+                      .toString()
+                      .toUpperCase()
+                      .indexOf(input.toUpperCase()) !== -1
+                  }
                 >
                   <Option value="getall">Get All</Option>
                   {projectDropdown &&

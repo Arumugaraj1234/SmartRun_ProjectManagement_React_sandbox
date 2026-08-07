@@ -1198,6 +1198,13 @@ const CommonIndentGroupComponent = ({ isTailview }) => {
                           getIndentList(projId)
                           getIsInternalOrNot(projId)
                         }}
+                        showSearch
+                        filterOption={(input, option) =>
+                          option.children
+                            .toString()
+                            .toUpperCase()
+                            .indexOf(input.toUpperCase()) !== -1
+                        }
                       >
                         {projectList?.map(item => (
                           <Option key={item.projectId} value={item.projectId}>

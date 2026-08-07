@@ -158,7 +158,18 @@ const Grnfields = ({ onGetDetails, onClear, isVisible, getAllEnable }) => {
                 </span>
               }
             >
-              <Select style={{ width: '100%' }} onChange={getPONOlist} placeholder="Select Project">
+              <Select
+                style={{ width: '100%' }}
+                onChange={getPONOlist}
+                placeholder="Select Project"
+                showSearch
+                filterOption={(input, option) =>
+                  option.children
+                    .toString()
+                    .toUpperCase()
+                    .indexOf(input.toUpperCase()) !== -1
+                }
+              >
                 {getAllEnable && (
                   <Option key="getAll" value="getAll">
                     Get All

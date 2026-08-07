@@ -235,8 +235,6 @@ const QualityDashboard = () => {
     }
   }
 
-  
-
   const getKeyCategory = async () => {
     const response = await indentFileUpload({
       requestPath: 'getKeyCategory',
@@ -483,8 +481,8 @@ const QualityDashboard = () => {
           record.actualEndDate !== 'NA' && record.actualEndDate !== '-'
             ? moment(record.actualEndDate).diff(moment(record.plannedEndDate), 'days')
             : record.actualEndDate === '-'
-              ? moment().diff(moment(record.plannedEndDate), 'days')
-              : '-'
+            ? moment().diff(moment(record.plannedEndDate), 'days')
+            : '-'
 
         // moment().diff(moment(record.plannedEndDate), 'days')
 
@@ -912,7 +910,7 @@ const QualityDashboard = () => {
               // pagination={false}
               scroll={{ y: 250 }}
               onChange={handleChange1}
-            // style={{ height: '400px' }}
+              // style={{ height: '400px' }}
             />
           </div>
         </div>
@@ -967,6 +965,13 @@ const QualityDashboard = () => {
                   placeholder="Select Project"
                   onChange={(val, opt) => handleChangeProject(val, opt)}
                   value={project}
+                  showSearch
+                  filterOption={(input, option) =>
+                    option.children
+                      .toString()
+                      .toUpperCase()
+                      .indexOf(input.toUpperCase()) !== -1
+                  }
                 >
                   <Option key="getAll" value="getAll">
                     Get All

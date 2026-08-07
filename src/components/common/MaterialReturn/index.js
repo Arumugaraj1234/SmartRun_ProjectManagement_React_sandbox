@@ -849,7 +849,17 @@ const MaterialReturn = () => {
                   </span>
                 }
               >
-                <Select style={{ width: '100%' }} placeholder="Select Project">
+                <Select
+                  style={{ width: '100%' }}
+                  placeholder="Select Project"
+                  showSearch
+                  filterOption={(input, option) =>
+                    option.children
+                      .toString()
+                      .toUpperCase()
+                      .indexOf(input.toUpperCase()) !== -1
+                  }
+                >
                   {projectList?.map(item => (
                     <Option key={item.projectId} value={item.projectId}>
                       {item.projectCode}-{item.customerName}

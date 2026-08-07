@@ -16,9 +16,17 @@ import SubMenuService from '../../../../services/SubMenu'
 
 const Projectprocess = () => {
 
-  const EnquiryDtlsArry = store.get('Enquiry')
+  const [EnquiryDtlsArry, setEnquiryDtlsArry] = useState(store.get('Enquiry'))
 
   // const enqryDetlsArry=enqrydetlsvwdtlsval.EnquiryDtlsArry;
+
+  useEffect(() => {
+    const handleEnquiryRefresh = e => {
+      setEnquiryDtlsArry(e.detail || store.get('Enquiry'))
+    }
+    window.addEventListener('enquiry-refresh', handleEnquiryRefresh)
+    return () => window.removeEventListener('enquiry-refresh', handleEnquiryRefresh)
+  }, [])
 
   const [subMenu, setSubMenu] = useState([])
   // const [comp, Setcomponent] = useState([]);

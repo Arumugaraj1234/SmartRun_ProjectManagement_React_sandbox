@@ -928,6 +928,13 @@ const MaterialIssue = () => {
                   placeholder="Select Project"
                   style={{ width: '200px' }}
                   onChange={(value, option) => handleProjSelect(value, option)}
+                  showSearch
+                  filterOption={(input, option) =>
+                    option.children
+                      .toString()
+                      .toUpperCase()
+                      .indexOf(input.toUpperCase()) !== -1
+                  }
                 >
                   {projectDropdown &&
                     projectDropdown.map(item => (
@@ -951,6 +958,13 @@ const MaterialIssue = () => {
                   placeholder="Select MR Code"
                   style={{ width: '200px' }}
                   onChange={(value, option) => handleMRCode(value, option)}
+                  showSearch
+                  filterOption={(input, option) =>
+                    option.children
+                      .toString()
+                      .toUpperCase()
+                      .indexOf(input.toUpperCase()) !== -1
+                  }
                 >
                   {mrCodedropdown &&
                     mrCodedropdown
@@ -1087,6 +1101,13 @@ const MaterialIssue = () => {
                   placeholder="Select Project"
                   style={{ width: '200px' }}
                   onChange={(value, option) => handleProjectChange(value, option)}
+                  showSearch
+                  filterOption={(input, option) =>
+                    option.children
+                      .toString()
+                      .toUpperCase()
+                      .indexOf(input.toUpperCase()) !== -1
+                  }
                 >
                   <Option value="getAll">Get All</Option>
                   {projectDropdown &&

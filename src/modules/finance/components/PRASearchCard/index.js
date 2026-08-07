@@ -1783,6 +1783,13 @@ const PRASearchCardComp = () => {
                       onChange={getPONOlist}
                       placeholder="Select Project"
                       style={{ width: '100%' }}
+                      showSearch
+                      filterOption={(input, option) =>
+                        option.children
+                          .toString()
+                          .toUpperCase()
+                          .indexOf(input.toUpperCase()) !== -1
+                      }
                     >
                       <Select.Option key="getAll" value="getAll">
                         Get All

@@ -393,9 +393,9 @@ const Inventoryjournal = () => {
         <div style={{ textAlign: 'right' }}>
           {text !== undefined && text !== null
             ? parseFloat(text).toLocaleString('en-IN', {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })
             : ''}
         </div>
       ),
@@ -413,9 +413,9 @@ const Inventoryjournal = () => {
         <div style={{ textAlign: 'right' }}>
           {text !== undefined && text !== null
             ? parseFloat(text).toLocaleString('en-IN', {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })
             : ''}
         </div>
       ),
@@ -433,9 +433,9 @@ const Inventoryjournal = () => {
         <div style={{ textAlign: 'right' }}>
           {text !== undefined && text !== null
             ? parseFloat(text).toLocaleString('en-IN', {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })
             : ''}
         </div>
       ),
@@ -520,6 +520,13 @@ const Inventoryjournal = () => {
                     style={{ width: '100%' }}
                     // onChange={getIndentList}
                     placeholder="Select Project"
+                    showSearch
+                    filterOption={(input, option) =>
+                      option.children
+                        .toString()
+                        .toUpperCase()
+                        .indexOf(input.toUpperCase()) !== -1
+                    }
                   >
                     <Option value="getall">Get All</Option>
                     {projectList?.map(item => (

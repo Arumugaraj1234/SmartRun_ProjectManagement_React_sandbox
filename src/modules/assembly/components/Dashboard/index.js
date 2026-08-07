@@ -646,6 +646,13 @@ const AssemblyDashboard = () => {
                     value={project}
                     placeholder="Select Project"
                     onChange={(val, opt) => handleChangeProject(val, opt)}
+                    showSearch
+                    filterOption={(input, option) =>
+                      option.children
+                        .toString()
+                        .toUpperCase()
+                        .indexOf(input.toUpperCase()) !== -1
+                    }
                   >
                     <Option key="getall" value="getall">
                       Get All

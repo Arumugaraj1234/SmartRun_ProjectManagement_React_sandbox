@@ -1071,6 +1071,13 @@ const DesignIndentLifecycle = ({ componentdata }) => {
                   placeholder="Select Project"
                   style={{ width: '100%' }}
                   onChange={(value, option) => handleSelectProject(value, option)}
+                  showSearch
+                  filterOption={(input, option) =>
+                    option.children
+                      .toString()
+                      .toUpperCase()
+                      .indexOf(input.toUpperCase()) !== -1
+                  }
                 >
                   {projectList &&
                     projectList.map(item => (

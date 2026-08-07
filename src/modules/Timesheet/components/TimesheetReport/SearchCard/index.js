@@ -478,7 +478,17 @@ const GetReportSearchCard = () => {
                       {item.projectCode}-{item.customerName}
                     </Option>
                   ))} */}
-                <Select onChange={handleProjectChange} placeholder="Select Project">
+                <Select
+                  onChange={handleProjectChange}
+                  placeholder="Select Project"
+                  showSearch
+                  filterOption={(input, option) =>
+                    option.children
+                      .toString()
+                      .toUpperCase()
+                      .indexOf(input.toUpperCase()) !== -1
+                  }
+                >
                   <Option value="getall">Get All</Option>
                   {projectResp?.map(item => (
                     <Option key={item.projectId} value={item.projectId}>

@@ -1263,9 +1263,7 @@ const QualityDashboard = () => {
             align: 'right',
             width: 180,
             render: (_, r) =>
-              r.inspCompleteCnt
-                ? ((r.okQty / r.inspCompleteCnt) * 100).toFixed(2)
-                : '0.00',
+              r.inspCompleteCnt ? ((r.okQty / r.inspCompleteCnt) * 100).toFixed(2) : '0.00',
           },
           {
             title: 'CA %',
@@ -1273,9 +1271,7 @@ const QualityDashboard = () => {
             align: 'right',
             width: 180,
             render: (_, r) =>
-              r.inspCompleteCnt
-                ? ((r.ca / r.inspCompleteCnt) * 100).toFixed(2)
-                : '0.00',
+              r.inspCompleteCnt ? ((r.ca / r.inspCompleteCnt) * 100).toFixed(2) : '0.00',
           },
           {
             title: 'Rew %',
@@ -1283,9 +1279,7 @@ const QualityDashboard = () => {
             align: 'right',
             width: 180,
             render: (_, r) =>
-              r.inspCompleteCnt
-                ? ((r.reWorkQty / r.inspCompleteCnt) * 100).toFixed(2)
-                : '0.00',
+              r.inspCompleteCnt ? ((r.reWorkQty / r.inspCompleteCnt) * 100).toFixed(2) : '0.00',
           },
           {
             title: 'Rej %',
@@ -1303,9 +1297,7 @@ const QualityDashboard = () => {
             align: 'right',
             width: 180,
             render: (_, r) =>
-              r.inspReqCnt
-                ? ((r.qcNotRequiredQty / r.inspReqCnt) * 100).toFixed(2)
-                : '0.00',
+              r.inspReqCnt ? ((r.qcNotRequiredQty / r.inspReqCnt) * 100).toFixed(2) : '0.00',
           },
         ]
         newColumnsToAdd.forEach((newColumn, index) => {
@@ -1542,6 +1534,13 @@ const QualityDashboard = () => {
                   style={{ width: '155px' }}
                   placeholder="Select Project"
                   onChange={(val, opt) => handleChangeProject(val, opt)}
+                  showSearch
+                  filterOption={(input, option) =>
+                    option.children
+                      .toString()
+                      .toUpperCase()
+                      .indexOf(input.toUpperCase()) !== -1
+                  }
                 >
                   <Option key="getAll" value="getAll">
                     Get All

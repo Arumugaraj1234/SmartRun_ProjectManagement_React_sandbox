@@ -517,6 +517,13 @@ const CommonAddIndentGroup = ({
                   placeholder="Select Project"
                   onChange={ProjId => getIndentList(ProjId)}
                   // disabled={isTailview}
+                  showSearch
+                  filterOption={(input, option) =>
+                    option.children
+                      .toString()
+                      .toUpperCase()
+                      .indexOf(input.toUpperCase()) !== -1
+                  }
                 >
                   {ProjectList?.map(item => (
                     <Option key={item.projectId} value={item.projectId}>

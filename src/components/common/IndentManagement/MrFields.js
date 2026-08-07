@@ -153,6 +153,13 @@ const CommonFields2 = ({ onGetDetails, onClear }) => {
                   handleGetDetails(value, option)
                   getIsInternalOrNot(value)
                 }}
+                showSearch
+                filterOption={(input, option) =>
+                  option.children
+                    .toString()
+                    .toUpperCase()
+                    .indexOf(input.toUpperCase()) !== -1
+                }
               >
                 {projectList?.map(item => (
                   <Option key={item.masterId} value={item.projectId}>

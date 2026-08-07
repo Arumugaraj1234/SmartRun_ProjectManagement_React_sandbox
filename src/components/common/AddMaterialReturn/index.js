@@ -1,7 +1,19 @@
 import React, { useEffect, useState } from 'react'
 import moment from 'moment'
 import store from 'store'
-import { Form, Table, Input, message, Col, DatePicker, Select, Button, Skeleton } from 'antd'
+import {
+  Form,
+  Table,
+  Input,
+  message,
+  Col,
+  DatePicker,
+  Select,
+  Button,
+  Skeleton,
+  Radio,
+  Checkbox,
+} from 'antd'
 import ModalPopup from 'components/shared/ModalPopupComponent'
 import Buttons from 'components/shared/ButtonComponent'
 import { indentFileUpload } from 'services/common/AppeovedDocumentService/adddocumentservice'
@@ -9,7 +21,9 @@ import messageReturn from '_helpers/messageReturn'
 
 const AddMaterialReturn = ({ handleCancel, isModalVisible }) => {
   const [projectList, setProjectList] = useState([])
-  const [createMtrlRtrnRespVal, setCreateMtrlRtrnRespVal] = useState([])
+  const [individualItems, setIndividualItems] = useState([])
+  const [groupRows, setGroupRows] = useState([])
+  const [activeTab, setActiveTab] = useState('individual')
   const [remarkscreateTbl, showremarkscreateTbl] = useState(false)
   const [slctdProjctVal, setSlctdProjctVal] = useState('')
   const [mtrlRtrnCreteTableLoader, setMtrlRtrnCreteTableLoader] = useState(false)
@@ -38,6 +52,9 @@ const AddMaterialReturn = ({ handleCancel, isModalVisible }) => {
   useEffect(() => {
     showremarkscreateTbl(false)
     remarksQtyForm.resetFields()
+    setActiveTab('individual')
+    setIndividualItems([])
+    setGroupRows([])
     getProjectList()
   }, [isModalVisible])
 
@@ -67,23 +84,44 @@ const AddMaterialReturn = ({ handleCancel, isModalVisible }) => {
         hdrId: formvalues.Projectcode,
         tenantId,
       }
-      const response = await indentFileUpload({
-        requestPath: 'retrieveForMS',
-        requestData: keyareaobj,
-      })
-      let data
-      if (response.responseData !== null && response.responseData !== undefined) {
-        if (response.responseData.length > 0) {
-          data = response.responseData.map((item, index) => {
-            return { ...item, sno: index }
+
+      const [individualResp, groupResp] = await Promise.all([
+        indentFileUpload({ requestPath: 'retrieveForMS', requestData: keyareaobj }),
+        indentFileUpload({ requestPath: 'msHdrRetrieve', requestData: keyareaobj }),
+      ])
+
+      const rawIndividualItems =
+        individualResp?.responseData && individualResp.responseData.length > 0
+          ? individualResp.responseData.map(item => ({ ...item, isGroup: false }))
+          : []
+
+      const groupHdrs =
+        groupResp?.responseData && groupResp.responseData.length > 0 ? groupResp.responseData : []
+
+      const rawGroupRows = await Promise.all(
+        groupHdrs.map(async grp => {
+          const dtlResp = await indentFileUpload({
+            requestPath: 'retrieveMSDtlByHdr',
+            requestData: { hdrId: grp.msHdrId, tenantId },
           })
-        } else {
-          data = ''
-        }
-      } else {
-        data = ''
-      }
-      setCreateMtrlRtrnRespVal(data)
+          return {
+            isGroup: true,
+            msHdrId: grp.msHdrId,
+            msName: grp.msName,
+            productDesc: grp.msName,
+            inventoryQtyOnHand: grp.stageQty,
+            groupItems: dtlResp?.responseData || [],
+          }
+        }),
+      )
+
+      // sno must be unique across BOTH lists since Return Qty inputs share one Form
+      const combined = [...rawIndividualItems, ...rawGroupRows].map((item, index) => ({
+        ...item,
+        sno: index,
+      }))
+      setIndividualItems(combined.filter(item => !item.isGroup))
+      setGroupRows(combined.filter(item => item.isGroup))
       setMtrlRtrnCreteTableLoader(false)
     } else {
       messageReturn(405)
@@ -109,11 +147,11 @@ const AddMaterialReturn = ({ handleCancel, isModalVisible }) => {
   }
 
   const distinctValues = key => {
-    if (!Array.isArray(createMtrlRtrnRespVal)) {
+    if (!Array.isArray(individualItems)) {
       return []
     }
 
-    return createMtrlRtrnRespVal
+    return individualItems
       .map(item => item[key])
       .filter(distinct)
       .map(value => ({
@@ -215,6 +253,50 @@ const AddMaterialReturn = ({ handleCancel, isModalVisible }) => {
       ),
     },
   ]
+
+  const groupColumns = [
+    {
+      title: 'Material Group',
+      dataIndex: 'msName',
+      key: 'msName',
+    },
+    {
+      title: 'UoM',
+      dataIndex: 'groupItems',
+      key: 'uom',
+      render: groupItems =>
+        [...new Set((groupItems || []).map(item => item.uomLongDesc).filter(Boolean))].join(', ') ||
+        '-',
+    },
+    {
+      title: 'Staged Qty.',
+      dataIndex: 'inventoryQtyOnHand',
+      key: 'inventoryQtyOnHand',
+      width: '20%',
+      align: 'right',
+      render: text => Number(text).toFixed(0),
+    },
+    {
+      title: 'Return',
+      dataIndex: 'availableQty',
+      key: 'availableQty',
+      width: '15%',
+      align: 'center',
+      render: (_, record) => (
+        <Form form={returnQtyForm}>
+          <Form.Item
+            name={`returnQty${record.sno}`}
+            valuePropName="checked"
+            initialValue={false}
+            noStyle
+          >
+            <Checkbox />
+          </Form.Item>
+        </Form>
+      ),
+    },
+  ]
+
   const FieldsComponent = () => {
     return (
       <div>
@@ -267,6 +349,13 @@ const AddMaterialReturn = ({ handleCancel, isModalVisible }) => {
                   style={{ width: '100%' }}
                   placeholder="Select Project"
                   onChange={getProjectVal}
+                  showSearch
+                  filterOption={(input, option) =>
+                    option.children
+                      .toString()
+                      .toUpperCase()
+                      .indexOf(input.toUpperCase()) !== -1
+                  }
                 >
                   {projectList?.map(item => (
                     <Option key={item.projectId} value={item.projectId}>
@@ -309,22 +398,41 @@ const AddMaterialReturn = ({ handleCancel, isModalVisible }) => {
             style={{
               display: 'flex',
               flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
               gap: '10px',
+              marginBottom: '10px',
             }}
           >
-            <Buttons text="Allocate All" type="primary" onClick={setAllocateAll} />
-            <Buttons text="Unallocate All" type="primary" onClick={setUnallocateAll} />
+            <Radio.Group value={activeTab} onChange={handleTabChange}>
+              <Radio.Button value="individual">Individual Items</Radio.Button>
+              <Radio.Button value="group">Material Groups</Radio.Button>
+            </Radio.Group>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <Buttons text="Allocate All" type="primary" onClick={setAllocateAll} />
+              <Buttons text="Unallocate All" type="primary" onClick={setUnallocateAll} />
+            </div>
           </div>
           <Skeleton active loading={mtrlRtrnCreteTableLoader}>
             <div>
-              <Table
-                columns={columns}
-                dataSource={createMtrlRtrnRespVal}
-                pagination={false}
-                onChange={handleChange}
-                scroll={{ y: 400 }}
-                bordered
-              />
+              {activeTab === 'individual' ? (
+                <Table
+                  columns={columns}
+                  dataSource={individualItems}
+                  pagination={false}
+                  onChange={handleChange}
+                  scroll={{ y: 400 }}
+                  bordered
+                />
+              ) : (
+                <Table
+                  columns={groupColumns}
+                  dataSource={groupRows}
+                  pagination={false}
+                  scroll={{ y: 400 }}
+                  bordered
+                />
+              )}
             </div>
           </Skeleton>
           <div
@@ -359,83 +467,140 @@ const AddMaterialReturn = ({ handleCancel, isModalVisible }) => {
 
   const handleCreate = async () => {
     const qtyform = remarksQtyForm.getFieldsValue()
-    const qtyform1 = returnQtyForm.getFieldsValue()
-    const updatedTableData = createMtrlRtrnRespVal.map((record, index) => {
-      return {
-        qty: qtyform1[`returnQty${index}`],
-        productId: record.productId,
-        tenantId,
-      }
-    })
+    const qtyform1 = returnQtyForm.getFieldsValue(true)
+    const allRows = [...individualItems, ...groupRows]
 
-    const filteredTableData = updatedTableData.filter(
-      item => item.qty !== '0' && item.qty !== '' && item.qty !== null && item.qty !== undefined,
-    )
-    if (filteredTableData.length > 0) {
-      if (qtyform.remarks !== undefined) {
-        setDisableInsrtBtn(true)
-        const keyareaobj = {
-          createdBy: employeeId,
-          hdrRemark: qtyform.remarks,
-          pmHdrId: slctdProjctVal,
-          tenantId,
-          remarks: qtyform.remarks,
-          mrDtlList: filteredTableData,
-        }
-        const response = await indentFileUpload({
-          requestPath: 'insertMRHAndMRD',
-          requestData: keyareaobj,
+    const selectedRows = allRows
+      .map(record => {
+        const rawValue = qtyform1[`returnQty${record.sno}`]
+        const qty = record.isGroup ? (rawValue === true ? record.inventoryQtyOnHand : '') : rawValue
+        return { record, qty }
+      })
+      .filter(({ qty }) => qty !== '0' && qty !== '' && qty !== null && qty !== undefined)
+
+    if (selectedRows.length === 0) {
+      return
+    }
+    const hasIndividualSelected = selectedRows.some(({ record }) => !record.isGroup)
+    const hasGroupSelected = selectedRows.some(({ record }) => record.isGroup)
+    if (hasIndividualSelected && hasGroupSelected) {
+      message.error('Select either Individual Items or Material Groups, not both, for a return')
+      return
+    }
+    if (qtyform.remarks === undefined) {
+      messageReturn(405)
+      return
+    }
+
+    setDisableInsrtBtn(true)
+
+    let mrDtlList = []
+    for (let i = 0; i < selectedRows.length; i += 1) {
+      const { record, qty } = selectedRows[i]
+      if (record.isGroup) {
+        // eslint-disable-next-line no-await-in-loop
+        const cancelResp = await indentFileUpload({
+          requestPath: 'cancelMsHdrReq',
+          requestData: { hdrId: record.msHdrId, tenantId, empId: employeeId },
         })
-        if (response.responseCode === '200') {
-          message.success(response.responseMessage)
-          handleCancel()
-          setDisableInsrtBtn(false)
-          remarksQtyForm.resetFields()
-          returnQtyForm.resetFields()
+        if (cancelResp?.responseCode === '200') {
+          mrDtlList = mrDtlList.concat(
+            (record.groupItems || []).map(line => ({
+              qty: line.qty,
+              productId: line.productId,
+              tenantId,
+              msHdrId: record.msHdrId,
+              msName: record.msName,
+            })),
+          )
         } else {
-          message.error(response.responseMessage)
-          setDisableInsrtBtn(false)
+          message.error(`Failed to release staging group "${record.msName}" for return`)
         }
       } else {
-        setDisableInsrtBtn(false)
-        messageReturn(405)
+        mrDtlList.push({ qty, productId: record.productId, tenantId })
       }
     }
+
+    if (mrDtlList.length === 0) {
+      setDisableInsrtBtn(false)
+      return
+    }
+
+    const keyareaobj = {
+      createdBy: employeeId,
+      hdrRemark: qtyform.remarks,
+      pmHdrId: slctdProjctVal,
+      tenantId,
+      remarks: qtyform.remarks,
+      mrDtlList,
+    }
+    const response = await indentFileUpload({
+      requestPath: 'insertMRHAndMRD',
+      requestData: keyareaobj,
+    })
+    if (response.responseCode === '200') {
+      message.success(response.responseMessage)
+      handleCancel()
+      setDisableInsrtBtn(false)
+      remarksQtyForm.resetFields()
+      returnQtyForm.resetFields()
+    } else {
+      message.error(response.responseMessage)
+      setDisableInsrtBtn(false)
+    }
+  }
+  const handleTabChange = e => {
+    const newTab = e.target.value
+    const rowsToClear = newTab === 'individual' ? groupRows : individualItems
+    if (rowsToClear.length > 0) {
+      const clearedValues = rowsToClear.map(record => ({
+        [`returnQty${record.sno}`]: record.isGroup ? false : '',
+      }))
+      returnQtyForm.setFieldsValue(Object.assign({}, ...clearedValues))
+    }
+    setActiveTab(newTab)
   }
   const handleClear = () => {
     remarksQtyForm.resetFields()
     returnQtyForm.resetFields()
+    setActiveTab('individual')
   }
   const handleClearVals = () => {
     remarksQtyForm.resetFields()
     returnQtyForm.resetFields()
+    setActiveTab('individual')
   }
   const setAllocateAll = () => {
-    if (createMtrlRtrnRespVal.length > 0) {
-      const updatedValues = createMtrlRtrnRespVal.map((record, index) => {
+    const rows = activeTab === 'individual' ? individualItems : groupRows
+    if (rows.length > 0) {
+      const updatedValues = rows.map(record => {
+        if (record.isGroup) {
+          return { [`returnQty${record.sno}`]: true }
+        }
         const returnQty = Number(record.inventoryQtyOnHand).toFixed(0)
-        const fieldName = `returnQty${index}`
-        return { [fieldName]: returnQty }
+        return { [`returnQty${record.sno}`]: returnQty }
       })
       returnQtyForm.setFieldsValue(Object.assign({}, ...updatedValues))
     }
   }
   const setUnallocateAll = () => {
-    if (createMtrlRtrnRespVal.length > 0) {
-      const updatedValues = createMtrlRtrnRespVal.map((record, index) => {
-        const fieldName = `returnQty${index}`
-        return { [fieldName]: '' }
+    const rows = activeTab === 'individual' ? individualItems : groupRows
+    if (rows.length > 0) {
+      const updatedValues = rows.map(record => {
+        return { [`returnQty${record.sno}`]: record.isGroup ? false : '' }
       })
       returnQtyForm.setFieldsValue(Object.assign({}, ...updatedValues))
     }
   }
   const handleRtnQtyChange = (record, event, sno) => {
-    if (Number(event.target.value) > Number(record.inventoryQtyOnHand)) {
+    const {
+      target: { value },
+    } = event
+    if (Number(value) > Number(record.inventoryQtyOnHand)) {
       returnQtyForm.setFieldsValue({ [`returnQty${sno}`]: '' })
       messageReturn(604)
     } else {
-      // setRequestedQtyValue(event.target.value)
-      returnQtyForm.setFieldsValue({ [`returnQty${sno}`]: event.target.value })
+      returnQtyForm.setFieldsValue({ [`returnQty${sno}`]: value })
     }
   }
 

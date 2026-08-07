@@ -386,6 +386,13 @@ const Inventoryadjustment = () => {
                   placeholder="Select Project"
                   onChange={(value, option) => handleChangeProject(option)}
                   value={projName}
+                  showSearch
+                  filterOption={(input, option) =>
+                    option.children
+                      .toString()
+                      .toUpperCase()
+                      .indexOf(input.toUpperCase()) !== -1
+                  }
                 >
                   {projectlist
                     ? projectlist.map(item => (

@@ -63,7 +63,7 @@ const DesignDashboard = () => {
 
   // const monthFormat = 'MMM-YYYY';
 
-  useEffect(() => { }, [selectedMonth])
+  useEffect(() => {}, [selectedMonth])
   useEffect(() => {
     const handleResize = () => {
       const screenWidth = window.innerWidth
@@ -1061,15 +1061,15 @@ const DesignDashboard = () => {
             style={
               !isMobile
                 ? {
-                  fontWeight: 'bold',
-                  fontFamily: 'sans-serif',
-                }
+                    fontWeight: 'bold',
+                    fontFamily: 'sans-serif',
+                  }
                 : {
-                  fontWeight: 'bold',
-                  fontFamily: 'sans-serif',
-                  fontSize: '18px',
-                  marginBottom: '30px',
-                }
+                    fontWeight: 'bold',
+                    fontFamily: 'sans-serif',
+                    fontSize: '18px',
+                    marginBottom: '30px',
+                  }
             }
           >
             Design Dashboard {project === 'getall' ? '' : projectCode ? `- ${projectCode}` : ''}
@@ -1327,6 +1327,13 @@ const DesignDashboard = () => {
                   value={project}
                   placeholder="Select Project"
                   onChange={(val, opt) => handleChangeProject(val, opt)}
+                  showSearch
+                  filterOption={(input, option) =>
+                    option.children
+                      .toString()
+                      .toUpperCase()
+                      .indexOf(input.toUpperCase()) !== -1
+                  }
                 >
                   <Option key="getall" value="getall">
                     Get All

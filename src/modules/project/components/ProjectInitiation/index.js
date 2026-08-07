@@ -1745,8 +1745,8 @@ const ProjectInitiation = () => {
           <Form.Item name={`allocatedQty_${index + 1}`} initialValue={undefined}>
             <InputNumber
               style={{ width: '100%' }}
-              precision={2}
-              value={undefined}
+              formatter={value => (value === null || value === undefined ? '' : value)}
+              parser={value => (value === '' ? null : value)}
               onChange={value => handleAllocateChange(value, record, index)}
             />
           </Form.Item>
@@ -1781,7 +1781,7 @@ const ProjectInitiation = () => {
     if (budgetLinkTablDtl.length > 0) {
       const updatedValues = budgetLinkTablDtl.map((rec, ind) => {
         const fieldName = `allocatedQty_${ind + 1}`
-        return { [fieldName]: 0 }
+        return { [fieldName]: null }
       })
       tableform.setFieldsValue(Object.assign({}, ...updatedValues))
     } else {

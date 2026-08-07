@@ -19,7 +19,12 @@ import {
   Table,
   Tooltip,
 } from 'antd'
-import { CommentOutlined, DownloadOutlined, PlusCircleOutlined } from '@ant-design/icons'
+import {
+  CommentOutlined,
+  DownloadOutlined,
+  PlusCircleOutlined,
+  InfoCircleOutlined,
+} from '@ant-design/icons'
 import TableComponent from 'components/common/TableComponent'
 import ButtonComponent from 'components/shared/ButtonComponent'
 import IndentGroupgetDetails from 'services/common/IndentGroupService'
@@ -1200,6 +1205,33 @@ const SupCompState = ({
 
       if (httpapprovals.responseCode === '200') {
         message.success(httpapprovals.responseMessage)
+        if (
+          scmHdrdata?.[0]?.costFlowType === 'NEW' &&
+          docStatus?.[0]?.docStatusDesc === 'Project Approved'
+        ) {
+          // This PJS just crossed the "committed" threshold - add its own value to the
+          // project header's Actual Spent/Balance Available immediately, client-side,
+          // instead of refetching the whole project summary from the server. finalcost
+          // (L1/L2/L3_FINAL_SUB_TOTAL) is exactly what gets written into
+          // indent_hdr.SCM_BUDGET_ALLOCATED, which is the column every backend
+          // committed-PJS-total query sums into Actual Spent - see IndentGroupService
+          // updateInScp (~line 710-713) and IIndentGroupDAO.getCommittedScsTotalByProjectId.
+          const parseAmount = v => parseFloat(String(v).replace(/,/g, '')) || 0
+          const formatAmount = v => new Intl.NumberFormat('en-IN', { style: 'decimal' }).format(v)
+          const pjsValue = parseFloat(finalcost) || 0
+          const currentEnquiry = store.get('Enquiry') || []
+          const updatedEnquiry = currentEnquiry.map(item => {
+            if (item.key === 9) {
+              return { ...item, value: formatAmount(parseAmount(item.value) + pjsValue) }
+            }
+            if (item.key === 10) {
+              return { ...item, value: formatAmount(parseAmount(item.value) - pjsValue) }
+            }
+            return item
+          })
+          store.set('Enquiry', updatedEnquiry)
+          window.dispatchEvent(new CustomEvent('enquiry-refresh', { detail: updatedEnquiry }))
+        }
         onmodalCancel()
       } else {
         message.error(httpapprovals.responseMessage)
@@ -3955,7 +3987,7 @@ const SupCompState = ({
                       </p>
                     </div>
                   </div>
-                ) : (
+                ) : docStatus?.[0]?.docStatusDesc === 'Project Approved' ? (
                   <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
                     <div style={{ display: 'flex', alignItems: 'center' }}>
                       <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
@@ -3969,10 +4001,44 @@ const SupCompState = ({
                             ).toLocaleString('en-IN')
                           : '0'}
                       </p>
+                      {scmHdrdata && scmHdrdata.length > 0 ? (
+                        <Tooltip
+                          placement="bottom"
+                          overlayStyle={{ maxWidth: '320px' }}
+                          title={
+                            <div style={{ whiteSpace: 'nowrap' }}>
+                              {[
+                                ['PO Approved (Rs.)', scmHdrdata[0].approvedPoAmount],
+                                ['Project Approved, Pending PO (Rs.)', scmHdrdata[0].committedPjsAmount],
+                                ['Blocked by Other PJS (Rs.)', scmHdrdata[0].reservedPendingExcessAmount],
+                              ].map(([label, value]) => (
+                                <div
+                                  key={label}
+                                  style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    gap: '16px',
+                                  }}
+                                >
+                                  <span>{label}:</span>
+                                  <span>
+                                    {parseFloat(parseFloat(value || 0).toFixed(2)).toLocaleString(
+                                      'en-IN',
+                                    )}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          }
+                        >
+                          <InfoCircleOutlined style={{ marginLeft: '8px', color: '#1890ff' }} />
+                        </Tooltip>
+                      ) : null}
                     </div>
                   </div>
-                )}
-                {scmHdrdata?.[0]?.costFlowType === 'NEW' ? (
+                ) : null}
+                {scmHdrdata?.[0]?.costFlowType === 'NEW' &&
+                docStatus?.[0]?.docStatusDesc === 'Project Approved' ? (
                   <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
                     <div style={{ display: 'flex', alignItems: 'center' }}>
                       <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>

@@ -3959,6 +3959,7 @@ const SupCompState = ({
                           : '0'}
                       </p>
                       {depCode === 'D03' &&
+                      docStatus?.[0]?.docStatusDesc === 'Project Approved' &&
                       scmHdrdata?.[0]?.canAllocateFromSalesBudget === 'true' &&
                       scmHdrdata?.[0]?.hasBudgetExcess !== 'true' ? (
                         <Tooltip title="Allocate budget from Sales Value">
@@ -4067,6 +4068,7 @@ const SupCompState = ({
                 ) : null}
                 {scmHdrdata?.[0]?.costFlowType === 'NEW' &&
                 depCode === 'D03' &&
+                docStatus?.[0]?.docStatusDesc === 'Project Approved' &&
                 scmHdrdata?.[0]?.isShortfall === 'true' &&
                 scmHdrdata?.[0]?.hasBudgetExcess !== 'true' ? (
                   <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">

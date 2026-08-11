@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import moment from 'moment'
 import store from 'store'
 import {
@@ -33,6 +33,18 @@ const AddMaterialReturn = ({ handleCancel, isModalVisible }) => {
   const { Option } = Select
   const [returnQtyForm] = Form.useForm()
   const [remarksQtyForm] = Form.useForm()
+  // Individual Return Qty is a fast-typed number input — mutate this ref on every
+  // keystroke (no re-render) and only sync it into React state (which does
+  // re-render, and would otherwise interrupt/drop fast keystrokes) at safe
+  // boundaries like blur, bulk actions, tab switch, clear, or a fresh data load.
+  const individualSelectionRef = useRef(new Set())
+  const [hasIndividualSelected, setHasIndividualSelected] = useState(false)
+  const [selectedGroupSnos, setSelectedGroupSnos] = useState(new Set())
+  const hasGroupSelected = selectedGroupSnos.size > 0
+  const syncIndividualSelectionState = () => {
+    const next = individualSelectionRef.current.size > 0
+    setHasIndividualSelected(prev => (prev === next ? prev : next))
+  }
   const tenantId = store.get('tenantId')
   const employeeId = store.get('employeeId')
   const currentYear = moment().year()
@@ -122,6 +134,9 @@ const AddMaterialReturn = ({ handleCancel, isModalVisible }) => {
       }))
       setIndividualItems(combined.filter(item => !item.isGroup))
       setGroupRows(combined.filter(item => item.isGroup))
+      individualSelectionRef.current = new Set()
+      setHasIndividualSelected(false)
+      setSelectedGroupSnos(new Set())
       setMtrlRtrnCreteTableLoader(false)
     } else {
       messageReturn(405)
@@ -247,6 +262,7 @@ const AddMaterialReturn = ({ handleCancel, isModalVisible }) => {
               type="number"
               style={{ textAlign: 'right' }}
               onChange={event => handleRtnQtyChange(record, event, record.sno)}
+              onBlur={syncIndividualSelectionState}
             />
           </Form.Item>
         </Form>
@@ -290,7 +306,7 @@ const AddMaterialReturn = ({ handleCancel, isModalVisible }) => {
             initialValue={false}
             noStyle
           >
-            <Checkbox />
+            <Checkbox onChange={e => handleGroupCheckChange(record.sno, e.target.checked)} />
           </Form.Item>
         </Form>
       ),
@@ -405,8 +421,15 @@ const AddMaterialReturn = ({ handleCancel, isModalVisible }) => {
             }}
           >
             <Radio.Group value={activeTab} onChange={handleTabChange}>
-              <Radio.Button value="individual">Individual Items</Radio.Button>
-              <Radio.Button value="group">Material Groups</Radio.Button>
+              <Radio.Button value="individual" disabled={activeTab === 'group' && hasGroupSelected}>
+                Individual Items
+              </Radio.Button>
+              <Radio.Button
+                value="group"
+                disabled={activeTab === 'individual' && hasIndividualSelected}
+              >
+                Material Groups
+              </Radio.Button>
             </Radio.Group>
             <div style={{ display: 'flex', gap: '10px' }}>
               <Buttons text="Allocate All" type="primary" onClick={setAllocateAll} />
@@ -481,9 +504,9 @@ const AddMaterialReturn = ({ handleCancel, isModalVisible }) => {
     if (selectedRows.length === 0) {
       return
     }
-    const hasIndividualSelected = selectedRows.some(({ record }) => !record.isGroup)
-    const hasGroupSelected = selectedRows.some(({ record }) => record.isGroup)
-    if (hasIndividualSelected && hasGroupSelected) {
+    const hasIndividualInSubmit = selectedRows.some(({ record }) => !record.isGroup)
+    const hasGroupInSubmit = selectedRows.some(({ record }) => record.isGroup)
+    if (hasIndividualInSubmit && hasGroupInSubmit) {
       message.error('Select either Individual Items or Material Groups, not both, for a return')
       return
     }
@@ -500,7 +523,7 @@ const AddMaterialReturn = ({ handleCancel, isModalVisible }) => {
       if (record.isGroup) {
         // eslint-disable-next-line no-await-in-loop
         const cancelResp = await indentFileUpload({
-          requestPath: 'cancelMsHdrReq',
+          requestPath: 'useMsHdrForReturn',
           requestData: { hdrId: record.msHdrId, tenantId, empId: employeeId },
         })
         if (cancelResp?.responseCode === '200') {
@@ -558,17 +581,29 @@ const AddMaterialReturn = ({ handleCancel, isModalVisible }) => {
       }))
       returnQtyForm.setFieldsValue(Object.assign({}, ...clearedValues))
     }
+    if (newTab === 'individual') {
+      setSelectedGroupSnos(new Set())
+    } else {
+      individualSelectionRef.current = new Set()
+      setHasIndividualSelected(false)
+    }
     setActiveTab(newTab)
   }
   const handleClear = () => {
     remarksQtyForm.resetFields()
     returnQtyForm.resetFields()
     setActiveTab('individual')
+    individualSelectionRef.current = new Set()
+    setHasIndividualSelected(false)
+    setSelectedGroupSnos(new Set())
   }
   const handleClearVals = () => {
     remarksQtyForm.resetFields()
     returnQtyForm.resetFields()
     setActiveTab('individual')
+    individualSelectionRef.current = new Set()
+    setHasIndividualSelected(false)
+    setSelectedGroupSnos(new Set())
   }
   const setAllocateAll = () => {
     const rows = activeTab === 'individual' ? individualItems : groupRows
@@ -581,6 +616,13 @@ const AddMaterialReturn = ({ handleCancel, isModalVisible }) => {
         return { [`returnQty${record.sno}`]: returnQty }
       })
       returnQtyForm.setFieldsValue(Object.assign({}, ...updatedValues))
+      const allSnos = new Set(rows.map(record => record.sno))
+      if (activeTab === 'individual') {
+        individualSelectionRef.current = allSnos
+        setHasIndividualSelected(allSnos.size > 0)
+      } else {
+        setSelectedGroupSnos(allSnos)
+      }
     }
   }
   const setUnallocateAll = () => {
@@ -590,6 +632,12 @@ const AddMaterialReturn = ({ handleCancel, isModalVisible }) => {
         return { [`returnQty${record.sno}`]: record.isGroup ? false : '' }
       })
       returnQtyForm.setFieldsValue(Object.assign({}, ...updatedValues))
+      if (activeTab === 'individual') {
+        individualSelectionRef.current = new Set()
+        setHasIndividualSelected(false)
+      } else {
+        setSelectedGroupSnos(new Set())
+      }
     }
   }
   const handleRtnQtyChange = (record, event, sno) => {
@@ -599,9 +647,27 @@ const AddMaterialReturn = ({ handleCancel, isModalVisible }) => {
     if (Number(value) > Number(record.inventoryQtyOnHand)) {
       returnQtyForm.setFieldsValue({ [`returnQty${sno}`]: '' })
       messageReturn(604)
+      individualSelectionRef.current.delete(sno)
     } else {
       returnQtyForm.setFieldsValue({ [`returnQty${sno}`]: value })
+      const isSelected = value !== '' && value !== null && value !== undefined && Number(value) > 0
+      if (isSelected) {
+        individualSelectionRef.current.add(sno)
+      } else {
+        individualSelectionRef.current.delete(sno)
+      }
     }
+  }
+  const handleGroupCheckChange = (sno, checked) => {
+    setSelectedGroupSnos(prev => {
+      const next = new Set(prev)
+      if (checked) {
+        next.add(sno)
+      } else {
+        next.delete(sno)
+      }
+      return next
+    })
   }
 
   return (

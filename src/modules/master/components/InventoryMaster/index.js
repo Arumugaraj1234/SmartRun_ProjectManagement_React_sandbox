@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { Card, Select, Skeleton, Form, Button, Input } from 'antd'
+import { Card, Select, Skeleton, Form, Button, Input, Radio, Popover } from 'antd'
 import { Table } from 'ant-table-extensions'
 import store from 'store'
-import { FileExcelOutlined } from '@ant-design/icons'
+import { FileExcelOutlined, InfoCircleOutlined } from '@ant-design/icons'
 import { useMediaQuery } from 'react-responsive'
 // import { CSVLink } from 'react-csv'
 import messageReturn from '_helpers/messageReturn'
@@ -42,6 +42,23 @@ const InventoryMaster = () => {
   //   pageSize: 50,
   // })
   const [isDisplay, setIsDisplay] = useState(false)
+  const [selectedLocationCode, setSelectedLocationCode] = useState(undefined)
+  const [activeTab, setActiveTab] = useState('individual')
+  const [groupTbl, setGroupTbl] = useState([])
+  const [groupLoading, setGroupLoading] = useState(false)
+
+  const isStoresSelected = locdropdowndata.some(
+    item =>
+      item.inventoryLocationCode === selectedLocationCode &&
+      item.inventoryLocationDescription?.trim().toLowerCase() === 'stores',
+  )
+
+  useEffect(() => {
+    if (!isStoresSelected && activeTab !== 'individual') {
+      setActiveTab('individual')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStoresSelected])
 
   useEffect(() => {
     const handleResize = () => {
@@ -187,46 +204,98 @@ const InventoryMaster = () => {
     }
   }
 
+  const fetchIndividualItems = async formValues => {
+    setLoading(true)
+    try {
+      const response = await indentFileUpload({
+        requestPath: 'getPmInv',
+        requestData: {
+          projectId: formValues.Project === 'getall' ? '' : formValues.Project,
+          tenantId: tenantID,
+          invLocationCode: formValues.invLocation === 'getall' ? '' : formValues.invLocation,
+        },
+      })
+      if (response) {
+        if (response.responseCode === '200') {
+          if (response.responseData !== null && response.responseData.length > 0) {
+            setLoading(false)
+            const updatedData = response.responseData.map((item, index) => {
+              return {
+                ...item,
+                sno: index + 1,
+                bin: item.bin || '',
+              }
+            })
+            setProductDtlTbl(updatedData)
+            setfilteredvendor(response?.responseData)
+          } else {
+            setLoading(false)
+            setProductDtlTbl([])
+            setfilteredvendor([])
+          }
+        } else {
+          setLoading(false)
+          setProductDtlTbl([])
+        }
+      }
+    } catch (err) {
+      console.error(err)
+      setLoading(false)
+    }
+  }
+
+  const fetchMaterialGroups = async formValues => {
+    const selectedProject = projectDropdown.find(item => item.projCode === formValues.Project)
+    if (!selectedProject) {
+      messageReturn(405)
+      return
+    }
+    setGroupLoading(true)
+    try {
+      // Shows Store items by which approved Material Group return they came from
+      // (material_return_dtl.MS_HDR_ID/MS_NAME) — not currently-staged groups, since
+      // a group is deleted from material_staging_hdr/dtl the moment it's returned.
+      const response = await indentFileUpload({
+        requestPath: 'retrieveApprovedGroupReturnsByProject',
+        requestData: { hdrId: selectedProject.projectId, tenantId: tenantID },
+      })
+      const flatRows = response?.responseData?.length > 0 ? response.responseData : []
+      const groupsByHdrId = {}
+      flatRows.forEach(row => {
+        if (!groupsByHdrId[row.msHdrId]) {
+          groupsByHdrId[row.msHdrId] = { msHdrId: row.msHdrId, msName: row.msName, groupItems: [] }
+        }
+        groupsByHdrId[row.msHdrId].groupItems.push(row)
+      })
+      const rows = Object.values(groupsByHdrId).map((grp, index) => ({
+        sno: index + 1,
+        msHdrId: grp.msHdrId,
+        msName: grp.msName,
+        qty: grp.groupItems.reduce((sum, item) => sum + (Number(item.qty) || 0), 0),
+        groupItems: grp.groupItems,
+      }))
+      setGroupTbl(rows)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setGroupLoading(false)
+    }
+  }
+
   const handleSubmitPrDtl = async () => {
     const formValues = form.getFieldsValue()
 
     if (formValues.Project !== undefined && formValues.invLocation !== undefined) {
       setIsDisplay(true)
-      setLoading(true)
-      try {
-        const response = await indentFileUpload({
-          requestPath: 'getPmInv',
-          requestData: {
-            projectId: formValues.Project === 'getall' ? '' : formValues.Project,
-            tenantId: tenantID,
-            invLocationCode: formValues.invLocation === 'getall' ? '' : formValues.invLocation,
-          },
-        })
-        if (response) {
-          if (response.responseCode === '200') {
-            if (response.responseData !== null && response.responseData.length > 0) {
-              setLoading(false)
-              const updatedData = response.responseData.map((item, index) => {
-                return {
-                  ...item,
-                  sno: index + 1,
-                  bin: item.bin || '',
-                }
-              })
-              setProductDtlTbl(updatedData)
-              setfilteredvendor(response?.responseData)
-            } else {
-              setLoading(false)
-              setProductDtlTbl([])
-              setfilteredvendor([])
-            }
-          } else {
-            setLoading(false)
-            setProductDtlTbl([])
-          }
+      // Fetch both tabs' data together so switching tabs afterward doesn't
+      // require clicking Get Details again.
+      fetchIndividualItems(formValues)
+      if (isStoresSelected) {
+        if (formValues.Project === 'getall') {
+          setGroupTbl([])
+        } else {
+          fetchMaterialGroups(formValues)
         }
-      } catch (err) {
-        console.error(err)
       }
     } else {
       messageReturn(405)
@@ -466,6 +535,56 @@ const InventoryMaster = () => {
       ),
     },
   ]
+
+  const groupColumns = [
+    {
+      title: 'S.No',
+      dataIndex: 'sno',
+      key: 'sno',
+    },
+    {
+      title: 'Material Group',
+      dataIndex: 'msName',
+      key: 'msName',
+      render: (text, record) => (
+        <span>
+          {text}{' '}
+          <Popover
+            title={`${text} — Items`}
+            content={
+              <Table
+                dataSource={record.groupItems}
+                pagination={false}
+                size="small"
+                columns={[
+                  { title: 'Part Number', dataIndex: 'productCode', key: 'productCode' },
+                  { title: 'Description', dataIndex: 'productDesc', key: 'productDesc' },
+                  { title: 'UOM', dataIndex: 'uomLongDesc', key: 'uomLongDesc' },
+                  { title: 'Qty', dataIndex: 'qty', key: 'qty', align: 'right' },
+                ]}
+              />
+            }
+          >
+            <InfoCircleOutlined style={{ cursor: 'pointer', color: '#1890ff' }} />
+          </Popover>
+        </span>
+      ),
+    },
+    {
+      title: 'UOM',
+      dataIndex: 'groupItems',
+      key: 'uom',
+      render: groupItems =>
+        [...new Set((groupItems || []).map(item => item.uomLongDesc).filter(Boolean))].join(', '),
+    },
+    {
+      title: 'Returned Qty',
+      dataIndex: 'qty',
+      key: 'qty',
+      align: 'right',
+      render: text => (text !== null && text !== undefined ? parseFloat(text).toLocaleString('en-IN') : ''),
+    },
+  ]
   // const Dtlcolumns = [
   //   {
   //     title: 'S.No',
@@ -560,6 +679,9 @@ const InventoryMaster = () => {
     form.resetFields()
     setIsDisplay(false)
     setDtlTbl([])
+    setSelectedLocationCode(undefined)
+    setActiveTab('individual')
+    setGroupTbl([])
   }
 
   const DetailsTableComponent = () => {
@@ -808,7 +930,7 @@ const InventoryMaster = () => {
                 <Select
                   placeholder="Select Inv. Location"
                   style={{ width: '100%' }}
-                  // onChange={(value, option) => handleSelectChange(value, option)}
+                  onChange={value => setSelectedLocationCode(value)}
                   showSearch
                   filterOption={(input, option) =>
                     option.children
@@ -839,13 +961,17 @@ const InventoryMaster = () => {
           <ButtonComponent type="primary" text="Clear" onClick={handleClear} />
         </div>
         <div style={{ marginTop: '40px', display: isDisplay ? 'block' : 'none' }}>
-          <Skeleton loading={loading} active>
-            <div style={{ marginTop: 10 }}>
-              {/* <CSVLink data={csvData} filename={`InventoryMaster_${currentDateTime}`}>
-                <Button type="primary" icon={<FileExcelOutlined />}>
-                  Export to CSVs
-                </Button>
-              </CSVLink> */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'flex-start',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '10px',
+              marginTop: 10,
+            }}
+          >
+            {activeTab === 'individual' && (
               <Button
                 type="primary"
                 exportableProps={{
@@ -857,53 +983,75 @@ const InventoryMaster = () => {
                   },
                 }}
                 onClick={handleExport}
-                style={{ marginTop: '10px' }}
               >
                 Export to CSV
               </Button>
-            </div>
-            <Input.Search
-              style={{ margin: '0 0 10px 0', width: isMobile ? '100%' : '30%', float: 'right' }}
-              placeholder="Search here..."
-              enterButton
-              // onSearch={handleSearch}
-              onChange={e => handleSearch(e)}
-            />
-            <Table
-              dataSource={productTbl}
-              columns={columns}
-              scroll={{ y: 400 }}
-              pagination={{
-                pageSizeOptions: ['10', '20', '30', '50', [productTbl?.length]],
-                showSizeChanger: true,
-                defaultPageSize: 50,
-              }}
-              onChange={handleChange}
-              footer={() => (
-                <div
-                  style={{
-                    fontSize: '16px',
-                    marginLeft: '32px',
-                    textAlign: 'right',
-                    fontWeight: 700,
-                  }}
-                >
-                  <span style={{ padding: '0px 50px' }}>
-                    Total Qty. On hand (Nos.) :
-                    {totalcount !== null || undefined
-                      ? parseFloat(totalcount).toLocaleString('en-IN')
-                      : parseFloat(totalValue).toLocaleString('en-IN')}{' '}
-                  </span>
-                  <span style={{ padding: '0px 50px' }}>
-                    Total Inventory Value {MenulistData[0].currency} :
-                    {filteredtotalinvvalue !== null || undefined
-                      ? parseFloat(filteredtotalinvvalue).toLocaleString('en-IN')
-                      : parseFloat(inventorytotalvalue).toLocaleString('en-IN')}{' '}
-                  </span>
-                </div>
-              )}
-            />
-          </Skeleton>
+            )}
+            {isStoresSelected && (
+              <Radio.Group value={activeTab} onChange={e => setActiveTab(e.target.value)}>
+                <Radio.Button value="individual">Individual Items</Radio.Button>
+                <Radio.Button value="group">Material Groups</Radio.Button>
+              </Radio.Group>
+            )}
+          </div>
+          {activeTab === 'group' ? (
+            <Skeleton loading={groupLoading} active>
+              <Table
+                dataSource={groupTbl}
+                columns={groupColumns}
+                scroll={{ y: 400 }}
+                pagination={{
+                  pageSizeOptions: ['10', '20', '30', '50', [groupTbl?.length]],
+                  showSizeChanger: true,
+                  defaultPageSize: 50,
+                }}
+              />
+            </Skeleton>
+          ) : (
+            <Skeleton loading={loading} active>
+              <Input.Search
+                style={{ margin: '0 0 10px 0', width: isMobile ? '100%' : '30%', float: 'right' }}
+                placeholder="Search here..."
+                enterButton
+                // onSearch={handleSearch}
+                onChange={e => handleSearch(e)}
+              />
+              <Table
+                dataSource={productTbl}
+                columns={columns}
+                scroll={{ y: 400 }}
+                pagination={{
+                  pageSizeOptions: ['10', '20', '30', '50', [productTbl?.length]],
+                  showSizeChanger: true,
+                  defaultPageSize: 50,
+                }}
+                onChange={handleChange}
+                footer={() => (
+                  <div
+                    style={{
+                      fontSize: '16px',
+                      marginLeft: '32px',
+                      textAlign: 'right',
+                      fontWeight: 700,
+                    }}
+                  >
+                    <span style={{ padding: '0px 50px' }}>
+                      Total Qty. On hand (Nos.) :
+                      {totalcount !== null || undefined
+                        ? parseFloat(totalcount).toLocaleString('en-IN')
+                        : parseFloat(totalValue).toLocaleString('en-IN')}{' '}
+                    </span>
+                    <span style={{ padding: '0px 50px' }}>
+                      Total Inventory Value {MenulistData[0].currency} :
+                      {filteredtotalinvvalue !== null || undefined
+                        ? parseFloat(filteredtotalinvvalue).toLocaleString('en-IN')
+                        : parseFloat(inventorytotalvalue).toLocaleString('en-IN')}{' '}
+                    </span>
+                  </div>
+                )}
+              />
+            </Skeleton>
+          )}
         </div>
         <ModalPopup
           text="Inventory Store Details"

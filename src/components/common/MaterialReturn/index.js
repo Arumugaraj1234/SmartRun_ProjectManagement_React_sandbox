@@ -624,9 +624,17 @@ const MaterialReturn = () => {
     setShowDtlTablLoading(false)
   }
   function addRemarksSubmit() {
+    if (dtlIdList.length === 0) {
+      message.error('Select at least one item before approving')
+      return
+    }
     setApproveRemarksCard(true)
   }
   const handleApproveMatrlStgng = async () => {
+    if (dtlIdList.length === 0) {
+      message.error('Select at least one item before approving')
+      return
+    }
     const rmrksform = remarksForm.getFieldsValue()
     const response = await indentFileUpload({
       requestPath: 'materialReturnAccept',

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { PlusOutlined } from '@ant-design/icons'
 import Button from 'components/shared/ButtonComponent'
-import { Table, Modal, message } from 'antd'
+import { Table, Modal, message, Tag } from 'antd'
 import moment from 'moment'
 import AddNewMaterialStg from 'modules/assembly/components/AddAssyMaterialStaging'
 import store from 'store'
@@ -17,6 +17,7 @@ const AssyMaterialStaging = () => {
   const [materilStgnHdrResp, setMaterilStgnHdrResp] = useState([])
   const [matrlStgngPopupDtl, setMatrlStgngPopupDtl] = useState([])
   const [onClicksetMsHdrId, setOnClicksetMsHdrId] = useState('')
+  const [onClicksetStatus, setOnClicksetStatus] = useState('')
   const [materialStaging, setMaterialStaging] = useState(true)
   const [filtersinfo, setfilterinfo] = useState([])
 
@@ -30,7 +31,7 @@ const AssyMaterialStaging = () => {
       tenantId: tenantid,
     }
     const response = await indentFileUpload({
-      requestPath: 'msHdrRetrieve',
+      requestPath: 'msHdrRetrieveAll',
       requestData: keyareaobj,
     })
     setMaterilStgnHdrResp(response?.responseData || [])
@@ -64,6 +65,7 @@ const AssyMaterialStaging = () => {
       title: 'Stage Name',
       dataIndex: 'msName',
       key: 'msName',
+      sorter: (a, b) => (a.msName || '').localeCompare(b.msName || ''),
     },
     {
       title: 'Stage Qty.',
@@ -71,17 +73,37 @@ const AssyMaterialStaging = () => {
       key: 'stageQty',
       className: 'right-align-cell',
       render: text => Number(text).toFixed(0),
+      sorter: (a, b) => Number(a.stageQty) - Number(b.stageQty),
     },
     {
       title: 'Created on',
       dataIndex: 'createdOn',
       key: 'createdOn',
       render: text => moment(text).format('DD-MMM-YYYY'),
+      sorter: (a, b) => moment(a.createdOn).valueOf() - moment(b.createdOn).valueOf(),
     },
     {
       title: 'Created By',
       dataIndex: 'createdBy',
       key: 'createdBy',
+      sorter: (a, b) => (a.createdBy || '').localeCompare(b.createdBy || ''),
+    },
+    {
+      title: 'Status',
+      dataIndex: 'status',
+      key: 'status',
+      sorter: (a, b) => (a.status || '').localeCompare(b.status || ''),
+      filters: [
+        { text: 'Active', value: 'ACTIVE' },
+        { text: 'Used', value: 'USED' },
+        { text: 'Cancelled', value: 'CANCELLED' },
+      ],
+      onFilter: (value, record) => record.status === value,
+      render: status => {
+        const colorMap = { ACTIVE: 'blue', USED: 'green', CANCELLED: 'red' }
+        const labelMap = { ACTIVE: 'Active', USED: 'Used', CANCELLED: 'Cancelled' }
+        return <Tag color={colorMap[status] || 'default'}>{labelMap[status] || status}</Tag>
+      },
     },
     {
       title: 'Action',
@@ -100,6 +122,7 @@ const AssyMaterialStaging = () => {
   ]
   const handleClickOnDetails = record => {
     setOnClicksetMsHdrId(record.msHdrId)
+    setOnClicksetStatus(record.status)
     getMtrllStgngDtls(record.msHdrId)
     setShowDtlTablLoading(true)
   }
@@ -274,9 +297,11 @@ const AssyMaterialStaging = () => {
             bordered
             onChange={handleChange}
           />
-          <center>
-            <Button text="Cancel MS" type="primary" onClick={handleCancelMatrlStgng} />
-          </center>
+          {onClicksetStatus === 'ACTIVE' ? (
+            <center>
+              <Button text="Cancel MS" type="primary" onClick={handleCancelMatrlStgng} />
+            </center>
+          ) : null}
         </div>
       </Modal>
       <AddNewMaterialStg

@@ -25,7 +25,7 @@ import moment from 'moment'
 import RemoveIcon from 'components/shared/RemoveIconComponent'
 import AddIconButton from 'components/shared/AddIconComponent'
 import ModalPopupBox from 'components/shared/ModalPopupComponent'
-import { FileExcelOutlined } from '@ant-design/icons'
+import { FileExcelOutlined, HistoryOutlined } from '@ant-design/icons'
 import getDepartmentAndEmployeeDropDownDataService from 'services/common/getDepartmentAndEmployeeDropDownDataService'
 // import DropDownComponent from 'components/shared/DropDownComponent'
 import getMstPocEmpForDepartment from 'services/common/getMstPocEmpForDepartment'
@@ -266,6 +266,9 @@ const ProjectInitiation = () => {
   // const [popupsbExtnId, setpopupsbExtnId] = useState([])
   const [linkStatus, setLinkStatus] = useState([])
   const [disablbtn, setDisablebtn] = useState(false)
+  const [topupHistoryOpen, setTopupHistoryOpen] = useState(false)
+  const [topupHistoryDtl, setTopupHistoryDtl] = useState([])
+  const [topupHistoryLoading, setTopupHistoryLoading] = useState(false)
   const [salecatcode, setSalecatcode] = useState('')
   // const [popupTotalAllocVal, setPopupTotalAllocVal] = useState('0')
   // const [slctdElementVal, setSlctdElementVal] = useState('')
@@ -1091,7 +1094,8 @@ const ProjectInitiation = () => {
         // setpopupsbExtnId(resp[0].sbExtnId)
         // setAllocatedQty(resp[0].totalValue)
         resp.forEach((res, ind) => {
-          const fieldName = `allocatedQty_${ind + 1}`
+          const fieldName =
+            costFlowType === 'NEW' ? `allocatedValue_${ind + 1}` : `allocatedQty_${ind + 1}`
           // tableform.setFieldsValue({ [fieldName]: parseInt(res.totalQty, 10) })
           tableform.setFieldsValue({ [fieldName]: '' })
         })
@@ -1164,14 +1168,25 @@ const ProjectInitiation = () => {
     if (budgetLinkTablDtl.length > 0) {
       const formValues = tableform.getFieldsValue()
       const reqArr = budgetLinkTablDtl.map((item, index) => {
+        const perPartVal = parseFloat(item.perPartVal) || 0
+        let allocatedQty
+        let allocatedvalue
+        if (costFlowType === 'NEW') {
+          allocatedvalue = parseFloat(formValues[`allocatedValue_${index + 1}`]) || 0
+          allocatedQty = perPartVal > 0 ? allocatedvalue / perPartVal : 0
+        } else {
+          allocatedQty = parseFloat(formValues[`allocatedQty_${index + 1}`]) || 0
+          allocatedvalue = perPartVal * allocatedQty || 0
+        }
         const obj = {
           pkaId: dskIdVal,
           sbExtnId: item.sbExtnId,
-          allocatedQty: parseFloat(formValues[`allocatedQty_${index + 1}`]) || 0,
-          allocatedvalue:
-            parseFloat(item.perPartVal) * parseFloat(formValues[`allocatedQty_${index + 1}`]) || 0,
+          allocatedQty,
+          allocatedvalue,
           tenantId: tenantid,
           pmId: Tab.processCode,
+          empId: employeeId,
+          source: 'WBS',
         }
 
         const objAsString = {}
@@ -1217,6 +1232,47 @@ const ProjectInitiation = () => {
     //   errosr('No records to insert ')
     // }
   }
+
+  const handleViewTopupHistory = async () => {
+    setTopupHistoryLoading(true)
+    setTopupHistoryOpen(true)
+    const response = await indentFileUpload({
+      requestPath: 'getSubAreaExtnHist',
+      requestData: {
+        pkaId: dskIdVal,
+        tenantId: tenantid,
+      },
+    })
+    setTopupHistoryLoading(false)
+    setTopupHistoryDtl(response && response.responseData ? response.responseData : [])
+  }
+
+  const topupHistoryColumns = [
+    { title: 'Element', dataIndex: 'elementHdr', key: 'elementHdr' },
+    { title: 'Element Desc', dataIndex: 'elementDtl', key: 'elementDtl' },
+    {
+      title: `Allocated Value ${curr}`,
+      dataIndex: 'allocatedvalue',
+      key: 'allocatedvalue',
+      className: 'right-align-cell',
+      render: text => (text ? parseFloat(text).toLocaleString('en-IN') : '0'),
+    },
+    {
+      title: 'Allocated Qty',
+      dataIndex: 'allocatedQty',
+      key: 'allocatedQty',
+      className: 'right-align-cell',
+      render: text => (text ? parseFloat(text).toLocaleString('en-IN') : '0'),
+    },
+    { title: 'Source', dataIndex: 'source', key: 'source' },
+    { title: 'Allocated By', dataIndex: 'empName', key: 'empName', render: text => text || '-' },
+    {
+      title: 'Allocated On',
+      dataIndex: 'createdOn',
+      key: 'createdOn',
+      render: text => (text ? moment(text).format('DD-MM-YYYY hh:mm A') : '-'),
+    },
+  ]
 
   const handleRemoveAllocatedValRow = async rec => {
     const response = await indentFileUpload({
@@ -1663,6 +1719,44 @@ const ProjectInitiation = () => {
     }
   }
 
+  // NEW-flow only: client wants allocation entered as an amount, not a quantity.
+  // LEGACY keeps handleAllocateChange (qty-based) completely untouched above.
+  const handleAllocateValueChange = (value, record, index) => {
+    if (value === null || value === '' || Number.isNaN(value)) return
+
+    const valueStr = value.toString()
+    const decimalValid = /^(\d+)?(\.\d{0,4})?$/.test(valueStr)
+
+    if (!decimalValid) {
+      errosr('Only up to 4 decimal places are allowed.')
+      return
+    }
+
+    const allocatedValue = parseFloat(value)
+    const fieldName = `allocatedValue_${index + 1}`
+    tableform.setFieldsValue({ [fieldName]: parseFloat(allocatedValue.toFixed(2)) })
+  }
+
+  // Blocks the keystroke itself, before it ever reaches the DOM - clamping after the
+  // fact (via parser/onChange + a forced re-render) fights rc-input-number's own
+  // cursor-restoration logic and corrupts the displayed digits (e.g. typing past the
+  // cap could splice new digits into the wrong position, showing a scrambled number).
+  // Computing the prospective value from the current text + cursor selection and
+  // rejecting the keystroke outright avoids all of that.
+  const blockOverLimitKeyDown = (e, record) => {
+    if (!/^\d$/.test(e.key)) return
+    const input = e.target
+    const currentText = input.value || ''
+    const selStart = input.selectionStart ?? currentText.length
+    const selEnd = input.selectionEnd ?? currentText.length
+    const prospective = currentText.slice(0, selStart) + e.key + currentText.slice(selEnd)
+    const num = parseFloat(prospective)
+    const cap = parseFloat(record.availableAmount) || 0
+    if (!Number.isNaN(num) && num > cap) {
+      e.preventDefault()
+    }
+  }
+
   const handleChange = (pagination, filters) => {
     setfilterinfo(filters)
   }
@@ -1718,41 +1812,119 @@ const ProjectInitiation = () => {
       dataIndex: 'make',
       key: 'make',
     },
-    {
-      title: 'Available Qty.',
-      dataIndex: 'totalQty',
-      key: 'totalQty',
-      className: 'right-align-cell',
-      render: (text, record) => <span>{parseFloat(record.totalQty)}</span>,
-    },
-    {
-      title: `Unit Value ${curr}`,
-      dataIndex: 'perPartVal',
-      key: 'perPartVal',
-      className: 'right-align-cell',
-      render: (text, record) => (
-        <span>
-          {record.perPartVal ? parseFloat(record.perPartVal).toLocaleString('en-IN') : '0'}
-        </span>
-      ),
-    },
-    {
-      title: 'Allocated Qty',
-      dataIndex: 'allocatedQty',
-      key: 'allocatedQty',
-      render: (text, record, index) => (
-        <Form form={tableform} initialValues={{ ...record }}>
-          <Form.Item name={`allocatedQty_${index + 1}`} initialValue={undefined}>
-            <InputNumber
-              style={{ width: '100%' }}
-              formatter={value => (value === null || value === undefined ? '' : value)}
-              parser={value => (value === '' ? null : value)}
-              onChange={value => handleAllocateChange(value, record, index)}
-            />
-          </Form.Item>
-        </Form>
-      ),
-    },
+    ...(costFlowType === 'NEW'
+      ? [
+          {
+            title: 'Qty',
+            dataIndex: 'totalQty',
+            key: 'totalQty',
+            className: 'right-align-cell',
+            render: (text, record) => <span>{parseFloat(record.totalQty)}</span>,
+          },
+          {
+            title: `Total Amount ${curr}`,
+            dataIndex: 'totalAmount',
+            key: 'totalAmount',
+            className: 'right-align-cell',
+            render: (text, record) => (
+              <span>
+                {record.totalAmount ? parseFloat(record.totalAmount).toLocaleString('en-IN') : '0'}
+              </span>
+            ),
+          },
+          {
+            title: `Utilized Amount ${curr}`,
+            dataIndex: 'utilizedAmount',
+            key: 'utilizedAmount',
+            className: 'right-align-cell',
+            render: (text, record) => (
+              <span>
+                {record.utilizedAmount
+                  ? parseFloat(record.utilizedAmount).toLocaleString('en-IN')
+                  : '0'}
+              </span>
+            ),
+          },
+          {
+            title: `Amount Available ${curr}`,
+            dataIndex: 'availableAmount',
+            key: 'availableAmount',
+            className: 'right-align-cell',
+            render: (text, record) => (
+              <span>
+                {record.availableAmount
+                  ? parseFloat(record.availableAmount).toLocaleString('en-IN')
+                  : '0'}
+              </span>
+            ),
+          },
+          {
+            title: `Allocated Value ${curr}`,
+            dataIndex: 'allocatedValue',
+            key: 'allocatedValue',
+            render: (text, record, index) => (
+              <Form form={tableform} initialValues={{ ...record }}>
+                <Form.Item name={`allocatedValue_${index + 1}`} initialValue={undefined}>
+                  <InputNumber
+                    style={{ width: '100%' }}
+                    formatter={value => (value === null || value === undefined ? '' : value)}
+                    parser={value => {
+                      if (value === '' || value === null || value === undefined) return ''
+                      const num = parseFloat(value)
+                      if (Number.isNaN(num)) return ''
+                      const cap = parseFloat(record.availableAmount) || 0
+                      if (num < 0) return 0
+                      return num > cap ? cap : num
+                    }}
+                    controls={false}
+                    min={0}
+                    max={parseFloat(record.availableAmount) || 0}
+                    disabled={!record.availableAmount || parseFloat(record.availableAmount) <= 0}
+                    onKeyDown={e => blockOverLimitKeyDown(e, record)}
+                    onChange={value => handleAllocateValueChange(value, record, index)}
+                  />
+                </Form.Item>
+              </Form>
+            ),
+          },
+        ]
+      : [
+          {
+            title: 'Available Qty.',
+            dataIndex: 'totalQty',
+            key: 'totalQty',
+            className: 'right-align-cell',
+            render: (text, record) => <span>{parseFloat(record.totalQty)}</span>,
+          },
+          {
+            title: `Unit Value ${curr}`,
+            dataIndex: 'perPartVal',
+            key: 'perPartVal',
+            className: 'right-align-cell',
+            render: (text, record) => (
+              <span>
+                {record.perPartVal ? parseFloat(record.perPartVal).toLocaleString('en-IN') : '0'}
+              </span>
+            ),
+          },
+          {
+            title: 'Allocated Qty',
+            dataIndex: 'allocatedQty',
+            key: 'allocatedQty',
+            render: (text, record, index) => (
+              <Form form={tableform} initialValues={{ ...record }}>
+                <Form.Item name={`allocatedQty_${index + 1}`} initialValue={undefined}>
+                  <InputNumber
+                    style={{ width: '100%' }}
+                    formatter={value => (value === null || value === undefined ? '' : value)}
+                    parser={value => (value === '' ? null : value)}
+                    onChange={value => handleAllocateChange(value, record, index)}
+                  />
+                </Form.Item>
+              </Form>
+            ),
+          },
+        ]),
   ]
   const fetchElementDropdown = async e => {
     const response = await indentFileUpload({
@@ -1780,7 +1952,8 @@ const ProjectInitiation = () => {
   const handleAllocate = () => {
     if (budgetLinkTablDtl.length > 0) {
       const updatedValues = budgetLinkTablDtl.map((rec, ind) => {
-        const fieldName = `allocatedQty_${ind + 1}`
+        const fieldName =
+          costFlowType === 'NEW' ? `allocatedValue_${ind + 1}` : `allocatedQty_${ind + 1}`
         return { [fieldName]: null }
       })
       tableform.setFieldsValue(Object.assign({}, ...updatedValues))
@@ -1791,6 +1964,10 @@ const ProjectInitiation = () => {
   const handleUnAllocate = () => {
     if (budgetLinkTablDtl.length > 0) {
       const updatedValues = budgetLinkTablDtl.map((rec, ind) => {
+        if (costFlowType === 'NEW') {
+          const fieldName = `allocatedValue_${ind + 1}`
+          return { [fieldName]: parseFloat(rec.availableAmount) || 0 }
+        }
         const fieldName = `allocatedQty_${ind + 1}`
         return { [fieldName]: parseInt(rec.totalQty, 10) }
       })
@@ -1863,6 +2040,14 @@ const ProjectInitiation = () => {
                 <div className="col-md-1" style={{ marginLeft: '5px' }}>
                   <Buttons type="primary" text="Allocate All" onClick={handleUnAllocate} />
                 </div>
+                <div className="col-md-1" style={{ marginLeft: '5px' }}>
+                  <Buttons
+                    type="primary"
+                    icon={<HistoryOutlined />}
+                    text="History"
+                    onClick={handleViewTopupHistory}
+                  />
+                </div>
                 <div className="col-md-12">
                   {budgetLinkTablDtl ? (
                     <Table
@@ -1881,6 +2066,23 @@ const ProjectInitiation = () => {
               </div>
             </Form>
           </div>
+          <Modal
+            title="Topup History"
+            open={topupHistoryOpen}
+            onCancel={() => setTopupHistoryOpen(false)}
+            footer={null}
+            width={900}
+          >
+            <Table
+              dataSource={topupHistoryDtl}
+              columns={topupHistoryColumns}
+              loading={topupHistoryLoading}
+              rowKey="pkseHistId"
+              pagination={false}
+              scroll={{ y: 300 }}
+              bordered
+            />
+          </Modal>
         </div>
       </SpinLoading>
     )
@@ -2313,7 +2515,7 @@ const ProjectInitiation = () => {
         FieldsComponent={FieldsComponent}
         ButtonsComponent={ButtonsComponent}
         onCancel={handleCancel}
-        width={1200}
+        width={1500}
       />
     </div>
   )

@@ -19,6 +19,7 @@ const AllocateStationBudgetModal = ({ visible, onCancel, pkaId, stationLabel, on
   const [form] = Form.useForm()
   const [tableform] = Form.useForm()
   const tenantId = store.get('tenantId')
+  const empId = store.get('employeeId')
   const Tab = store.get('Tab')
   const enquiryId = store.get('enquiryId') || store.get('EnquiryID')
   const pmHdrId = store.get('ProjectID') || store.get('ProjectPMHdrId')
@@ -112,10 +113,38 @@ const AllocateStationBudgetModal = ({ visible, onCancel, pkaId, stationLabel, on
     setIsLoading(false)
     setBudgetLinkTablDtl(resp)
     resp.forEach((res, ind) => {
-      tableform.setFieldsValue({ [`allocatedQty_${ind + 1}`]: '' })
+      tableform.setFieldsValue({ [`allocatedValue_${ind + 1}`]: '' })
     })
   }
 
+  // Blocks the keystroke itself, before it ever reaches the DOM - clamping after the
+  // fact (via parser/onChange + a forced re-render) fights rc-input-number's own
+  // cursor-restoration logic and corrupts the displayed digits (e.g. typing past the
+  // cap could splice new digits into the wrong position, showing a scrambled number).
+  // Computing the prospective value from the current text + cursor selection and
+  // rejecting the keystroke outright avoids all of that.
+  const blockOverLimitKeyDown = (e, record) => {
+    if (!/^\d$/.test(e.key)) return
+    const input = e.target
+    const currentText = input.value || ''
+    const selStart = input.selectionStart ?? currentText.length
+    const selEnd = input.selectionEnd ?? currentText.length
+    const prospective = currentText.slice(0, selStart) + e.key + currentText.slice(selEnd)
+    const num = parseFloat(prospective)
+    const cap = parseFloat(record.availableAmount) || 0
+    if (!Number.isNaN(num) && num > cap) {
+      e.preventDefault()
+    }
+  }
+
+  // This modal is only ever opened from ScsComponent's "Allocate to Station" icon,
+  // which is itself gated on canAllocateFromSalesBudget/hasBudgetExcess - fields the
+  // backend only populates for NEW-flow indents (IndentUploadService.getIndentByIndentID) -
+  // so this modal is already NEW-flow-only; no legacy/qty-based fallback is needed here.
+  // Client wants allocation entered as an amount, not a quantity - the input still caps
+  // against what's actually available (Available Qty x Unit Value), and the qty the
+  // backend also expects gets derived back from the entered amount at Save time (see
+  // handleSave), since insertSubAreaExtn persists both fields independently.
   const handleAllocateChange = (value, record, index) => {
     if (value === null || value === '' || Number.isNaN(value)) return
     const valueStr = value.toString()
@@ -124,21 +153,15 @@ const AllocateStationBudgetModal = ({ visible, onCancel, pkaId, stationLabel, on
       errosr('Only up to 4 decimal places are allowed.')
       return
     }
-    const allocatedQty = parseFloat(value)
-    const availableQty = parseFloat(record.totalQty)
-    const fieldName = `allocatedQty_${index + 1}`
-    if (allocatedQty <= availableQty) {
-      tableform.setFieldsValue({ [fieldName]: parseFloat(allocatedQty.toFixed(2)) })
-    } else {
-      errosr('Allocated Qty. cannot be higher than Available Qty.')
-      tableform.setFieldsValue({ [fieldName]: parseFloat(availableQty.toFixed(2)) })
-    }
+    const allocatedValue = parseFloat(value)
+    const fieldName = `allocatedValue_${index + 1}`
+    tableform.setFieldsValue({ [fieldName]: parseFloat(allocatedValue.toFixed(2)) })
   }
 
   const handleAllocateAll = () => {
     if (budgetLinkTablDtl.length > 0) {
       const updatedValues = budgetLinkTablDtl.map((rec, ind) => ({
-        [`allocatedQty_${ind + 1}`]: parseInt(rec.totalQty, 10),
+        [`allocatedValue_${ind + 1}`]: parseFloat(rec.availableAmount) || 0,
       }))
       tableform.setFieldsValue(Object.assign({}, ...updatedValues))
     } else {
@@ -149,7 +172,7 @@ const AllocateStationBudgetModal = ({ visible, onCancel, pkaId, stationLabel, on
   const handleUnallocate = () => {
     if (budgetLinkTablDtl.length > 0) {
       const updatedValues = budgetLinkTablDtl.map((rec, ind) => ({
-        [`allocatedQty_${ind + 1}`]: 0,
+        [`allocatedValue_${ind + 1}`]: 0,
       }))
       tableform.setFieldsValue(Object.assign({}, ...updatedValues))
     } else {
@@ -163,14 +186,17 @@ const AllocateStationBudgetModal = ({ visible, onCancel, pkaId, stationLabel, on
     if (budgetLinkTablDtl.length > 0) {
       const formValues = tableform.getFieldsValue()
       const reqArr = budgetLinkTablDtl.map((item, index) => {
+        const allocatedValue = parseFloat(formValues[`allocatedValue_${index + 1}`]) || 0
+        const perPartVal = parseFloat(item.perPartVal) || 0
         const obj = {
           pkaId,
           sbExtnId: item.sbExtnId,
-          allocatedQty: parseFloat(formValues[`allocatedQty_${index + 1}`]) || 0,
-          allocatedvalue:
-            parseFloat(item.perPartVal) * parseFloat(formValues[`allocatedQty_${index + 1}`]) || 0,
+          allocatedQty: perPartVal > 0 ? allocatedValue / perPartVal : 0,
+          allocatedvalue: allocatedValue,
           tenantId,
           pmId: '3',
+          empId,
+          source: 'PJS',
         }
         const objAsString = {}
         Object.keys(obj).forEach(key => {
@@ -196,7 +222,7 @@ const AllocateStationBudgetModal = ({ visible, onCancel, pkaId, stationLabel, on
     } else {
       setDisablebtn(false)
       setIsLoading(false)
-      errosr('Minimum one Allocated Qty should be greater than zero')
+      errosr('Minimum one Allocated Value should be greater than zero')
     }
   }
 
@@ -220,31 +246,62 @@ const AllocateStationBudgetModal = ({ visible, onCancel, pkaId, stationLabel, on
     { title: 'Specification', dataIndex: 'specification', key: 'specification' },
     { title: 'Make', dataIndex: 'make', key: 'make' },
     {
-      title: 'Available Qty.',
+      title: 'Qty',
       dataIndex: 'totalQty',
       key: 'totalQty',
       className: 'right-align-cell',
       render: (text, record) => <span>{parseFloat(record.totalQty)}</span>,
     },
     {
-      title: `Unit Value ${curr}`,
-      dataIndex: 'perPartVal',
-      key: 'perPartVal',
+      title: `Total Amount ${curr}`,
+      dataIndex: 'totalAmount',
+      key: 'totalAmount',
       className: 'right-align-cell',
       render: (text, record) => (
-        <span>{record.perPartVal ? parseFloat(record.perPartVal).toLocaleString('en-IN') : '0'}</span>
+        <span>{record.totalAmount ? parseFloat(record.totalAmount).toLocaleString('en-IN') : '0'}</span>
       ),
     },
     {
-      title: 'Allocated Qty',
-      dataIndex: 'allocatedQty',
-      key: 'allocatedQty',
+      title: `Utilized Amount ${curr}`,
+      dataIndex: 'utilizedAmount',
+      key: 'utilizedAmount',
+      className: 'right-align-cell',
+      render: (text, record) => (
+        <span>{record.utilizedAmount ? parseFloat(record.utilizedAmount).toLocaleString('en-IN') : '0'}</span>
+      ),
+    },
+    {
+      title: `Amount Available ${curr}`,
+      dataIndex: 'availableAmount',
+      key: 'availableAmount',
+      className: 'right-align-cell',
+      render: (text, record) => (
+        <span>{record.availableAmount ? parseFloat(record.availableAmount).toLocaleString('en-IN') : '0'}</span>
+      ),
+    },
+    {
+      title: `Allocated Value ${curr}`,
+      dataIndex: 'allocatedValue',
+      key: 'allocatedValue',
       render: (text, record, index) => (
         <Form form={tableform} initialValues={{ ...record }}>
-          <Form.Item name={`allocatedQty_${index + 1}`} initialValue={undefined}>
+          <Form.Item name={`allocatedValue_${index + 1}`} initialValue={undefined}>
             <InputNumber
               style={{ width: '100%' }}
-              precision={2}
+              controls={false}
+              min={0}
+              max={parseFloat(record.availableAmount) || 0}
+              formatter={value => (value === null || value === undefined ? '' : value)}
+              parser={value => {
+                if (value === '' || value === null || value === undefined) return ''
+                const num = parseFloat(value)
+                if (Number.isNaN(num)) return ''
+                const cap = parseFloat(record.availableAmount) || 0
+                if (num < 0) return 0
+                return num > cap ? cap : num
+              }}
+              disabled={!record.availableAmount || parseFloat(record.availableAmount) <= 0}
+              onKeyDown={e => blockOverLimitKeyDown(e, record)}
               onChange={value => handleAllocateChange(value, record, index)}
             />
           </Form.Item>

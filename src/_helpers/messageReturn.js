@@ -122,6 +122,7 @@ const messageMap = {
       'Full Available Qty must be transferred for a bin-to-bin transfer within the same Project and Location',
     ),
   '691': () => message.error('From Bin and To Bin cannot be the same'),
+  '692': () => message.error('Allocate Qty. cannot be negative'),
 }
 
 const messageReturn = (code, content, type) => {

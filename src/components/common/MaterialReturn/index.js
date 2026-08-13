@@ -125,19 +125,6 @@ const MaterialReturn = () => {
     }
     return returndata
   }
-  // const dateformatter = dateStringval => {
-  //   const dateSp = dateStringval.split('-')
-  //   const finalStr = `${dateSp[2]}-${moment(dateSp[1]).format('MMM')}-${dateSp[0]}`
-  //   return finalStr
-  // }
-  const dateformatter1 = dateStringval => {
-    const splitDateandTym = dateStringval.split(' ')
-    const datesp = splitDateandTym[0].split('-')
-    const finalStr = `${datesp[2]}-${moment(datesp[1]).format('MMM')}-${datesp[0]} ${
-      splitDateandTym[1]
-    }`
-    return finalStr
-  }
   const getProjectList = async () => {
     const formData = allqtyForm.getFieldsValue()
     const response = await indentFileUpload({
@@ -203,6 +190,11 @@ const MaterialReturn = () => {
       key: 'mrhId',
     },
     {
+      title: 'Type',
+      dataIndex: 'returnType',
+      key: 'returnType',
+    },
+    {
       title: 'Request By',
       dataIndex: 'employeeName',
       key: 'employeeName',
@@ -227,11 +219,6 @@ const MaterialReturn = () => {
       title: 'No. of Products',
       dataIndex: 'productCount',
       key: 'productCount',
-    },
-    {
-      title: 'Type',
-      dataIndex: 'returnType',
-      key: 'returnType',
     },
     {
       title: 'Last Updated On',
@@ -706,7 +693,7 @@ const MaterialReturn = () => {
             Request By : <span style={{ fontWeight: 'bold' }}>{requestBy}</span>{' '}
           </div>
           <div className="col-md-4 col-lg-2 col-xl-3 col-sm-4">
-            Requested On : <span style={{ fontWeight: 'bold' }}>{dateformatter1(requestedOn)}</span>{' '}
+            Requested On : <span style={{ fontWeight: 'bold' }}>{dateformatter(requestedOn)}</span>{' '}
           </div>
           <div
             className="col-md-4 col-lg-2 col-xl-1 col-sm-4 d-none"
@@ -716,7 +703,7 @@ const MaterialReturn = () => {
           </div>
           <div className="col-md-4 col-lg-2 col-xl-3 col-sm-4">
             Last Upated By :{' '}
-            <span style={{ fontWeight: 'bold' }}>{dateformatter1(lastUpdtBy)}</span>{' '}
+            <span style={{ fontWeight: 'bold' }}>{dateformatter(lastUpdtBy)}</span>{' '}
           </div>
           <div className="col-md-4 col-lg-2 col-xl-2 col-sm-4">
             Status : <span style={{ fontWeight: 'bold' }}>{StatusVal}</span>{' '}

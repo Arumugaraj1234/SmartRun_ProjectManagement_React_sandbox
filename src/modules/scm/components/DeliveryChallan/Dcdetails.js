@@ -173,6 +173,44 @@ const Dcdetails = ({ visible, onClose, data }) => {
       render: text => getFormattedValue(text),
     },
   ]
+
+  const columnsGroup = [
+    {
+      title: 'Group',
+      dataIndex: 'msName',
+      key: 'msName',
+      width: '30%',
+    },
+    {
+      title: 'HSN Code',
+      dataIndex: 'hsnNo',
+      key: 'hsnNo',
+      width: '15%',
+    },
+    {
+      title: 'Qty.',
+      dataIndex: 'qty',
+      key: 'qty',
+      width: '15%',
+    },
+    {
+      title: 'UOM',
+      dataIndex: 'uomDesc',
+      key: 'uomDesc',
+      width: '15%',
+    },
+    {
+      title: `Total Value ${Menulistdata[0].currency}`,
+      dataIndex: 'total',
+      key: 'total',
+      width: '25%',
+      align: 'right',
+      render: text => getFormattedValue(text),
+    },
+  ]
+
+  const isGroupDc = data?.dcMode === 'Group' || hsntable?.some(row => row.msHdrId)
+
   const FieldsComponent = () => {
     return (
       <div className="row">
@@ -180,11 +218,7 @@ const Dcdetails = ({ visible, onClose, data }) => {
           <div>
             <Card className="mt-4">
               <div className="d-flex justify-content-end mb-5">
-                <Form.Item
-                  name="projectCode"
-                  label="Project Number"
-                  className="col-md-2 mr-5"
-                >
+                <Form.Item name="projectCode" label="Project Number" className="col-md-2 mr-5">
                   <Input placeholder="" />
                 </Form.Item>
                 <Form.Item
@@ -438,7 +472,11 @@ const Dcdetails = ({ visible, onClose, data }) => {
                 </div>
               </div>
               <div>
-                <Table columns={columns1} dataSource={hsntable} pagination={false} />
+                <Table
+                  columns={isGroupDc ? columnsGroup : columns1}
+                  dataSource={hsntable}
+                  pagination={false}
+                />
               </div>
               <div className="row mt-4">
                 <div className="col-md-5 remarks_section">

@@ -49,6 +49,7 @@ const DeliveryChallan = () => {
   const fdcto = []
   const fpodate = []
   const fstatus = []
+  const fdcmode = []
 
   tableData.map(h => {
     return fdcType.push(h.dcType)
@@ -68,6 +69,9 @@ const DeliveryChallan = () => {
   tableData.map(h => {
     return fstatus.push(h.isCancel)
   })
+  tableData.map(h => {
+    return fdcmode.push(h.dcMode)
+  })
 
   const distinct = (value, index, self) => {
     return self.indexOf(value) === index
@@ -79,6 +83,7 @@ const DeliveryChallan = () => {
   const filterdcto = fdcto.filter(distinct)
   const filteredpodate = fpodate.filter(distinct)
   const filteredstatus = fstatus.filter(distinct)
+  const filtereddcmode = fdcmode.filter(distinct)
 
   const FDCTYPE = []
   const FILEREDDATE = []
@@ -86,6 +91,7 @@ const DeliveryChallan = () => {
   const FILTERDCTO = []
   const FILTEREDPODATE = []
   const FILTEREDSTATUS = []
+  const FDCMODE = []
 
   filtereddctype.map(element => {
     return FDCTYPE.push({
@@ -122,6 +128,12 @@ const DeliveryChallan = () => {
   filteredstatus.map(element => {
     return FILTEREDSTATUS.push({
       text: element === '0' ? 'Created' : 'Cancelled',
+      value: element,
+    })
+  })
+  filtereddcmode.map(element => {
+    return FDCMODE.push({
+      text: element,
       value: element,
     })
   })
@@ -182,6 +194,14 @@ const DeliveryChallan = () => {
       ),
     },
     {
+      title: 'Type',
+      dataIndex: 'dcMode',
+      key: 'dcMode',
+      filters: FDCMODE,
+      filteredValue: filtersinfo.dcMode,
+      onFilter: (value, record) => record?.dcMode === value,
+    },
+    {
       title: 'DC From Name',
       dataIndex: 'shippedFrom',
       key: 'shippedFrom',
@@ -202,7 +222,7 @@ const DeliveryChallan = () => {
       dataIndex: 'poDATE',
       key: 'poDATE',
       filters: FILTEREDPODATE,
-      render: text => moment(text).format('DD-MMM-YYYY') || '',
+      render: text => (text ? moment(text).format('DD-MMM-YYYY') : ''),
       filteredValue: filtersinfo.poDATE,
       onFilter: (value, record) => record?.poDATE === value,
     },

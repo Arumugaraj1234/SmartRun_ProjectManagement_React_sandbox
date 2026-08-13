@@ -1,7 +1,20 @@
 import React, { useEffect, useState } from 'react'
 import store from 'store'
 import moment from 'moment'
-import { Modal, Form, Input, Select, Card, Table, message, DatePicker, AutoComplete } from 'antd'
+import {
+  Modal,
+  Form,
+  Input,
+  Select,
+  Card,
+  Table,
+  message,
+  DatePicker,
+  AutoComplete,
+  Radio,
+  Popover,
+} from 'antd'
+import { InfoCircleOutlined } from '@ant-design/icons'
 import AddIcon from 'components/shared/AddIconComponent'
 import RemoveIcon from 'components/shared/RemoveIconComponent'
 import ButtonComponent from 'components/shared/ButtonComponent'
@@ -46,6 +59,33 @@ const CreateDc = ({ onClose, visible }) => {
   const [mrDetails, setMrDetails] = useState([])
   const [newhsnData, setNewhsnData] = useState([emptyrow])
 
+  const emptyGroupRow = {
+    msHdrId: '',
+    msName: '',
+    hsnCode: '',
+    qty: '1',
+    uom: '',
+    uomCode: '',
+    totalvalue: '',
+  }
+  const [dcMode, setDcMode] = useState('individual')
+  const [availableGroups, setAvailableGroups] = useState([])
+  const [groupRowsData, setGroupRowsData] = useState([emptyGroupRow])
+
+  // Re-render trigger only - Form.useWatch's direct return value is unreliable in this
+  // antd/rc-field-form version, so the actual value is read via getFieldsValue(true) below.
+  Form.useWatch([], DcForm)
+  const isBgrNeoFactoryShipping =
+    DcForm.getFieldsValue(true).FromdeliveryName === 'BGR NEO LIMITED - Factory'
+
+  useEffect(() => {
+    if (!isBgrNeoFactoryShipping && dcMode === 'group') {
+      setDcMode('individual')
+      setGroupRowsData([emptyGroupRow])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isBgrNeoFactoryShipping])
+
   const tenantId = store.get('tenantId')
   const Menulistdata = store.get('MenuListData')
   const employeeId = store.get('employeeId')
@@ -56,9 +96,21 @@ const CreateDc = ({ onClose, visible }) => {
       getpoDtl(formData.Projectcode)
       setPmHdrId(formData.Projectcode)
       getDcRequest(formData.Projectcode)
+      getAvailableGroups(formData.Projectcode)
     } else {
       messageReturn(405)
     }
+  }
+
+  const getAvailableGroups = async projectId => {
+    const response = await indentFileUpload({
+      requestPath: 'retrieveApprovedGroupReturnsByProject',
+      requestData: {
+        hdrId: projectId || '',
+        tenantId,
+      },
+    })
+    setAvailableGroups(response?.responseData || [])
   }
 
   const getpoDtl = async projectId => {
@@ -220,6 +272,7 @@ const CreateDc = ({ onClose, visible }) => {
     getpoDtl(pmHdrId)
     DcForm.setFieldsValue({ DCReqest: undefined })
     setNewhsnData([emptyrow])
+    setGroupRowsData([emptyGroupRow])
     const deliveryName = DcForm.getFieldValue('FromdeliveryName')
     if (deliveryName !== '' && deliveryName !== null && deliveryName !== undefined) {
       const data = fromAddresList.find(item => item.code === deliveryName)
@@ -273,6 +326,10 @@ const CreateDc = ({ onClose, visible }) => {
     DcForm.resetFields()
     setPmHdrId(null)
     setDcList([])
+    setDcMode('individual')
+    setNewhsnData([emptyrow])
+    setGroupRowsData([emptyGroupRow])
+    setAvailableGroups([])
     // setUomcode('')
   }
   const onFinish = values => {
@@ -556,14 +613,15 @@ const CreateDc = ({ onClose, visible }) => {
 
   useEffect(() => {
     updatetotalvalue()
-  }, [newhsnData])
+  }, [newhsnData, groupRowsData, dcMode])
 
   const handleRemoveRow = index => {
     const newTableData = newhsnData.filter((_, rowIndex) => rowIndex !== index)
     setNewhsnData(newTableData)
   }
   const updatetotalvalue = () => {
-    const totalvalues = newhsnData.reduce((sum, row) => sum + parseFloat(row.totalvalue || 0), 0)
+    const activeRows = dcMode === 'group' ? groupRowsData : newhsnData
+    const totalvalues = activeRows.reduce((sum, row) => sum + parseFloat(row.totalvalue || 0), 0)
     DcForm.setFieldsValue({
       TotalBasic: getFormattedValue(totalvalues.toLocaleString()),
     })
@@ -851,6 +909,233 @@ const CreateDc = ({ onClose, visible }) => {
     },
   ]
 
+  // Available Material Groups come back as one row per constituent product (grouped
+  // by msHdrId) — collapse them into one option per group for the picker, keeping
+  // the item breakdown around for the info popover.
+  const groupOptions = []
+  const groupOptionsByHdrId = {}
+  availableGroups.forEach(item => {
+    if (!groupOptionsByHdrId[item.msHdrId]) {
+      groupOptionsByHdrId[item.msHdrId] = { msHdrId: item.msHdrId, msName: item.msName, items: [] }
+      groupOptions.push(groupOptionsByHdrId[item.msHdrId])
+    }
+    groupOptionsByHdrId[item.msHdrId].items.push(item)
+  })
+
+  const handleGroupSelect = (index, msHdrId) => {
+    const newData = [...groupRowsData]
+    const selected = groupOptionsByHdrId[msHdrId]
+    if (!selected) return
+    const computedTotal = selected.items.reduce(
+      (sum, item) => sum + parseFloat(item.qty || 0) * parseFloat(item.costPerUnit || 0),
+      0,
+    )
+    newData[index] = {
+      ...newData[index],
+      msHdrId: selected.msHdrId,
+      msName: selected.msName,
+      uom: selected.items[0]?.uomLongDesc || '',
+      uomCode: selected.items[0]?.uomCode || '',
+      totalvalue: computedTotal ? computedTotal.toFixed(2) : '',
+    }
+    setGroupRowsData(newData)
+  }
+
+  const handleGroupInputChange = (index, key, value) => {
+    const newData = [...groupRowsData]
+    newData[index][key] = value
+    setGroupRowsData(newData)
+  }
+
+  const handleAddGroupRow = () => {
+    const mandatoryFields = ['msHdrId', 'hsnCode', 'totalvalue']
+    const incompleteRow = groupRowsData.find(row =>
+      mandatoryFields.some(field => !row[field] || row[field] === ''),
+    )
+    if (incompleteRow) {
+      message.error('Please fill all mandatory fields in the existing rows before adding new.')
+      return
+    }
+    setGroupRowsData([...groupRowsData, { ...emptyGroupRow }])
+  }
+
+  const handleRemoveGroupRow = index => {
+    setGroupRowsData(groupRowsData.filter((_, rowIndex) => rowIndex !== index))
+  }
+
+  const hasIndividualData = newhsnData.some(
+    row =>
+      row.productCode || row.description || row.hsnCode || row.productQtyOnHand || row.unitrate,
+  )
+  const hasGroupData = groupRowsData.some(row => row.msHdrId)
+
+  const groupColumns = [
+    {
+      title: (
+        <span>
+          Group <strong style={{ color: 'red' }}>*</strong>
+        </span>
+      ),
+      dataIndex: 'msHdrId',
+      key: 'msHdrId',
+      width: '25%',
+      render: (text, record, index) => {
+        const usedIds = groupRowsData
+          .filter((_, rowIndex) => rowIndex !== index)
+          .map(row => row.msHdrId)
+          .filter(Boolean)
+        const options = groupOptions.filter(g => !usedIds.includes(g.msHdrId))
+        const group = groupOptionsByHdrId[record.msHdrId]
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Select
+              style={{ width: '100%' }}
+              placeholder="Select Group"
+              value={record.msHdrId || undefined}
+              onChange={value => handleGroupSelect(index, value)}
+            >
+              {options.map(g => (
+                <Option key={g.msHdrId} value={g.msHdrId}>
+                  {g.msName}
+                </Option>
+              ))}
+            </Select>
+            {group ? (
+              <Popover
+                content={
+                  <Table
+                    size="small"
+                    pagination={false}
+                    columns={[
+                      { title: 'Part Number', dataIndex: 'productCode', key: 'productCode' },
+                      { title: 'Description', dataIndex: 'productDesc', key: 'productDesc' },
+                      { title: 'UOM', dataIndex: 'uomLongDesc', key: 'uomLongDesc' },
+                      { title: 'Qty', dataIndex: 'qty', key: 'qty' },
+                    ]}
+                    dataSource={group.items}
+                    rowKey="productId"
+                  />
+                }
+              >
+                <InfoCircleOutlined />
+              </Popover>
+            ) : null}
+          </div>
+        )
+      },
+    },
+    {
+      title: (
+        <span>
+          {' '}
+          HSN Code <strong style={{ color: 'red' }}>*</strong>
+        </span>
+      ),
+      dataIndex: 'hsnCode',
+      key: 'hsnCode',
+      width: '10%',
+      render: (text, record, index) => (
+        <Input
+          maxLength={8}
+          value={text}
+          onChange={e => handleGroupInputChange(index, 'hsnCode', e.target.value)}
+          onKeyPress={e => {
+            const charCode = e.charCode || e.keyCode
+            if (charCode < 48 || charCode > 57) {
+              e.preventDefault()
+            }
+            handleKeyPress(e)
+          }}
+        />
+      ),
+    },
+    {
+      title: (
+        <span>
+          {' '}
+          Qty.<strong style={{ color: 'red' }}>*</strong>
+        </span>
+      ),
+      dataIndex: 'qty',
+      key: 'qty',
+      width: '8%',
+      render: (text, record, index) => (
+        <Input
+          value={text}
+          onChange={e => handleGroupInputChange(index, 'qty', e.target.value)}
+          onKeyPress={e => {
+            const {
+              key,
+              currentTarget: { value },
+            } = e
+            const isDigit = /[0-9]/.test(key)
+            const isDot = key === '.'
+            const alreadyHasDot = value.includes('.')
+            if (!isDigit && (!isDot || alreadyHasDot)) {
+              e.preventDefault()
+            }
+            handleKeyPress(e)
+          }}
+        />
+      ),
+    },
+    {
+      title: (
+        <span>
+          {' '}
+          UOM<strong style={{ color: 'red' }}>*</strong>
+        </span>
+      ),
+      dataIndex: 'uom',
+      key: 'uom',
+      width: '8%',
+      render: text => <Input value={text} disabled />,
+    },
+    {
+      title: (
+        <span>
+          {' '}
+          Total Value {Menulistdata[0].currency}
+          <strong style={{ color: 'red' }}>*</strong>
+        </span>
+      ),
+      dataIndex: 'totalvalue',
+      key: 'totalvalue',
+      width: '15%',
+      align: 'right',
+      render: (text, record, index) => (
+        <Input
+          value={text}
+          onChange={e => handleGroupInputChange(index, 'totalvalue', e.target.value)}
+          onKeyPress={e => {
+            const {
+              key,
+              currentTarget: { value },
+            } = e
+            const isDigit = /[0-9]/.test(key)
+            const isDot = key === '.'
+            const alreadyHasDot = value.includes('.')
+            if (!isDigit && (!isDot || alreadyHasDot)) {
+              e.preventDefault()
+            }
+            handleKeyPress(e)
+          }}
+        />
+      ),
+    },
+    {
+      title: 'Action',
+      dataIndex: 'operation',
+      key: 'operation',
+      render: (text, record, index) => (
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px' }}>
+          {groupRowsData.length > 1 && <RemoveIcon onClick={() => handleRemoveGroupRow(index)} />}
+          {index === groupRowsData.length - 1 && <AddIcon onClick={() => handleAddGroupRow()} />}
+        </div>
+      ),
+    },
+  ]
+
   // const handleAdd = () => {
   //   const formValues = tableForm.getFieldsValue()
   //   if (
@@ -966,36 +1251,77 @@ const CreateDc = ({ onClose, visible }) => {
 
   const saveDc = async () => {
     let isValid = true
-    console.log(newhsnData, 'newhsnData==')
-    const newhsnData2 = newhsnData
-    newhsnData2.forEach(item => {
-      if (
-        !item.description ||
-        !item.hsnCode ||
-        !item.productQtyOnHand ||
-        !item.unitrate ||
-        !item.totalvalue ||
-        !item.uom
-      ) {
+    let updatedHsnTable = []
+    if (dcMode === 'group') {
+      const touchedGroupRows = groupRowsData.filter(item => item.msHdrId)
+      touchedGroupRows.forEach(item => {
+        if (!item.msHdrId || !item.hsnCode || !item.qty || !item.totalvalue) {
+          isValid = false
+        }
+      })
+      if (touchedGroupRows.length === 0) {
         isValid = false
       }
-    })
-    const updatedHsnTable = newhsnData2.map(item => ({
-      dcDtlId: item.dcDtlId || '',
-      dcId: '',
-      descOfGoods: item.description,
-      hsnNo: item.hsnCode,
-      productId: item.productId || '',
-      qty: item.productQtyOnHand,
-      rate: item.unitrate,
-      total: item.totalvalue,
-      uom: item.uom,
-      uomDesc: '',
-      dcrId: item.dcrId || '',
-      productCode: item.productCode || '',
-      mrHdrId: item.mrHdrId,
-      locationCode: item.locationCode || '',
-    }))
+      updatedHsnTable = touchedGroupRows.map(item => ({
+        dcDtlId: '',
+        dcId: '',
+        descOfGoods: item.msName,
+        hsnNo: item.hsnCode,
+        productId: '',
+        qty: item.qty,
+        rate: '0',
+        total: item.totalvalue,
+        uom: item.uom,
+        uomDesc: item.uomCode || '',
+        dcrId: '',
+        productCode: '',
+        mrHdrId: null,
+        locationCode: '',
+        msHdrId: item.msHdrId,
+        msName: item.msName,
+      }))
+    } else {
+      console.log(newhsnData, 'newhsnData==')
+      const newhsnData2 = newhsnData.filter(
+        item =>
+          item.productCode ||
+          item.description ||
+          item.hsnCode ||
+          item.productQtyOnHand ||
+          item.unitrate,
+      )
+      newhsnData2.forEach(item => {
+        if (
+          !item.description ||
+          !item.hsnCode ||
+          !item.productQtyOnHand ||
+          !item.unitrate ||
+          !item.totalvalue ||
+          !item.uom
+        ) {
+          isValid = false
+        }
+      })
+      if (newhsnData2.length === 0) {
+        isValid = false
+      }
+      updatedHsnTable = newhsnData2.map(item => ({
+        dcDtlId: item.dcDtlId || '',
+        dcId: '',
+        descOfGoods: item.description,
+        hsnNo: item.hsnCode,
+        productId: item.productId || '',
+        qty: item.productQtyOnHand,
+        rate: item.unitrate,
+        total: item.totalvalue,
+        uom: item.uom,
+        uomDesc: '',
+        dcrId: item.dcrId || '',
+        productCode: item.productCode || '',
+        mrHdrId: item.mrHdrId,
+        locationCode: item.locationCode || '',
+      }))
+    }
     const formvalues = DcForm.getFieldsValue()
     const mandatoryFields = [
       'DcType',
@@ -1457,6 +1783,28 @@ const CreateDc = ({ onClose, visible }) => {
                     </Form.Item>
                   </div>
                 </div>
+                <div className="mb-3">
+                  <Radio.Group
+                    value={dcMode}
+                    onChange={e => {
+                      setDcMode(e.target.value)
+                      setNewhsnData([emptyrow])
+                      setGroupRowsData([emptyGroupRow])
+                    }}
+                  >
+                    <Radio.Button value="individual" disabled={dcMode === 'group' && hasGroupData}>
+                      Individual Items
+                    </Radio.Button>
+                    {isBgrNeoFactoryShipping && (
+                      <Radio.Button
+                        value="group"
+                        disabled={dcMode === 'individual' && hasIndividualData}
+                      >
+                        Material Group
+                      </Radio.Button>
+                    )}
+                  </Radio.Group>
+                </div>
                 <Form form={tableForm}>
                   <div>
                     {/* {hsntable.length > 0 ? (
@@ -1469,12 +1817,21 @@ const CreateDc = ({ onClose, visible }) => {
                         showHeader={!(hsntable.length > 0)}
                         style={{ marginTop: '-1px' }}
                       /> */}
-                    <Table
-                      columns={columns3}
-                      dataSource={newhsnData}
-                      pagination={false}
-                      style={{ marginTop: '-1px' }}
-                    />
+                    {dcMode === 'group' ? (
+                      <Table
+                        columns={groupColumns}
+                        dataSource={groupRowsData}
+                        pagination={false}
+                        style={{ marginTop: '-1px' }}
+                      />
+                    ) : (
+                      <Table
+                        columns={columns3}
+                        dataSource={newhsnData}
+                        pagination={false}
+                        style={{ marginTop: '-1px' }}
+                      />
+                    )}
                   </div>
                 </Form>
                 <div className="row mt-4">

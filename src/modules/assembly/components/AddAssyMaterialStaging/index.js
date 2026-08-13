@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react'
-import { Form, Table, Input, message } from 'antd'
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react'
+import { Form, Table, Input, Checkbox, message } from 'antd'
 import store from 'store'
 import debounce from 'lodash.debounce'
 import Buttons from 'components/shared/ButtonComponent'
@@ -14,14 +14,35 @@ const AddAssyIndent = ({ handleCancel, isModalVisible }) => {
   const [inputForm] = Form.useForm()
   const [allqtyForm] = Form.useForm()
   const [createMtrlStgRespVal, setCreateMtrlStgRespVal] = useState([])
-  const [responseValue2, setResponseValue2] = useState([])
   const [submitBtnDisble, setSubmitBtnDisble] = useState(false)
   const [filtersinfo, setfilterinfo] = useState([])
+  const [searchText, setSearchText] = useState('')
+  const [searchInputValue, setSearchInputValue] = useState('')
+  const [showSelectedOnly, setShowSelectedOnly] = useState(false)
+  const [selectedSnos, setSelectedSnos] = useState(new Set())
+  const handleSearchRef = useRef(debounce(value => setSearchText(value), 300))
+  const fieldsStateRef = useRef({})
+  const tableContainerRef = useRef(null)
   useEffect(() => {
     getCreateRespDtlVals()
     inputForm.resetFields()
     allqtyForm.resetFields()
+    setSearchText('')
+    setSearchInputValue('')
+    setShowSelectedOnly(false)
+    setSelectedSnos(new Set())
   }, [isModalVisible])
+
+  useLayoutEffect(() => {
+    const root = tableContainerRef.current
+    if (!root) return
+    ;['.ant-table-wrapper', '.ant-table', '.ant-table-container', '.ant-table-content'].forEach(
+      sel => {
+        const el = root.querySelector(sel)
+        if (el) el.style.setProperty('width', '100%', 'important')
+      },
+    )
+  })
 
   // useEffect(() => {
   //   inputForm.resetFields()
@@ -41,7 +62,6 @@ const AddAssyIndent = ({ handleCancel, isModalVisible }) => {
       return { ...item, sno: index + 1 }
     })
     setCreateMtrlStgRespVal(updatedData || [])
-    setResponseValue2(updatedData || [])
   }
   const productCode1 = []
   const productDesc1 = []
@@ -81,7 +101,7 @@ const AddAssyIndent = ({ handleCancel, isModalVisible }) => {
 
   const distinct = (value, index, self) => {
     // return self.indexOf(value) === index
-    return value !== null && value !== undefined && value !== "" && self.indexOf(value) === index;
+    return value !== null && value !== undefined && value !== '' && self.indexOf(value) === index
   }
 
   const productCode2 = productCode1.filter(distinct)
@@ -100,19 +120,23 @@ const AddAssyIndent = ({ handleCancel, isModalVisible }) => {
   const specification3 = []
   const make3 = []
 
-  productCode2.sort((a, b) => a.localeCompare(b)).map(element => {
-    return productCode3.push({
-      text: element,
-      value: element,
+  productCode2
+    .sort((a, b) => a.localeCompare(b))
+    .map(element => {
+      return productCode3.push({
+        text: element,
+        value: element,
+      })
     })
-  })
 
-  productDesc2.sort((a, b) => a.localeCompare(b)).map(element => {
-    return productDesc3.push({
-      text: element,
-      value: element,
+  productDesc2
+    .sort((a, b) => a.localeCompare(b))
+    .map(element => {
+      return productDesc3.push({
+        text: element,
+        value: element,
+      })
     })
-  })
 
   uomLongDesc2.map(element => {
     return uomLongDesc3.push({
@@ -126,12 +150,14 @@ const AddAssyIndent = ({ handleCancel, isModalVisible }) => {
       value: element,
     })
   })
-  station2.sort((a, b) => a.localeCompare(b)).map(element => {
-    return station3.push({
-      text: element,
-      value: element,
+  station2
+    .sort((a, b) => a.localeCompare(b))
+    .map(element => {
+      return station3.push({
+        text: element,
+        value: element,
+      })
     })
-  })
 
   specification2.map(element => {
     return specification3.push({
@@ -170,7 +196,7 @@ const AddAssyIndent = ({ handleCancel, isModalVisible }) => {
       title: 'Specification',
       dataIndex: 'specification',
       key: 'specification',
-      width: '17%',
+      width: '15%',
       filters: specification3,
       filteredValue: filtersinfo.specification,
       onFilter: (value, record) => record?.specification === value,
@@ -229,6 +255,7 @@ const AddAssyIndent = ({ handleCancel, isModalVisible }) => {
           <Form.Item name={`allctdQty${record.sno}`} initialValue={record.availableQty}>
             <Input
               type="number"
+              min={0}
               style={{ textAlign: 'right' }}
               onChange={event => handleAllQtyChange(record, event, record.sno)}
             />
@@ -241,7 +268,7 @@ const AddAssyIndent = ({ handleCancel, isModalVisible }) => {
       dataIndex: 'action',
       key: 'action',
       width: '10%',
-      render: (text, record, index) => <RemoveIcon onClick={() => handleRemove(record, index)} />,
+      render: (text, record) => <RemoveIcon onClick={() => handleRemove(record)} />,
     },
   ]
 
@@ -249,19 +276,30 @@ const AddAssyIndent = ({ handleCancel, isModalVisible }) => {
     setfilterinfo(filters)
   }
 
-  const FieldsComponent = () => {
-    const handleSearch = debounce(searchValue => {
-      const filteringdatas = responseValue2.filter(item =>
-        Object.keys(item).some(key =>
-          item[key]
-            ?.toString()
-            .toLowerCase()
-            .includes(searchValue.toLowerCase()),
-        ),
-      )
-      console.log(filteringdatas)
-      setCreateMtrlStgRespVal(filteringdatas)
-    }, 500)
+  const displayedData = createMtrlStgRespVal.filter(item => {
+    const matchesSelection = !showSelectedOnly || selectedSnos.has(item.sno)
+    if (!matchesSelection) return false
+    if (!searchText) return true
+    return Object.keys(item).some(key =>
+      item[key]
+        ?.toString()
+        .toLowerCase()
+        .includes(searchText.toLowerCase()),
+    )
+  })
+
+  const FieldsComponent = useRef(() => {
+    const {
+      columns: fsColumns,
+      displayedData: fsDisplayedData,
+      handleChange: fsHandleChange,
+      showSelectedOnly: fsShowSelectedOnly,
+      selectedSnos: fsSelectedSnos,
+      searchInputValue: fsSearchInputValue,
+      setAllocateAll: fsSetAllocateAll,
+      setUnallocateAll: fsSetUnallocateAll,
+    } = fieldsStateRef.current
+    const handleSearch = handleSearchRef.current
     return (
       <div>
         <div>
@@ -306,37 +344,67 @@ const AddAssyIndent = ({ handleCancel, isModalVisible }) => {
             </div>
           </Form>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'row',
-              gap: '10px',
-            }}
-          >
-            <Buttons text="Allocate All" type="primary" onClick={setAllocateAll} />
-            <Buttons text="Unallocate All" type="primary" onClick={setUnallocateAll} />
-          </div>
-          <Input.Search
-            style={{ margin: '0 0 10px 0', width: '300px', display: 'none', float: 'right' }}
-            placeholder="Search here..."
-            enterButton
-            // onSearch={handleSearch}
-            onChange={e => handleSearch(e.target.value)}
-          />
-        </div>
-        <div className="custom_antd_Table">
+        <div className="custom_antd_Table" ref={tableContainerRef}>
           <Table
-            columns={columns}
-            onChange={handleChange}
-            dataSource={createMtrlStgRespVal}
+            columns={fsColumns}
+            onChange={fsHandleChange}
+            dataSource={fsDisplayedData}
             bordered
             pagination={false}
+            tableLayout="fixed"
+            title={() => (
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '10px',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'row',
+                    gap: '10px',
+                  }}
+                >
+                  <Buttons text="Allocate All" type="primary" onClick={fsSetAllocateAll} />
+                  <Buttons text="Unallocate All" type="primary" onClick={fsSetUnallocateAll} />
+                </div>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <Checkbox
+                    checked={fsShowSelectedOnly}
+                    disabled={fsSelectedSnos.size === 0}
+                    onChange={e => setShowSelectedOnly(e.target.checked)}
+                  >
+                    Show selected only ({fsSelectedSnos.size})
+                  </Checkbox>
+                  <Input.Search
+                    style={{ width: '300px' }}
+                    placeholder="Search here..."
+                    allowClear
+                    value={fsSearchInputValue}
+                    onChange={e => {
+                      setSearchInputValue(e.target.value)
+                      handleSearch(e.target.value)
+                    }}
+                  />
+                </div>
+              </div>
+            )}
           />
         </div>
       </div>
     )
-  }
+  }).current
 
   const ButtonsComponent = () => {
     return (
@@ -364,55 +432,90 @@ const AddAssyIndent = ({ handleCancel, isModalVisible }) => {
       </div>
     )
   }
-  const handleRemove = (record, index) => {
-    const newData = [...createMtrlStgRespVal]
-    newData.splice(index, 1)
-    setCreateMtrlStgRespVal(newData)
-    // const newData = [...retrivaldata]
-    // const updatedData = newData.filter((item, idx) => idx !== index)
-    // setDeleteMileStones(updatedData)
-    // setCreateMtrlStgRespVal(prevData => prevData.filter((_, index) => index !== indexToRemove))
+  const handleRemove = record => {
+    setCreateMtrlStgRespVal(prevData => prevData.filter(item => item.sno !== record.sno))
+    setSelectedSnos(prev => {
+      const next = new Set(prev)
+      next.delete(record.sno)
+      return next
+    })
   }
   const setAllocateAll = () => {
-    if (createMtrlStgRespVal.length > 0) {
-      const updatedValues = createMtrlStgRespVal.map(record => {
+    if (displayedData.length > 0) {
+      const updatedValues = displayedData.map(record => {
         const allocateQty = Number(record.inventoryQtyOnHand).toFixed(0)
         const fieldName = `allctdQty${record.sno}`
         return { [fieldName]: allocateQty }
       })
       inputForm.setFieldsValue(Object.assign({}, ...updatedValues))
+      setSelectedSnos(prev => {
+        const next = new Set(prev)
+        displayedData.forEach(record => {
+          if (Number(record.inventoryQtyOnHand) > 0) next.add(record.sno)
+        })
+        return next
+      })
     }
   }
   const setUnallocateAll = () => {
-    if (createMtrlStgRespVal.length > 0) {
-      const updatedValues = createMtrlStgRespVal.map(record => {
+    if (displayedData.length > 0) {
+      const updatedValues = displayedData.map(record => {
         const fieldName = `allctdQty${record.sno}`
         return { [fieldName]: '' }
       })
       inputForm.setFieldsValue(Object.assign({}, ...updatedValues))
+      setSelectedSnos(prev => {
+        const next = new Set(prev)
+        displayedData.forEach(record => next.delete(record.sno))
+        return next
+      })
     }
   }
   const handleAllQtyChange = (record, event, sno) => {
-    // const qtyform = inputForm.getFieldsValue()
-    if (Number(event.target.value) > Number(record.inventoryQtyOnHand)) {
+    const { value } = event.target
+    if (Number(value) < 0) {
+      inputForm.setFieldsValue({ [`allctdQty${sno}`]: '' })
+      messageReturn(692)
+      setSelectedSnos(prev => {
+        const next = new Set(prev)
+        next.delete(sno)
+        return next
+      })
+    } else if (Number(value) > Number(record.inventoryQtyOnHand)) {
       inputForm.setFieldsValue({ [`allctdQty${sno}`]: '' })
       messageReturn(630)
+      setSelectedSnos(prev => {
+        const next = new Set(prev)
+        next.delete(sno)
+        return next
+      })
     } else {
-      // setRequestedQtyValue(event.target.value)
-      // const setIndexId = `allctdQty${sno}`
-      inputForm.setFieldsValue({ [`allctdQty${sno}`]: event.target.value })
+      inputForm.setFieldsValue({ [`allctdQty${sno}`]: value })
+      setSelectedSnos(prev => {
+        const next = new Set(prev)
+        if (value !== '' && Number(value) > 0) {
+          next.add(sno)
+        } else {
+          next.delete(sno)
+        }
+        return next
+      })
     }
   }
   const handleClear = () => {
     inputForm.resetFields()
     allqtyForm.resetFields()
+    setSearchText('')
+    setSearchInputValue('')
+    setShowSelectedOnly(false)
+    setSelectedSnos(new Set())
   }
   const handleClearVals = () => {
     inputForm.resetFields()
     allqtyForm.resetFields()
   }
   const handleCreate = async () => {
-    const qtyform = inputForm.getFieldsValue()
+    const qtyform = inputForm.getFieldsValue(true)
     const qtyform1 = allqtyForm.getFieldsValue()
     setSubmitBtnDisble(true)
     const updatedTableData = createMtrlStgRespVal.map(record => {
@@ -455,6 +558,10 @@ const AddAssyIndent = ({ handleCancel, isModalVisible }) => {
             inputForm.resetFields()
             allqtyForm.resetFields()
             setSubmitBtnDisble(false)
+            setSearchText('')
+            setSearchInputValue('')
+            setShowSelectedOnly(false)
+            setSelectedSnos(new Set())
           } else {
             message.error(response.responseMessage)
             setSubmitBtnDisble(false)
@@ -471,6 +578,17 @@ const AddAssyIndent = ({ handleCancel, isModalVisible }) => {
     }
 
     setSubmitBtnDisble(false)
+  }
+
+  fieldsStateRef.current = {
+    columns,
+    displayedData,
+    handleChange,
+    showSelectedOnly,
+    selectedSnos,
+    searchInputValue,
+    setAllocateAll,
+    setUnallocateAll,
   }
 
   return (

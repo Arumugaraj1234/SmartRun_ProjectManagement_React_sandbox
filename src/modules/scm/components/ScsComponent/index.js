@@ -3891,6 +3891,14 @@ const SupCompState = ({
                     </p>
                     <p style={{ marginBottom: '0' }}>{indentcode}</p>
                   </div>
+                  {scmHdrdata && scmHdrdata.length > 0 && scmHdrdata[0].pjsRefNo ? (
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
+                        PJS No.:
+                      </p>
+                      <p style={{ marginBottom: '0' }}>{scmHdrdata[0].pjsRefNo}</p>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
                   <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -4039,33 +4047,35 @@ const SupCompState = ({
                   </div>
                 ) : null}
                 {scmHdrdata?.[0]?.costFlowType === 'NEW' &&
-                docStatus?.[0]?.docStatusDesc === 'Project Approved' ? (
-                  <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                      <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
-                        Available Value (Rs.) :
-                      </p>
-                      {(() => {
-                        const allocated = parseFloat(scmHdrdata?.[0]?.allocatedValue) || 0
-                        const consumed = parseFloat(scmHdrdata?.[0]?.actualConsumedValue) || 0
-                        const quote = parseFloat(finalcost) || 0
-                        const available = allocated - consumed
-                        const isShort = available < quote
-                        return (
-                          <p
-                            style={{
-                              marginBottom: '0',
-                              color: isShort ? 'red' : 'inherit',
-                              fontWeight: isShort ? 'bold' : 'normal',
-                            }}
-                          >
-                            {available.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                          </p>
-                        )
-                      })()}
-                    </div>
-                  </div>
-                ) : null}
+                docStatus?.[0]?.docStatusDesc === 'Project Approved'
+                  ? (() => {
+                      const allocated = parseFloat(scmHdrdata?.[0]?.allocatedValue) || 0
+                      const consumed = parseFloat(scmHdrdata?.[0]?.actualConsumedValue) || 0
+                      const quote = parseFloat(finalcost) || 0
+                      const available = allocated - consumed
+                      // Mirrors BudgetExcessSheetService.insertBudgetExcessSheetDtl's actual
+                      // raise-excess formula: scsActualCost = actualCost - max(remaining, 0).
+                      // A pre-existing station deficit (from other PJS/PO, not this one) is
+                      // clamped to zero rather than subtracted, so it isn't double-counted
+                      // into this PJS's own shortage.
+                      const shortage = quote - Math.max(available, 0)
+                      if (shortage <= 0) return null
+                      return (
+                        <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                          <div style={{ display: 'flex', alignItems: 'center' }}>
+                            <p
+                              style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}
+                            >
+                              Shortage Value (Rs.) :
+                            </p>
+                            <p style={{ marginBottom: '0', color: 'red', fontWeight: 'bold' }}>
+                              {shortage.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                            </p>
+                          </div>
+                        </div>
+                      )
+                    })()
+                  : null}
                 {scmHdrdata?.[0]?.costFlowType === 'NEW' &&
                 depCode === 'D03' &&
                 docStatus?.[0]?.docStatusDesc === 'Project Approved' &&
@@ -4074,7 +4084,7 @@ const SupCompState = ({
                   <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
                     <div style={{ display: 'flex', alignItems: 'center' }}>
                       <Popconfirm
-                        title="Raise a Budget Excess request for this indent?"
+                        title="Raise a Budget Excess request for this PJS?"
                         onConfirm={handleRaiseBudgetExcess}
                         okText="Yes"
                         cancelText="No"

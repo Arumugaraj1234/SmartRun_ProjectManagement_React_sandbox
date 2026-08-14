@@ -829,6 +829,12 @@ const IndentGroupComponent = ({ isTailview }) => {
       onFilter: (value, record) => record?.indentCode === value,
     },
     {
+      title: 'PJS No.',
+      dataIndex: 'pjsRefNo',
+      key: 'pjsRefNo',
+      render: text => (text != null && text !== '' ? text : '-'),
+    },
+    {
       title: 'Indent Type',
       dataIndex: 'sbcDesc',
       key: 'sbcDesc',

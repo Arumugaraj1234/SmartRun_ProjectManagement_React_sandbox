@@ -112,8 +112,8 @@ const AllocateStationBudgetModal = ({ visible, onCancel, pkaId, stationLabel, on
     const resp = responses && responses.responseData ? responses.responseData : []
     setIsLoading(false)
     setBudgetLinkTablDtl(resp)
-    resp.forEach((res, ind) => {
-      tableform.setFieldsValue({ [`allocatedValue_${ind + 1}`]: '' })
+    resp.forEach(res => {
+      tableform.setFieldsValue({ [`allocatedValue_${res.sbExtnId}`]: '' })
     })
   }
 
@@ -145,7 +145,7 @@ const AllocateStationBudgetModal = ({ visible, onCancel, pkaId, stationLabel, on
   // against what's actually available (Available Qty x Unit Value), and the qty the
   // backend also expects gets derived back from the entered amount at Save time (see
   // handleSave), since insertSubAreaExtn persists both fields independently.
-  const handleAllocateChange = (value, record, index) => {
+  const handleAllocateChange = (value, record) => {
     if (value === null || value === '' || Number.isNaN(value)) return
     const valueStr = value.toString()
     const decimalValid = /^(\d+)?(\.\d{0,4})?$/.test(valueStr)
@@ -154,14 +154,14 @@ const AllocateStationBudgetModal = ({ visible, onCancel, pkaId, stationLabel, on
       return
     }
     const allocatedValue = parseFloat(value)
-    const fieldName = `allocatedValue_${index + 1}`
+    const fieldName = `allocatedValue_${record.sbExtnId}`
     tableform.setFieldsValue({ [fieldName]: parseFloat(allocatedValue.toFixed(2)) })
   }
 
   const handleAllocateAll = () => {
     if (budgetLinkTablDtl.length > 0) {
-      const updatedValues = budgetLinkTablDtl.map((rec, ind) => ({
-        [`allocatedValue_${ind + 1}`]: parseFloat(rec.availableAmount) || 0,
+      const updatedValues = budgetLinkTablDtl.map(rec => ({
+        [`allocatedValue_${rec.sbExtnId}`]: parseFloat(rec.availableAmount) || 0,
       }))
       tableform.setFieldsValue(Object.assign({}, ...updatedValues))
     } else {
@@ -171,8 +171,8 @@ const AllocateStationBudgetModal = ({ visible, onCancel, pkaId, stationLabel, on
 
   const handleUnallocate = () => {
     if (budgetLinkTablDtl.length > 0) {
-      const updatedValues = budgetLinkTablDtl.map((rec, ind) => ({
-        [`allocatedValue_${ind + 1}`]: 0,
+      const updatedValues = budgetLinkTablDtl.map(rec => ({
+        [`allocatedValue_${rec.sbExtnId}`]: 0,
       }))
       tableform.setFieldsValue(Object.assign({}, ...updatedValues))
     } else {
@@ -184,9 +184,9 @@ const AllocateStationBudgetModal = ({ visible, onCancel, pkaId, stationLabel, on
     setDisablebtn(true)
     setIsLoading(true)
     if (budgetLinkTablDtl.length > 0) {
-      const formValues = tableform.getFieldsValue()
-      const reqArr = budgetLinkTablDtl.map((item, index) => {
-        const allocatedValue = parseFloat(formValues[`allocatedValue_${index + 1}`]) || 0
+      const formValues = tableform.getFieldsValue(true)
+      const reqArr = budgetLinkTablDtl.map(item => {
+        const allocatedValue = parseFloat(formValues[`allocatedValue_${item.sbExtnId}`]) || 0
         const perPartVal = parseFloat(item.perPartVal) || 0
         const obj = {
           pkaId,
@@ -283,9 +283,10 @@ const AllocateStationBudgetModal = ({ visible, onCancel, pkaId, stationLabel, on
       title: `Allocated Value ${curr}`,
       dataIndex: 'allocatedValue',
       key: 'allocatedValue',
-      render: (text, record, index) => (
+      width: 160,
+      render: (text, record) => (
         <Form form={tableform} initialValues={{ ...record }}>
-          <Form.Item name={`allocatedValue_${index + 1}`} initialValue={undefined}>
+          <Form.Item name={`allocatedValue_${record.sbExtnId}`} initialValue={undefined}>
             <InputNumber
               style={{ width: '100%' }}
               controls={false}
@@ -302,7 +303,7 @@ const AllocateStationBudgetModal = ({ visible, onCancel, pkaId, stationLabel, on
               }}
               disabled={!record.availableAmount || parseFloat(record.availableAmount) <= 0}
               onKeyDown={e => blockOverLimitKeyDown(e, record)}
-              onChange={value => handleAllocateChange(value, record, index)}
+              onChange={value => handleAllocateChange(value, record)}
             />
           </Form.Item>
         </Form>
@@ -315,7 +316,7 @@ const AllocateStationBudgetModal = ({ visible, onCancel, pkaId, stationLabel, on
       title={`${stationLabel} - Budget Link`}
       open={visible}
       onCancel={onCancel}
-      width={900}
+      width={1500}
       footer={[
         <Buttons key="save" type="primary" text="Save" disable={disablbtn} onClick={handleSave} />,
       ]}

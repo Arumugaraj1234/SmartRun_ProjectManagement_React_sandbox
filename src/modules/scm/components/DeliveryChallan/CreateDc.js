@@ -924,6 +924,13 @@ const CreateDc = ({ onClose, visible }) => {
 
   const handleGroupSelect = (index, msHdrId) => {
     const newData = [...groupRowsData]
+    if (!msHdrId) {
+      // Cleared via the Select's own "x" - reset this row back to empty so hasGroupData can
+      // go false again once no row has a group selected, re-enabling the Individual Items tab.
+      newData[index] = { ...emptyGroupRow }
+      setGroupRowsData(newData)
+      return
+    }
     const selected = groupOptionsByHdrId[msHdrId]
     if (!selected) return
     const computedTotal = selected.items.reduce(
@@ -934,7 +941,9 @@ const CreateDc = ({ onClose, visible }) => {
       ...newData[index],
       msHdrId: selected.msHdrId,
       msName: selected.msName,
-      uom: selected.items[0]?.uomLongDesc || '',
+      // The Staging Group's own UOM (msUomLongDesc), not derived from a member item's own
+      // product UOM - every item on this group shares the same value.
+      uom: selected.items[0]?.msUomLongDesc || '',
       uomCode: selected.items[0]?.uomCode || '',
       totalvalue: computedTotal ? computedTotal.toFixed(2) : '',
     }
@@ -993,6 +1002,7 @@ const CreateDc = ({ onClose, visible }) => {
               placeholder="Select Group"
               value={record.msHdrId || undefined}
               onChange={value => handleGroupSelect(index, value)}
+              allowClear
             >
               {options.map(g => (
                 <Option key={g.msHdrId} value={g.msHdrId}>
@@ -1272,7 +1282,10 @@ const CreateDc = ({ onClose, visible }) => {
         rate: '0',
         total: item.totalvalue,
         uom: item.uom,
-        uomDesc: item.uomCode || '',
+        // Empty, like the individual-items branch below - lets the backend resolve/create a
+        // real uom_mst code from the group's own UOM label (item.uom) via getUomCodeByUnit,
+        // instead of persisting the group's member item's own product UOM code (wrong source).
+        uomDesc: '',
         dcrId: '',
         productCode: '',
         mrHdrId: null,
@@ -1783,7 +1796,7 @@ const CreateDc = ({ onClose, visible }) => {
                     </Form.Item>
                   </div>
                 </div>
-                <div className="mb-3">
+                <div className="mb-3" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <Radio.Group
                     value={dcMode}
                     onChange={e => {
@@ -1804,6 +1817,20 @@ const CreateDc = ({ onClose, visible }) => {
                       </Radio.Button>
                     )}
                   </Radio.Group>
+                  {((dcMode === 'group' && hasGroupData) ||
+                    (dcMode === 'individual' && hasIndividualData)) && (
+                    <ButtonComponent
+                      type="primary"
+                      text="Clear"
+                      onClick={() => {
+                        if (dcMode === 'group') {
+                          setGroupRowsData([emptyGroupRow])
+                        } else {
+                          setNewhsnData([emptyrow])
+                        }
+                      }}
+                    />
+                  )}
                 </div>
                 <Form form={tableForm}>
                   <div>

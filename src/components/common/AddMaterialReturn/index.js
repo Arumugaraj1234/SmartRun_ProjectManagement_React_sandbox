@@ -122,6 +122,7 @@ const AddMaterialReturn = ({ handleCancel, isModalVisible }) => {
             msName: grp.msName,
             productDesc: grp.msName,
             inventoryQtyOnHand: grp.stageQty,
+            uomCode: grp.uomCode,
             groupItems: dtlResp?.responseData || [],
           }
         }),
@@ -278,11 +279,9 @@ const AddMaterialReturn = ({ handleCancel, isModalVisible }) => {
     },
     {
       title: 'UoM',
-      dataIndex: 'groupItems',
+      dataIndex: 'uomCode',
       key: 'uom',
-      render: groupItems =>
-        [...new Set((groupItems || []).map(item => item.uomLongDesc).filter(Boolean))].join(', ') ||
-        '-',
+      render: text => text || '-',
     },
     {
       title: 'Staged Qty.',

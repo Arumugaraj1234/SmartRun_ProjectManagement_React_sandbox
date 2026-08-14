@@ -533,6 +533,7 @@ const ProjectInitiation = () => {
   const ShowModalPopup = rec => {
     setAllocateVal(rec)
     getSubAreaPm(rec)
+    setDskId(rec.pkaId)
     setIsModalVal(true)
   }
   const handleCancelModalVal = () => {
@@ -1093,9 +1094,11 @@ const ProjectInitiation = () => {
         // setpopupdskId(resp[0].dskId)
         // setpopupsbExtnId(resp[0].sbExtnId)
         // setAllocatedQty(resp[0].totalValue)
-        resp.forEach((res, ind) => {
+        resp.forEach(res => {
           const fieldName =
-            costFlowType === 'NEW' ? `allocatedValue_${ind + 1}` : `allocatedQty_${ind + 1}`
+            costFlowType === 'NEW'
+              ? `allocatedValue_${res.sbExtnId}`
+              : `allocatedQty_${res.sbExtnId}`
           // tableform.setFieldsValue({ [fieldName]: parseInt(res.totalQty, 10) })
           tableform.setFieldsValue({ [fieldName]: '' })
         })
@@ -1166,16 +1169,16 @@ const ProjectInitiation = () => {
     setDisablebtn(true)
     setIsLoading(true)
     if (budgetLinkTablDtl.length > 0) {
-      const formValues = tableform.getFieldsValue()
-      const reqArr = budgetLinkTablDtl.map((item, index) => {
+      const formValues = tableform.getFieldsValue(true)
+      const reqArr = budgetLinkTablDtl.map(item => {
         const perPartVal = parseFloat(item.perPartVal) || 0
         let allocatedQty
         let allocatedvalue
         if (costFlowType === 'NEW') {
-          allocatedvalue = parseFloat(formValues[`allocatedValue_${index + 1}`]) || 0
+          allocatedvalue = parseFloat(formValues[`allocatedValue_${item.sbExtnId}`]) || 0
           allocatedQty = perPartVal > 0 ? allocatedvalue / perPartVal : 0
         } else {
-          allocatedQty = parseFloat(formValues[`allocatedQty_${index + 1}`]) || 0
+          allocatedQty = parseFloat(formValues[`allocatedQty_${item.sbExtnId}`]) || 0
           allocatedvalue = perPartVal * allocatedQty || 0
         }
         const obj = {
@@ -1576,13 +1579,28 @@ const ProjectInitiation = () => {
     }
     return (
       <div>
-        <Input.Search
-          style={{ margin: '0 0 10px 0', width: '30%', float: 'right' }}
-          placeholder="Search here..."
-          enterButton
-          // onSearch={handleSearch}
-          onChange={e => handleSearch(e)}
-        />
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '10px',
+          }}
+        >
+          <Buttons
+            type="primary"
+            icon={<HistoryOutlined />}
+            text="History"
+            onClick={handleViewTopupHistory}
+          />
+          <Input.Search
+            style={{ width: '30%' }}
+            placeholder="Search here..."
+            enterButton
+            // onSearch={handleSearch}
+            onChange={e => handleSearch(e)}
+          />
+        </div>
         <Table
           dataSource={filteredData}
           columns={ModalLinkCol}
@@ -1692,7 +1710,7 @@ const ProjectInitiation = () => {
       }
     }
   }
-  const handleAllocateChange = (value, record, index) => {
+  const handleAllocateChange = (value, record) => {
     if (value === null || value === '' || Number.isNaN(value)) return
 
     const valueStr = value.toString()
@@ -1705,7 +1723,7 @@ const ProjectInitiation = () => {
 
     const allocatedQty = parseFloat(value)
     const availableQty = parseFloat(record.totalQty)
-    const fieldName = `allocatedQty_${index + 1}`
+    const fieldName = `allocatedQty_${record.sbExtnId}`
 
     if (allocatedQty <= availableQty) {
       tableform.setFieldsValue({
@@ -1721,7 +1739,7 @@ const ProjectInitiation = () => {
 
   // NEW-flow only: client wants allocation entered as an amount, not a quantity.
   // LEGACY keeps handleAllocateChange (qty-based) completely untouched above.
-  const handleAllocateValueChange = (value, record, index) => {
+  const handleAllocateValueChange = (value, record) => {
     if (value === null || value === '' || Number.isNaN(value)) return
 
     const valueStr = value.toString()
@@ -1733,7 +1751,7 @@ const ProjectInitiation = () => {
     }
 
     const allocatedValue = parseFloat(value)
-    const fieldName = `allocatedValue_${index + 1}`
+    const fieldName = `allocatedValue_${record.sbExtnId}`
     tableform.setFieldsValue({ [fieldName]: parseFloat(allocatedValue.toFixed(2)) })
   }
 
@@ -1862,9 +1880,9 @@ const ProjectInitiation = () => {
             title: `Allocated Value ${curr}`,
             dataIndex: 'allocatedValue',
             key: 'allocatedValue',
-            render: (text, record, index) => (
+            render: (text, record) => (
               <Form form={tableform} initialValues={{ ...record }}>
-                <Form.Item name={`allocatedValue_${index + 1}`} initialValue={undefined}>
+                <Form.Item name={`allocatedValue_${record.sbExtnId}`} initialValue={undefined}>
                   <InputNumber
                     style={{ width: '100%' }}
                     formatter={value => (value === null || value === undefined ? '' : value)}
@@ -1881,7 +1899,7 @@ const ProjectInitiation = () => {
                     max={parseFloat(record.availableAmount) || 0}
                     disabled={!record.availableAmount || parseFloat(record.availableAmount) <= 0}
                     onKeyDown={e => blockOverLimitKeyDown(e, record)}
-                    onChange={value => handleAllocateValueChange(value, record, index)}
+                    onChange={value => handleAllocateValueChange(value, record)}
                   />
                 </Form.Item>
               </Form>
@@ -1911,14 +1929,14 @@ const ProjectInitiation = () => {
             title: 'Allocated Qty',
             dataIndex: 'allocatedQty',
             key: 'allocatedQty',
-            render: (text, record, index) => (
+            render: (text, record) => (
               <Form form={tableform} initialValues={{ ...record }}>
-                <Form.Item name={`allocatedQty_${index + 1}`} initialValue={undefined}>
+                <Form.Item name={`allocatedQty_${record.sbExtnId}`} initialValue={undefined}>
                   <InputNumber
                     style={{ width: '100%' }}
                     formatter={value => (value === null || value === undefined ? '' : value)}
                     parser={value => (value === '' ? null : value)}
-                    onChange={value => handleAllocateChange(value, record, index)}
+                    onChange={value => handleAllocateChange(value, record)}
                   />
                 </Form.Item>
               </Form>
@@ -1951,9 +1969,11 @@ const ProjectInitiation = () => {
 
   const handleAllocate = () => {
     if (budgetLinkTablDtl.length > 0) {
-      const updatedValues = budgetLinkTablDtl.map((rec, ind) => {
+      const updatedValues = budgetLinkTablDtl.map(rec => {
         const fieldName =
-          costFlowType === 'NEW' ? `allocatedValue_${ind + 1}` : `allocatedQty_${ind + 1}`
+          costFlowType === 'NEW'
+            ? `allocatedValue_${rec.sbExtnId}`
+            : `allocatedQty_${rec.sbExtnId}`
         return { [fieldName]: null }
       })
       tableform.setFieldsValue(Object.assign({}, ...updatedValues))
@@ -1963,12 +1983,12 @@ const ProjectInitiation = () => {
   }
   const handleUnAllocate = () => {
     if (budgetLinkTablDtl.length > 0) {
-      const updatedValues = budgetLinkTablDtl.map((rec, ind) => {
+      const updatedValues = budgetLinkTablDtl.map(rec => {
         if (costFlowType === 'NEW') {
-          const fieldName = `allocatedValue_${ind + 1}`
+          const fieldName = `allocatedValue_${rec.sbExtnId}`
           return { [fieldName]: parseFloat(rec.availableAmount) || 0 }
         }
-        const fieldName = `allocatedQty_${ind + 1}`
+        const fieldName = `allocatedQty_${rec.sbExtnId}`
         return { [fieldName]: parseInt(rec.totalQty, 10) }
       })
       tableform.setFieldsValue(Object.assign({}, ...updatedValues))
@@ -2040,14 +2060,6 @@ const ProjectInitiation = () => {
                 <div className="col-md-1" style={{ marginLeft: '5px' }}>
                   <Buttons type="primary" text="Allocate All" onClick={handleUnAllocate} />
                 </div>
-                <div className="col-md-1" style={{ marginLeft: '5px' }}>
-                  <Buttons
-                    type="primary"
-                    icon={<HistoryOutlined />}
-                    text="History"
-                    onClick={handleViewTopupHistory}
-                  />
-                </div>
                 <div className="col-md-12">
                   {budgetLinkTablDtl ? (
                     <Table
@@ -2066,23 +2078,6 @@ const ProjectInitiation = () => {
               </div>
             </Form>
           </div>
-          <Modal
-            title="Topup History"
-            open={topupHistoryOpen}
-            onCancel={() => setTopupHistoryOpen(false)}
-            footer={null}
-            width={900}
-          >
-            <Table
-              dataSource={topupHistoryDtl}
-              columns={topupHistoryColumns}
-              loading={topupHistoryLoading}
-              rowKey="pkseHistId"
-              pagination={false}
-              scroll={{ y: 300 }}
-              bordered
-            />
-          </Modal>
         </div>
       </SpinLoading>
     )
@@ -2517,6 +2512,23 @@ const ProjectInitiation = () => {
         onCancel={handleCancel}
         width={1500}
       />
+      <Modal
+        title="Topup History"
+        open={topupHistoryOpen}
+        onCancel={() => setTopupHistoryOpen(false)}
+        footer={null}
+        width={900}
+      >
+        <Table
+          dataSource={topupHistoryDtl}
+          columns={topupHistoryColumns}
+          loading={topupHistoryLoading}
+          rowKey="pkseHistId"
+          pagination={false}
+          scroll={{ y: 300 }}
+          bordered
+        />
+      </Modal>
     </div>
   )
 }

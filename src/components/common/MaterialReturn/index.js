@@ -287,21 +287,19 @@ const MaterialReturn = () => {
           msHdrId: item.msHdrId,
           msName: item.msName,
           qty: 0,
-          uomSet: new Set(),
+          // The Staging Group's own UOM (set when the group was created), not derived from
+          // its member items - every item on this group shares the same msUomLongDesc value.
+          uomLongDesc: item.msUomLongDesc || '-',
           mrdIds: [],
           items: [],
         })
       }
       const group = groupMap.get(item.msHdrId)
       group.qty += Number(item.qty) || 0
-      if (item.uomLongDesc) group.uomSet.add(item.uomLongDesc)
       group.mrdIds.push(item.mrdId)
       group.items.push(item)
     })
-    return Array.from(groupMap.values()).map(group => ({
-      ...group,
-      uomLongDesc: Array.from(group.uomSet).join(', ') || '-',
-    }))
+    return Array.from(groupMap.values())
   })()
   const cancelMRCols = [
     {

@@ -301,6 +301,9 @@ const SalesComponent = () => {
           sno: index + 1,
           enqList: updatedEnqList,
           salesContact: item.salesContact.length > 0 ? item.salesContact[0].contactNo : '',
+          contactName: item.salesContact.length > 0 ? item.salesContact[0].contactName : '',
+          contactEmail: item.salesContact.length > 0 ? item.salesContact[0].contactEmail : '',
+          contactNo: item.salesContact.length > 0 ? item.salesContact[0].contactNo : '',
         }
       })
     } else {
@@ -347,6 +350,9 @@ const SalesComponent = () => {
               ? moment(item.createdDateTime).format('YYYY-MM-DD')
               : '',
             salesContact: item.salesContact?.[0]?.contactNo,
+            contactName: item.salesContact?.[0]?.contactName,
+            contactEmail: item.salesContact?.[0]?.contactEmail,
+            contactNo: item.salesContact?.[0]?.contactNo,
             finalCost: fullValue ? fullValue.toLocaleString() : '',
           }
         })

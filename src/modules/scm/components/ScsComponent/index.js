@@ -4084,7 +4084,7 @@ const SupCompState = ({
                   <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
                     <div style={{ display: 'flex', alignItems: 'center' }}>
                       <Popconfirm
-                        title="Raise a Budget Excess request for this PJS?"
+                        title="Raise a Budget Excess for this PJS?"
                         onConfirm={handleRaiseBudgetExcess}
                         okText="Yes"
                         cancelText="No"

@@ -5,6 +5,7 @@ import './global.scss' // app & third-party component styles
 
 import React from 'react'
 import ReactDOM from 'react-dom'
+import { message } from 'antd'
 import { createHashHistory } from 'history'
 import { createStore, applyMiddleware } from 'redux'
 import { Provider } from 'react-redux'
@@ -21,6 +22,9 @@ import * as serviceWorker from './serviceWorker'
 
 // mocking api
 import 'services/axios/Api'
+
+// keep toast messages on screen long enough to read
+message.config({ duration: 6 })
 
 // middlewared
 const history = createHashHistory()

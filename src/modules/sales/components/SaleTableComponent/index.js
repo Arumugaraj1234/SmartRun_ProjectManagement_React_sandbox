@@ -445,6 +445,29 @@ useEffect(() => {
               dataSource={tableData}
               exportableProps={{
                 fileName: `Enquiries${currentDateTime}`,
+                // explicit field map so the CSV can include columns (Contact Name/Email/Number)
+                // that aren't shown in the on-screen table
+                fields: {
+                  sno: 'Serial No',
+                  enquiryCode: 'Enquiry No',
+                  customerName: 'Customer',
+                  projectName: 'Project Name',
+                  stgDesc: 'Enquiry Stage',
+                  hdrStatusDesc: 'Enquiry Status',
+                  enquiryType: 'Enquiry Type',
+                  industrialType: 'Industrial Type',
+                  leadDtl: 'Lead Through',
+                  enquiryDate: 'RFQ Date',
+                  createdDateTime: 'Created Date',
+                  expectedPoDate: 'Order Booking',
+                  tentativePoMonth: 'Tentative PO Month',
+                  finalCost: `Order Values ${Menulistdata[0].currency}`,
+                  salesContact: 'Client Contact',
+                  employeeNames: 'Assigned Team Member',
+                  contactName: 'Contact Name',
+                  contactEmail: 'Email ID',
+                  contactNo: 'Contact Number',
+                },
                 btnProps: {
                   type: 'primary',
                   icon: <FileExcelOutlined />,

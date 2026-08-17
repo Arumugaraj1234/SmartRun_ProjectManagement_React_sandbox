@@ -1198,18 +1198,22 @@ const ProjectInitiation = () => {
         })
         return objAsString
       })
-      // const newData = reqArr.map(item => {
-      //   if (item.requiredQty === '') {
-      //     return { ...item, requiredQty: '0' }
-      //   }
-      //   return item
-      // })
-      // const isMandatory = reqArr && reqArr.filter(item => item.allocatedQty !== '0')
-
-      // if (isMandatory.length > 0) {
+      // Both backend updates this feeds (project_key_area_extn / sales_budget_sheet_extn) are
+      // additive (ALLOCATED_VALUE = ALLOCATED_VALUE + ?), so sending 0 for a row nobody touched
+      // is a harmless no-op for the actual allocation math - but insertSubAreaExtnHist still
+      // inserts a Topup History row for every entry in the array unconditionally, flooding the
+      // history with meaningless "0/0" rows for every untouched item in the table. Only send
+      // rows that actually have something to add.
+      const touchedRows = reqArr.filter(item => item.allocatedvalue !== '0' || item.allocatedQty !== '0')
+      if (touchedRows.length === 0) {
+        errosr('Enter at least one Allocated Value before saving')
+        setDisablebtn(false)
+        setIsLoading(false)
+        return
+      }
       const response = await indentFileUpload({
         requestPath: 'insertSubAreaExtn',
-        requestData: reqArr,
+        requestData: touchedRows,
       })
 
       if (response) {

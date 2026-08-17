@@ -205,9 +205,22 @@ const AllocateStationBudgetModal = ({ visible, onCancel, pkaId, stationLabel, on
         return objAsString
       })
 
+      // Both backend updates this feeds are additive (ALLOCATED_VALUE = ALLOCATED_VALUE + ?),
+      // so sending 0 for a row nobody touched is a harmless no-op for the allocation math -
+      // but insertSubAreaExtnHist still inserts a Topup History row for every entry in the
+      // array unconditionally, flooding the history with meaningless "0/0" rows for every
+      // untouched item in the table. Only send rows that actually have something to add.
+      const touchedRows = reqArr.filter(item => item.allocatedvalue !== '0')
+      if (touchedRows.length === 0) {
+        errosr('Enter at least one Allocated Value before saving')
+        setDisablebtn(false)
+        setIsLoading(false)
+        return
+      }
+
       const response = await indentFileUpload({
         requestPath: 'insertSubAreaExtn',
-        requestData: reqArr,
+        requestData: touchedRows,
       })
 
       setDisablebtn(false)

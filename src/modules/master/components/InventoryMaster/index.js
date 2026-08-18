@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { Card, Select, Skeleton, Form, Button, Input, Radio, Popover } from 'antd'
 import { Table } from 'ant-table-extensions'
+import moment from 'moment'
 import store from 'store'
 import { FileExcelOutlined, InfoCircleOutlined } from '@ant-design/icons'
 import { useMediaQuery } from 'react-responsive'
@@ -275,6 +276,9 @@ const InventoryMaster = () => {
         // The Staging Group's own UOM, not derived from its member items - every item on
         // this group shares the same msUomLongDesc value.
         uomLongDesc: grp.groupItems[0]?.msUomLongDesc || '-',
+        // Staging Group's own CREATED_ON/CREATED_BY - same value on every item row.
+        createdOn: grp.groupItems[0]?.msCreatedOn || '',
+        createdBy: grp.groupItems[0]?.msCreatedBy || '',
         groupItems: grp.groupItems,
       }))
       setGroupTbl(rows)
@@ -546,7 +550,7 @@ const InventoryMaster = () => {
       key: 'sno',
     },
     {
-      title: 'Material Group',
+      title: 'Group Name',
       dataIndex: 'msName',
       key: 'msName',
       render: (text, record) => (
@@ -585,6 +589,18 @@ const InventoryMaster = () => {
       key: 'qty',
       align: 'right',
       render: text => (text !== null && text !== undefined ? parseFloat(text).toLocaleString('en-IN') : ''),
+    },
+    {
+      title: 'Created On',
+      dataIndex: 'createdOn',
+      key: 'createdOn',
+      render: text => (text ? moment(text).format('DD-MMM-YYYY') : '-'),
+    },
+    {
+      title: 'Created By',
+      dataIndex: 'createdBy',
+      key: 'createdBy',
+      render: text => text || '-',
     },
   ]
   // const Dtlcolumns = [
@@ -805,6 +821,33 @@ const InventoryMaster = () => {
     downloadCSV(csvData, `Inventory_Details-${currentDateTime}.csv`)
   }
 
+  const handleExportGroup = () => {
+    const cleanedData = cleanupGroupDataSource(groupTbl)
+    const csvData = convertToCSV(cleanedData)
+    downloadCSV(csvData, `Inventory_Material_Groups-${currentDateTime}.csv`)
+  }
+
+  const cleanupGroupDataSource = dataSource => {
+    const escapeValue = value => {
+      if (
+        typeof value === 'string' &&
+        (value.includes(',') || value.includes('\n') || value.includes('"'))
+      ) {
+        return `"${value.replace(/"/g, '""').replace(/\n/g, '')}"`
+      }
+      return value
+    }
+
+    return dataSource.map((row, index) => ({
+      'S.No.': index + 1,
+      'Group Name': escapeValue(row.msName),
+      UOM: escapeValue(row.uomLongDesc),
+      'Returned Qty': row.qty,
+      'Created On': row.createdOn ? moment(row.createdOn).format('DD-MMM-YYYY') : '',
+      'Created By': escapeValue(row.createdBy),
+    }))
+  }
+
   const cleanupDataSource = dataSource => {
     const escapeValue = value => {
       if (
@@ -986,6 +1029,11 @@ const InventoryMaster = () => {
                 }}
                 onClick={handleExport}
               >
+                Export to CSV
+              </Button>
+            )}
+            {activeTab === 'group' && (
+              <Button type="primary" icon={<FileExcelOutlined />} onClick={handleExportGroup}>
                 Export to CSV
               </Button>
             )}

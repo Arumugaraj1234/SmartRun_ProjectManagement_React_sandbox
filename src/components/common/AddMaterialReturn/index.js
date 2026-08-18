@@ -273,7 +273,7 @@ const AddMaterialReturn = ({ handleCancel, isModalVisible }) => {
 
   const groupColumns = [
     {
-      title: 'Material Group',
+      title: 'Group Name',
       dataIndex: 'msName',
       key: 'msName',
     },

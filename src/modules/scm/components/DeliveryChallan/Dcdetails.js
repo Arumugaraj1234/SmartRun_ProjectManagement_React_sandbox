@@ -176,7 +176,7 @@ const Dcdetails = ({ visible, onClose, data }) => {
 
   const columnsGroup = [
     {
-      title: 'Group',
+      title: 'Group Name',
       dataIndex: 'msName',
       key: 'msName',
       width: '30%',

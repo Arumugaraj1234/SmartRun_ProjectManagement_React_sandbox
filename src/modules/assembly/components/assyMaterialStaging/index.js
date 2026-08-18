@@ -62,18 +62,24 @@ const AssyMaterialStaging = () => {
 
   const columns = [
     {
-      title: 'Stage Name',
+      title: 'Group Name',
       dataIndex: 'msName',
       key: 'msName',
       sorter: (a, b) => (a.msName || '').localeCompare(b.msName || ''),
     },
     {
-      title: 'Stage Qty.',
+      title: 'Qty',
       dataIndex: 'stageQty',
       key: 'stageQty',
       className: 'right-align-cell',
       render: text => Number(text).toFixed(0),
       sorter: (a, b) => Number(a.stageQty) - Number(b.stageQty),
+    },
+    {
+      title: 'UOM',
+      dataIndex: 'uomCode',
+      key: 'uomCode',
+      sorter: (a, b) => (a.uomCode || '').localeCompare(b.uomCode || ''),
     },
     {
       title: 'Created on',
@@ -94,14 +100,14 @@ const AssyMaterialStaging = () => {
       key: 'status',
       sorter: (a, b) => (a.status || '').localeCompare(b.status || ''),
       filters: [
-        { text: 'Active', value: 'ACTIVE' },
-        { text: 'Used', value: 'USED' },
+        { text: 'Material not returned yet', value: 'ACTIVE' },
+        { text: 'Material returned', value: 'USED' },
         { text: 'Cancelled', value: 'CANCELLED' },
       ],
       onFilter: (value, record) => record.status === value,
       render: status => {
         const colorMap = { ACTIVE: 'blue', USED: 'green', CANCELLED: 'red' }
-        const labelMap = { ACTIVE: 'Active', USED: 'Used', CANCELLED: 'Cancelled' }
+        const labelMap = { ACTIVE: 'Material not returned yet', USED: 'Material returned', CANCELLED: 'Cancelled' }
         return <Tag color={colorMap[status] || 'default'}>{labelMap[status] || status}</Tag>
       },
     },

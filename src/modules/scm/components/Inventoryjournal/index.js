@@ -116,7 +116,6 @@ const Inventoryjournal = () => {
   }
 
   // const SNo = []
-  const TransDate = []
   const TransType = []
   const ProjCode = []
   const ProduCode = []
@@ -128,14 +127,15 @@ const Inventoryjournal = () => {
   const ReferId = []
   const TransQty = []
   const PoCode = []
+  const TransactionMode = []
+  const GroupName = []
+  const CreatedOn = []
+  const CreatedBy = []
 
   if (inventoryTable) {
     // inventoryTable.map(h => {
     //   return SNo.push(h.serialNumber)
     // })
-    inventoryTable.map(h => {
-      return TransDate.push(h.inventoryTransactionDate)
-    })
     inventoryTable.map(h => {
       return TransType.push(h.inventoryTransactionTypeDescription)
     })
@@ -169,6 +169,18 @@ const Inventoryjournal = () => {
     inventoryTable.map(h => {
       return TransQty.push(h.inventoryTransactionQuantity)
     })
+    inventoryTable.map(h => {
+      return TransactionMode.push(h.transactionMode)
+    })
+    inventoryTable.map(h => {
+      return GroupName.push(h.msName)
+    })
+    inventoryTable.map(h => {
+      return CreatedOn.push(h.createdOn)
+    })
+    inventoryTable.map(h => {
+      return CreatedBy.push(h.createdBy)
+    })
   }
 
   const distinct = (value, index, self) => {
@@ -176,7 +188,6 @@ const Inventoryjournal = () => {
   }
 
   // const filtersNo       = SNo.filter(distinct)
-  const filtertransDate = TransDate.filter(distinct)
   const filtertransType = TransType.filter(distinct)
   const filterprojCode = ProjCode.filter(distinct)
   const filterprodCode = ProduCode.filter(distinct)
@@ -188,9 +199,12 @@ const Inventoryjournal = () => {
   const filtercloseBal = CloseBal.filter(distinct)
   const filterreferId = ReferId.filter(distinct)
   const filtertransQty = TransQty.filter(distinct)
+  const filtertransactionMode = TransactionMode.filter(distinct)
+  const filtergroupName = GroupName.filter(distinct)
+  const filtercreatedOn = CreatedOn.filter(distinct)
+  const filtercreatedBy = CreatedBy.filter(distinct)
 
   // const FilterSNo = []
-  const FilterTransDate = []
   const FilterTransType = []
   const FilterProjCode = []
   const FilterProduCode = []
@@ -202,19 +216,16 @@ const Inventoryjournal = () => {
   const FilterReferId = []
   const FilterTransQty = []
   const FilterPoCode = []
+  const FilterTransactionMode = []
+  const FilterGroupName = []
+  const FilterCreatedOn = []
+  const FilterCreatedBy = []
   // filtersNo.map(element => {
   //   return FilterSNo.push({
   //     text: element,
   //     value: element,
   //   })
   // })
-  filtertransDate.map(element => {
-    const formattedDate = element ? moment(element).format('DD-MMM-YYYY') : ''
-    return FilterTransDate.push({
-      text: formattedDate,
-      value: element,
-    })
-  })
   filtertransType.map(element => {
     return FilterTransType.push({
       text: element,
@@ -235,6 +246,31 @@ const Inventoryjournal = () => {
   })
   filterpoCode.map(element => {
     return FilterPoCode.push({
+      text: element,
+      value: element,
+    })
+  })
+  filtertransactionMode.map(element => {
+    return FilterTransactionMode.push({
+      text: element,
+      value: element,
+    })
+  })
+  filtergroupName.map(element => {
+    return FilterGroupName.push({
+      text: element,
+      value: element,
+    })
+  })
+  filtercreatedOn.map(element => {
+    const formattedDate = element ? moment(element).format('DD-MMM-YYYY') : ''
+    return FilterCreatedOn.push({
+      text: formattedDate,
+      value: element,
+    })
+  })
+  filtercreatedBy.map(element => {
+    return FilterCreatedBy.push({
       text: element,
       value: element,
     })
@@ -321,6 +357,23 @@ const Inventoryjournal = () => {
       onFilter: (value, record) => record?.productCode === value,
     },
     {
+      title: 'Type',
+      dataIndex: 'transactionMode',
+      key: 'transactionMode',
+      filters: FilterTransactionMode,
+      filteredValue: filtersinfo.transactionMode,
+      onFilter: (value, record) => record?.transactionMode === value,
+    },
+    {
+      title: 'Group Name',
+      dataIndex: 'msName',
+      key: 'msName',
+      filters: FilterGroupName,
+      filteredValue: filtersinfo.msName,
+      onFilter: (value, record) => record?.msName === value,
+      render: text => text || '-',
+    },
+    {
       title: 'Description',
       dataIndex: 'productDescription',
       key: 'productDescription',
@@ -363,17 +416,22 @@ const Inventoryjournal = () => {
       onFilter: (value, record) => record?.inventoryTransactionReferenceId === value,
     },
     {
-      title: 'Transaction On',
-      dataIndex: 'inventoryTransactionDate',
-      key: 'inventoryTransactionDate',
+      title: 'Created On',
+      dataIndex: 'createdOn',
+      key: 'createdOn',
       width: 150,
-      render: (text, record) =>
-        record.inventoryTransactionDate
-          ? moment(record.inventoryTransactionDate).format('DD-MMM-YYYY HH:mm')
-          : '',
-      filters: FilterTransDate,
-      filteredValue: filtersinfo.inventoryTransactionDate,
-      onFilter: (value, record) => record?.inventoryTransactionDate === value,
+      render: text => (text ? moment(text).format('DD-MMM-YYYY HH:mm') : ''),
+      filters: FilterCreatedOn,
+      filteredValue: filtersinfo.createdOn,
+      onFilter: (value, record) => record?.createdOn === value,
+    },
+    {
+      title: 'Created By',
+      dataIndex: 'createdBy',
+      key: 'createdBy',
+      filters: FilterCreatedBy,
+      filteredValue: filtersinfo.createdBy,
+      onFilter: (value, record) => record?.createdBy === value,
     },
     {
       title: 'UOM',

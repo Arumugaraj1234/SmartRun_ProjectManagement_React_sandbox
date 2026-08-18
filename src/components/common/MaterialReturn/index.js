@@ -195,6 +195,11 @@ const MaterialReturn = () => {
       key: 'returnType',
     },
     {
+      title: 'Group Name',
+      dataIndex: 'groupName',
+      key: 'groupName',
+    },
+    {
       title: 'Request By',
       dataIndex: 'employeeName',
       key: 'employeeName',
@@ -421,7 +426,7 @@ const MaterialReturn = () => {
   )
   const groupMRCols = [
     {
-      title: 'Material Group',
+      title: 'Group Name',
       dataIndex: 'msName',
       key: 'msName',
       render: (text, record) => (

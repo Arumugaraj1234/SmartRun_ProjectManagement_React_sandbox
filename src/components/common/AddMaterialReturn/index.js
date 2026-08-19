@@ -284,7 +284,7 @@ const AddMaterialReturn = ({ handleCancel, isModalVisible }) => {
       render: text => text || '-',
     },
     {
-      title: 'Staged Qty.',
+      title: 'Qty.',
       dataIndex: 'inventoryQtyOnHand',
       key: 'inventoryQtyOnHand',
       width: '20%',

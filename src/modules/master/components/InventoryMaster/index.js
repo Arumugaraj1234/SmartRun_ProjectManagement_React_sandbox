@@ -272,7 +272,9 @@ const InventoryMaster = () => {
         sno: index + 1,
         msHdrId: grp.msHdrId,
         msName: grp.msName,
-        qty: grp.groupItems.reduce((sum, item) => sum + (Number(item.qty) || 0), 0),
+        // The Staging Group's own Qty, not summed from its member items - every item on
+        // this group shares the same msQty value.
+        qty: Number(grp.groupItems[0]?.msQty) || 0,
         // The Staging Group's own UOM, not derived from its member items - every item on
         // this group shares the same msUomLongDesc value.
         uomLongDesc: grp.groupItems[0]?.msUomLongDesc || '-',

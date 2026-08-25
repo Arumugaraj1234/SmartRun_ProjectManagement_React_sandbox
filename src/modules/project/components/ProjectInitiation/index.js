@@ -60,6 +60,10 @@ const ProjectInitiation = () => {
   const [pkaId, setPkaId] = useState(null)
   const [costFlowType, setCostFlowType] = useState('LEGACY')
   const [manualProjectId, setManualProjectId] = useState('')
+  // Tracks the pkseId currently being removed so its Confirm-Delete button can be
+  // disabled immediately on click - prevents a double-click/slow-network double
+  // submit from removing more than intended (see project_wbs_budget_cost_bug memory).
+  const [removingPkseId, setRemovingPkseId] = useState(null)
   const setDefaultMileStone = [
     {
       milestoneName: '',
@@ -1282,14 +1286,21 @@ const ProjectInitiation = () => {
   ]
 
   const handleRemoveAllocatedValRow = async rec => {
-    const response = await indentFileUpload({
-      requestPath: 'deleteSubAreaExtn',
-      requestData: {
-        pkseId: rec.pkseId,
-        tenantId: tenantid,
-        pmId: Tab.processCode,
-      },
-    })
+    if (removingPkseId === rec.pkseId) return
+    setRemovingPkseId(rec.pkseId)
+    let response
+    try {
+      response = await indentFileUpload({
+        requestPath: 'deleteSubAreaExtn',
+        requestData: {
+          pkseId: rec.pkseId,
+          tenantId: tenantid,
+          pmId: Tab.processCode,
+        },
+      })
+    } finally {
+      setRemovingPkseId(null)
+    }
     if (response) {
       if (response.responseCode === '200') {
         // setIsModalVal(false)
@@ -1527,6 +1538,8 @@ const ProjectInitiation = () => {
                 <div style={{ display: 'flex', gap: '5px', justifyContent: 'center' }}>
                   <Button
                     type="primary"
+                    disabled={removingPkseId === record.pkseId}
+                    loading={removingPkseId === record.pkseId}
                     onClick={() => {
                       handleRemoveAllocatedValRow(record, index)
                     }}

@@ -310,11 +310,11 @@ const AddAssyIndent = ({ handleCancel, isModalVisible }) => {
                   name="StageName"
                   label={
                     <span>
-                      Stage Name<span style={{ color: 'red', marginRight: '22px' }}>*</span>{' '}
+                      Group Name<span style={{ color: 'red', marginRight: '22px' }}>*</span>{' '}
                     </span>
                   }
                 >
-                  <Input placeholder="Enter Stage Name" style={{ width: '100%' }} />
+                  <Input placeholder="Enter Group Name" style={{ width: '100%' }} />
                 </Form.Item>
               </div>
               <div className="col-sm-12 col-md-4 col-lg-3 col-xl-3 col-xxl-3">

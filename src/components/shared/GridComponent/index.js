@@ -89,10 +89,28 @@ const GridComponent = ({
                             data.customerName
                           )}
                         </p>
-                        <div style={{ marginTop: '-20px', color: 'black' }}>
+                        <div
+                          className={`project-badge-${(title || '').replace(
+                            /[^a-zA-Z0-9]/g,
+                            '',
+                          )}-${data.id || index}`}
+                          style={{ marginTop: '-20px', color: 'black' }}
+                        >
                           <style>
-                            {`
-                             .ant-ribbon-text {
+                            {moduleType !== undefined && moduleType.toLowerCase() === 'project'
+                              ? `
+                             .project-badge-${(title || '').replace(
+                               /[^a-zA-Z0-9]/g,
+                               '',
+                             )}-${data.id || index} .ant-ribbon-text {
+                             color: ${data.costFlowType === 'NEW' ? '#ffffff' : 'black'} !important;
+                            }
+                          `
+                              : `
+                             .project-badge-${(title || '').replace(
+                               /[^a-zA-Z0-9]/g,
+                               '',
+                             )}-${data.id || index} .ant-ribbon-text {
                              color: black !important;
                             }
                           `}
@@ -114,7 +132,13 @@ const GridComponent = ({
                             //       ? '#50C878'
                             //       : '#FFED5F'
                             // }
-                            BadgeColor="#FFED5F"
+                            BadgeColor={
+                              moduleType !== undefined &&
+                              moduleType.toLowerCase() === 'project' &&
+                              data.costFlowType === 'NEW'
+                                ? '#1D3557'
+                                : '#FFED5F'
+                            }
                           />
                         </div>
                       </div>

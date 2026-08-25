@@ -46,12 +46,6 @@ const ProjectBExcessSheet = () => {
   const [singledetail, setSingleDetail] = useState(null)
   const [rejectRemarksCard, setRejectRemarksCard] = useState(false)
   const disable = true
-  // RCA fields (Reason/RCA/Action Planned/Responsible Dept) are the only fields on this
-  // popup meant to be filled in by a human, not just displayed for reference - restrict
-  // editing to the PM login (D03), matching the same depCode gate used for PM-only
-  // actions elsewhere (e.g. ScsComponent's Allocate to Station/Raise Budget Excess).
-  const depCode = store.get('depCode')
-  const isPM = depCode === 'D03'
   const [detailCard, setdetailCard] = useState(false)
   const { TextArea } = Input
 
@@ -1250,14 +1244,11 @@ const ProjectBExcessSheet = () => {
 
   // component
   const DtlComponent = () => {
-    // documentStatusMstList[0] is only populated by the backend when the CURRENT
-    // login is authorized to act on this record's CURRENT pending step (see
-    // BudgetExcessSheetService.retriveBudgetExcessSheetDtl's approveBtnEnable check,
-    // which matches designCode against APPR_DESI for the row's live CURR_SEQUENCE) -
-    // it goes null again for PM's own login once their step has been approved and
-    // the record has moved on, so combining it with isPM covers both "only PM can
-    // edit" and "not even PM once they've already approved it".
-    const canEditRca = isPM && !!singledetail?.documentStatusMstList?.[0]
+    // RCA fields are only fillable while the record is still at its very first status
+    // ("Created", before anyone has acted on it yet) - whoever's turn that first step is
+    // (PM for regular projects, Finance directly for CAPEX projects with no PM step) can
+    // fill it in; once it moves past "Created", every later login is approve-only.
+    const canEditRca = singledetail?.statusDesc === 'Created' && !!singledetail?.documentStatusMstList?.[0]
     return (
       <div>
         <div>

@@ -291,7 +291,9 @@ const MaterialReturn = () => {
           key: item.msHdrId,
           msHdrId: item.msHdrId,
           msName: item.msName,
-          qty: 0,
+          // The Staging Group's own Qty (set when the group was created), not summed from
+          // its member items - every item on this group shares the same msQty value.
+          qty: Number(item.msQty) || 0,
           // The Staging Group's own UOM (set when the group was created), not derived from
           // its member items - every item on this group shares the same msUomLongDesc value.
           uomLongDesc: item.msUomLongDesc || '-',
@@ -300,7 +302,6 @@ const MaterialReturn = () => {
         })
       }
       const group = groupMap.get(item.msHdrId)
-      group.qty += Number(item.qty) || 0
       group.mrdIds.push(item.mrdId)
       group.items.push(item)
     })

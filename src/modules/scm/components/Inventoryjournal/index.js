@@ -349,14 +349,6 @@ const Inventoryjournal = () => {
     //   key: 'projectName',
     // },
     {
-      title: 'Part Number',
-      dataIndex: 'productCode',
-      key: 'productCode',
-      filters: FilterProduCode,
-      filteredValue: filtersinfo.productCode,
-      onFilter: (value, record) => record?.productCode === value,
-    },
-    {
       title: 'Type',
       dataIndex: 'transactionMode',
       key: 'transactionMode',
@@ -372,6 +364,14 @@ const Inventoryjournal = () => {
       filteredValue: filtersinfo.msName,
       onFilter: (value, record) => record?.msName === value,
       render: text => text || '-',
+    },
+    {
+      title: 'Part Number',
+      dataIndex: 'productCode',
+      key: 'productCode',
+      filters: FilterProduCode,
+      filteredValue: filtersinfo.productCode,
+      onFilter: (value, record) => record?.productCode === value,
     },
     {
       title: 'Description',

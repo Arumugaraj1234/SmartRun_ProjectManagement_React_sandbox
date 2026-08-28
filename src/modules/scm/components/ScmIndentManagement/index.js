@@ -831,6 +831,8 @@ const ScmIndentManagement = ({ isTailview }) => {
     //   dataIndex: 'statusDesc',
     // },
     {
+      // NEW-flow projects no longer gate visibility on per-part assignment (project-team
+      // membership is enough), so this column has nothing meaningful to show there.
       title: 'Assigned Status',
       key: 'assigned',
       dataIndex: 'assigned',
@@ -877,20 +879,26 @@ const ScmIndentManagement = ({ isTailview }) => {
             }}
             icon={<FileTwoTone />}
           />
-          <Button
-            type="primary"
-            onClick={() => {
-              OpendAssignTeam(record, index)
-            }}
-            icon={<UserOutlined />}
-          />
+          {costFlowType !== 'NEW' ? (
+            <Button
+              type="primary"
+              onClick={() => {
+                OpendAssignTeam(record, index)
+              }}
+              icon={<UserOutlined />}
+            />
+          ) : null}
         </div>
       ),
     },
     // This screen is always scoped to one project, so every row shares the same costFlowType -
     // drop the whole Target Cost column when the project is NEW-flow (always 0 there, no real
     // equivalent), matching the field already hidden in this file's own detail dialog.
-  ].filter(col => col.key !== 'targetCost' || costFlowType !== 'NEW')
+  ].filter(
+    col =>
+      (col.key !== 'targetCost' || costFlowType !== 'NEW') &&
+      (col.key !== 'assigned' || costFlowType !== 'NEW'),
+  )
   const columns2 = [
     {
       title: 'S.No',

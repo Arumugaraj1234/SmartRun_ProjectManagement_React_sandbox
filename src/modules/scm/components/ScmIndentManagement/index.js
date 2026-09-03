@@ -2,7 +2,19 @@
 /* eslint-disable eqeqeq */
 import React, { useState, useEffect } from 'react'
 import store from 'store'
-import { Card, Row, Divider, Popover, Input, Form, message, Select, Checkbox } from 'antd'
+import {
+  Card,
+  Row,
+  Divider,
+  Popover,
+  Input,
+  Form,
+  message,
+  Select,
+  Checkbox,
+  Spin,
+  Skeleton,
+} from 'antd'
 import {
   FileExcelOutlined,
   FileTwoTone,
@@ -83,6 +95,7 @@ const ScmIndentManagement = ({ isTailview }) => {
   const [isDownloading, setIsDownloading] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [searchText, setSearchText] = useState('')
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     onloadgetallIndent()
@@ -112,74 +125,84 @@ const ScmIndentManagement = ({ isTailview }) => {
     getallIndent(formData)
   }
   const getallIndent = async formData => {
-    if (!formData?.IndentCode || !formData?.Projectcode) {
-      onloadgetallIndent()
-      return
-    }
+    setLoading(true)
+    try {
+      if (!formData?.IndentCode || !formData?.Projectcode) {
+        await onloadgetallIndent()
+        return
+      }
 
-    const reqdata = {
-      pmId: '5',
-      indentId: formData?.IndentCode,
-      tenantId,
-      empId: employeeId,
-      projectId: formData?.Projectcode,
-      byProjectId: formData?.IndentCode === 'getAll' ? '1' : '0',
-      docType: 'DC018',
-    }
+      const reqdata = {
+        pmId: '5',
+        indentId: formData?.IndentCode,
+        tenantId,
+        empId: employeeId,
+        projectId: formData?.Projectcode,
+        byProjectId: formData?.IndentCode === 'getAll' ? '1' : '0',
+        docType: 'DC018',
+      }
 
-    const response = await indentFileUpload({
-      requestPath: 'getIndentHdrDtlsByIndentId',
-      requestData: reqdata,
-    })
-
-    if (response?.responseCode === '200') {
-      const updatedData = response.responseData.map((item, index) => {
-        const different =
-          item.indentClosed === '1' && item.indentClosedDate
-            ? moment(item.indentClosedDate).diff(moment(item.expectedDeliveryDate), 'days')
-            : moment().diff(moment(item.expectedDeliveryDate), 'days')
-        return {
-          ...item,
-          sno: index + 1,
-          different: different <= 0 ? '-' : different,
-        }
+      const response = await indentFileUpload({
+        requestPath: 'getIndentHdrDtlsByIndentId',
+        requestData: reqdata,
       })
-      setIndentTable(updatedData)
-      // message.success(response?.responseMessage)
-    } else {
-      message.error(response?.responseMessage)
-      setIndentTable([])
+
+      if (response?.responseCode === '200') {
+        const updatedData = response.responseData.map((item, index) => {
+          const different =
+            item.indentClosed === '1' && item.indentClosedDate
+              ? moment(item.indentClosedDate).diff(moment(item.expectedDeliveryDate), 'days')
+              : moment().diff(moment(item.expectedDeliveryDate), 'days')
+          return {
+            ...item,
+            sno: index + 1,
+            different: different <= 0 ? '-' : different,
+          }
+        })
+        setIndentTable(updatedData)
+        // message.success(response?.responseMessage)
+      } else {
+        message.error(response?.responseMessage)
+        setIndentTable([])
+      }
+    } finally {
+      setLoading(false)
     }
   }
 
   const onloadgetallIndent = async () => {
-    const reqdata = {
-      pmId: '5',
-      indentId: 'getAll',
-      tenantId,
-      empId: employeeId,
-      projectId: ProjectID,
-      byProjectId: '1',
-      docType: 'DC018',
-    }
+    setLoading(true)
+    try {
+      const reqdata = {
+        pmId: '5',
+        indentId: 'getAll',
+        tenantId,
+        empId: employeeId,
+        projectId: ProjectID,
+        byProjectId: '1',
+        docType: 'DC018',
+      }
 
-    const response = await indentFileUpload({
-      requestPath: 'getIndentHdrDtlsByIndentId',
-      requestData: reqdata,
-    })
-
-    if (response?.responseCode === '200') {
-      const updatedData = response.responseData.map((item, index) => {
-        const different =
-          item.indentClosed === '1' && item.indentClosedDate
-            ? moment(item.indentClosedDate).diff(moment(item.expectedDeliveryDate), 'days')
-            : moment().diff(moment(item.expectedDeliveryDate), 'days')
-        return { ...item, sno: index + 1, different: different <= 0 ? '-' : different }
+      const response = await indentFileUpload({
+        requestPath: 'getIndentHdrDtlsByIndentId',
+        requestData: reqdata,
       })
-      setIndentTable(updatedData)
-    } else {
-      message.error(response?.responseMessage)
-      setIndentTable([])
+
+      if (response?.responseCode === '200') {
+        const updatedData = response.responseData.map((item, index) => {
+          const different =
+            item.indentClosed === '1' && item.indentClosedDate
+              ? moment(item.indentClosedDate).diff(moment(item.expectedDeliveryDate), 'days')
+              : moment().diff(moment(item.expectedDeliveryDate), 'days')
+          return { ...item, sno: index + 1, different: different <= 0 ? '-' : different }
+        })
+        setIndentTable(updatedData)
+      } else {
+        message.error(response?.responseMessage)
+        setIndentTable([])
+      }
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -324,74 +347,77 @@ const ScmIndentManagement = ({ isTailview }) => {
 
   const submitApprove = async () => {
     setIsSubmitting(true)
-    setApprovebtn(false)
-    const formValues = form.getFieldsValue()
-    const keyareaobj = {
-      tenantId,
-      indentId: detailTable[0]?.indentId,
-      empId: employeeId,
-      remarks: formValues.remarks,
-      currentseq: docLifeList[0]?.currSequence,
-      pmId: Tab.processCode,
-      docType: 'DC018',
-    }
-    const response = await indentFileUpload({
-      requestPath: 'updateIndentHdrStatus',
-      requestData: keyareaobj,
-    })
-    if (response) {
-      setDetailTable([])
-      setDetailId(null)
-      setDetailmodalVisible(false)
-      if (response.responseCode === '200') {
-        message.success(response.responseMessage)
-        setIsSubmitting(false)
+    try {
+      setApprovebtn(false)
+      const formValues = form.getFieldsValue()
+      const keyareaobj = {
+        tenantId,
+        indentId: detailTable[0]?.indentId,
+        empId: employeeId,
+        remarks: formValues.remarks,
+        currentseq: docLifeList[0]?.currSequence,
+        pmId: Tab.processCode,
+        docType: 'DC018',
       }
-      if (response.responseCode !== '200') {
-        message.error(response.responseMessage)
-        setIsSubmitting(false)
+      const response = await indentFileUpload({
+        requestPath: 'updateIndentHdrStatus',
+        requestData: keyareaobj,
+      })
+      if (response) {
+        setDetailTable([])
+        setDetailId(null)
+        setDetailmodalVisible(false)
+        if (response.responseCode === '200') {
+          message.success(response.responseMessage)
+        }
+        if (response.responseCode !== '200') {
+          message.error(response.responseMessage)
+        }
       }
+
+      setApproveremarksCard(false)
+      getallIndent(fieldsvalue)
+      form.resetFields()
+    } finally {
+      setIsSubmitting(false)
     }
-    
-    setApproveremarksCard(false)
-    getallIndent(fieldsvalue)
-    form.resetFields()
   }
   const submitCancel = async () => {
     setIsSubmitting(true)
-    setApprovebtn(false)
-    const formValues = form.getFieldsValue()
-    const keyareaobj = {
-      tenantId,
-      indentId: detailTable[0]?.indentId,
-      empId: employeeId,
-      remarks: formValues.remarks,
-      currentseq: docLifeList[0]?.cancelSeq,
-      pmId: Tab.processCode,
-      docType: 'DC018',
-    }
-    const response = await indentFileUpload({
-      requestPath: 'updateIndentHdrStatus',
-      requestData: keyareaobj,
-    })
-    if (response) {
-      setDetailTable([])
-      setDetailId(null)
-      setDetailmodalVisible(false)
-      if (response.responseCode === '200') {
-        message.success(response.responseMessage)
-        getDetails(indentID)
-        setIsSubmitting(false)
+    try {
+      setApprovebtn(false)
+      const formValues = form.getFieldsValue()
+      const keyareaobj = {
+        tenantId,
+        indentId: detailTable[0]?.indentId,
+        empId: employeeId,
+        remarks: formValues.remarks,
+        currentseq: docLifeList[0]?.cancelSeq,
+        pmId: Tab.processCode,
+        docType: 'DC018',
       }
-      if (response.responseCode !== '200') {
-        message.error(response.responseMessage)
-        setIsSubmitting(false)
+      const response = await indentFileUpload({
+        requestPath: 'updateIndentHdrStatus',
+        requestData: keyareaobj,
+      })
+      if (response) {
+        setDetailTable([])
+        setDetailId(null)
+        setDetailmodalVisible(false)
+        if (response.responseCode === '200') {
+          message.success(response.responseMessage)
+          getDetails(indentID)
+        }
+        if (response.responseCode !== '200') {
+          message.error(response.responseMessage)
+        }
       }
+      setRejectRemarksCard(false)
+      getallIndent(fieldsvalue)
+      form.resetFields()
+    } finally {
+      setIsSubmitting(false)
     }
-    // setIsSubmitting(false)
-    setRejectRemarksCard(false)
-    getallIndent(fieldsvalue)
-    form.resetFields()
   }
 
   const DeleteBudget = async (record, index) => {
@@ -831,8 +857,6 @@ const ScmIndentManagement = ({ isTailview }) => {
     //   dataIndex: 'statusDesc',
     // },
     {
-      // NEW-flow projects no longer gate visibility on per-part assignment (project-team
-      // membership is enough), so this column has nothing meaningful to show there.
       title: 'Assigned Status',
       key: 'assigned',
       dataIndex: 'assigned',
@@ -879,26 +903,20 @@ const ScmIndentManagement = ({ isTailview }) => {
             }}
             icon={<FileTwoTone />}
           />
-          {costFlowType !== 'NEW' ? (
-            <Button
-              type="primary"
-              onClick={() => {
-                OpendAssignTeam(record, index)
-              }}
-              icon={<UserOutlined />}
-            />
-          ) : null}
+          <Button
+            type="primary"
+            onClick={() => {
+              OpendAssignTeam(record, index)
+            }}
+            icon={<UserOutlined />}
+          />
         </div>
       ),
     },
     // This screen is always scoped to one project, so every row shares the same costFlowType -
     // drop the whole Target Cost column when the project is NEW-flow (always 0 there, no real
     // equivalent), matching the field already hidden in this file's own detail dialog.
-  ].filter(
-    col =>
-      (col.key !== 'targetCost' || costFlowType !== 'NEW') &&
-      (col.key !== 'assigned' || costFlowType !== 'NEW'),
-  )
+  ].filter(col => col.key !== 'targetCost' || costFlowType !== 'NEW')
   const columns2 = [
     {
       title: 'S.No',
@@ -1287,36 +1305,43 @@ const ScmIndentManagement = ({ isTailview }) => {
   const AddRemarksComponent = () => {
     return (
       <div>
-        <Card bordered={false} className="custom-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <div>
-              <h5>Add Remarks</h5>
-              <Form form={form}>
-                <Form.Item name="remarks">
-                  <TextArea rows={4} />
-                </Form.Item>
-              </Form>
-              <center>
-                {approveRemarksCard ? (
-                  <Button
-                    type="primary"
-                    text="Save"
-                    onClick={submitApprove}
-                    disabled={isSubmitting}
-                  />
-                ) : null}
-                {rejectRemarksCard ? (
-                  <Button
-                    type="primary"
-                    text="Save"
-                    onClick={submitCancel}
-                    disabled={isSubmitting}
-                  />
-                ) : null}
-              </center>
+        {/* This popup renders through antd's Popover (a document.body portal), so it sits outside
+        the main detail Modal — this Spin has to cover it directly for the loading state to be
+        visible here while Approve/Previous Stage is submitting. */}
+        <Spin spinning={isSubmitting} size="large" tip="Please wait...">
+          <Card bordered={false} className="custom-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div>
+                <h5>Add Remarks</h5>
+                <Form form={form}>
+                  <Form.Item name="remarks">
+                    <TextArea rows={4} />
+                  </Form.Item>
+                </Form>
+                <center>
+                  {approveRemarksCard ? (
+                    <Button
+                      type="primary"
+                      text="Save"
+                      onClick={submitApprove}
+                      disable={isSubmitting}
+                      loading={isSubmitting}
+                    />
+                  ) : null}
+                  {rejectRemarksCard ? (
+                    <Button
+                      type="primary"
+                      text="Save"
+                      onClick={submitCancel}
+                      disable={isSubmitting}
+                      loading={isSubmitting}
+                    />
+                  ) : null}
+                </center>
+              </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        </Spin>
       </div>
     )
   }
@@ -1406,7 +1431,9 @@ const ScmIndentManagement = ({ isTailview }) => {
   }
   const FieldsComponent = () => {
     return (
-      <div>
+      // Covers the whole indent detail view — Approve/Previous Stage submitted from the
+      // remarks popup below still mutate this screen, so block it too until they finish.
+      <Spin spinning={isSubmitting} size="large" tip="Please wait...">
         <div>
           <div className="mt-1 custom_antd_Table">
             <div className="row">
@@ -1480,7 +1507,7 @@ const ScmIndentManagement = ({ isTailview }) => {
             />
           ) : null}
         </div>
-      </div>
+      </Spin>
     )
   }
   const ButtonsComponent = () => {
@@ -1501,29 +1528,48 @@ const ScmIndentManagement = ({ isTailview }) => {
                   type="primary"
                   text={docLifeList[0].docStatusDesc}
                   onClick={approveIndent}
+                  disable={isSubmitting}
                 />
               )}
               <Popuptable
-                onClose={() => setApproveremarksCard(false)}
+                onClose={() => {
+                  // A click landing outside the popover while Save is running would otherwise
+                  // dismiss it mid-request — ignore that until the action actually finishes.
+                  if (isSubmitting) return
+                  setApproveremarksCard(false)
+                }}
                 cardLabel=""
                 component={AddRemarksComponent}
                 visible={approveRemarksCard}
               />
               <span style={{ margin: '0 3px' }} />
               <Popuptable
-                onClose={() => setRejectRemarksCard(false)}
+                onClose={() => {
+                  if (isSubmitting) return
+                  setRejectRemarksCard(false)
+                }}
                 cardLabel=""
                 component={AddRemarksComponent}
                 visible={rejectRemarksCard}
               />
               {docLifeList && docLifeList.length > 0 && docLifeList[0].cancelSeq !== null && (
-                <Button type="danger" text="Previous Stage " onClick={cancelIndent} />
+                <Button
+                  type="danger"
+                  text="Previous Stage "
+                  onClick={cancelIndent}
+                  disable={isSubmitting}
+                />
               )}
               <span style={{ margin: '0 3px' }} />
             </div>
           ) : null}
           <div style={{ display: 'flex', gap: '5px' }}>
-            <Button type="primary" text="Cancel" onClick={() => handleDetailCancel()} />
+            <Button
+              type="primary"
+              text="Cancel"
+              onClick={() => handleDetailCancel()}
+              disable={isSubmitting}
+            />
             <Popuptable
               onClose={() => setMsgDetailCard(false)}
               cardLabel=""
@@ -1536,6 +1582,7 @@ const ScmIndentManagement = ({ isTailview }) => {
               onClick={() => {
                 OpenmsgDetailCard()
               }}
+              disable={isSubmitting}
             />
           </div>
         </div>
@@ -1694,10 +1741,16 @@ const ScmIndentManagement = ({ isTailview }) => {
         ) : (
           <div>
             <h5 className="mb-3">Indent Management</h5>
-            <Tailviewfields onGetDetails={handleGetDetails} onClear={handleClear} getIndent={isInternal == 1 ? '5' : '1'} />
+            <Tailviewfields
+              onGetDetails={handleGetDetails}
+              onClear={handleClear}
+              getIndent={isInternal == 1 ? '5' : '1'}
+            />
           </div>
         )}
-        {indentTable && indentTable.length > 0 ? (
+        {loading ? (
+          <Skeleton active paragraph={{ rows: 8 }} />
+        ) : indentTable && indentTable.length > 0 ? (
           <div>
             <Row>
               <Divider orientation="left">Indent Details</Divider>
@@ -1825,9 +1878,13 @@ const ScmIndentManagement = ({ isTailview }) => {
               text={`${singleIndent?.indentTypeDesc} -Indent Details -${detailId} -${singleIndent?.sbcDesc}`}
               width={1400}
               onCancel={() => {
+                // Mask click / X / Esc all route through here — ignore them while Approve /
+                // Previous Stage is submitting so the detail view can't be dismissed mid-request.
+                if (isSubmitting) return
                 handleDetailCancel()
                 getallIndent(fieldsvalue)
               }}
+              maskClosable={!isSubmitting}
             />
           ) : null}
         </div>

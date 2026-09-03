@@ -1,5 +1,15 @@
 import React, { useState, useEffect } from 'react'
-import { Button, Form, Input, DatePicker, AutoComplete, Checkbox, Select, message } from 'antd'
+import {
+  Button,
+  Form,
+  Input,
+  DatePicker,
+  AutoComplete,
+  Checkbox,
+  Select,
+  message,
+  Spin,
+} from 'antd'
 import moment from 'moment'
 import store from 'store'
 import ModalPopup from 'components/shared/ModalPopupComponent'
@@ -471,52 +481,56 @@ const PaymentTermsPopUp = props => {
       //   val && typeof val === 'string' && val.trim() !== '' ? val.replace(/,/g, '').trim() : '0'
       const safeGst = gstValue
       const safeIgst = IGstValue
-      const response = await indentFileUpload({
-        requestPath: 'InsertPRA',
-        requestData: {
-          grnHdrId: selectedValues.join(','),
-          poId: projectList[0].poId,
-          paymentTerms: formData.paymentType,
-          deliveryType,
-          poDate: projectList[0].date,
-          dueDate: formData.dueDate ? new Date(formData.dueDate).toISOString().split('T')[0] : null,
-          // invoiceDate: formData.invoiceDate
-          //   ? new Date(formData.invoiceDate).toISOString().split('T')[0]
-          //   : null,
-          invoiceDate: formData.invoiceDate ? formData.invoiceDate.format('YYYY-MM-DD') : null,
-          potId: resp.potId,
-          isLast: isFinal,
-          pmHdrId: pmhdrId,
-          vendorCode: projectList[0].vendorCode,
-          tds: projectList[0].tds,
-          remarks: projectList[0].remarks,
-          tenantId: tenantid,
-          orderValue: projectList[0].totalValue,
-          praDate: moment(new Date()).format('YYYY-MM-DD'),
-          typeOfPayment: formData.paymentType,
-          enquiryId: enqId,
-          processCode: tab.processCode,
-          empId,
-          poCode: projectList[0].poCode,
-          isCompleted: '0',
-          invoiceValue,
-          transportValue: resp?.isLast === '1' ? transportValue : '0.000',
-          pfValue: resp?.isLast === '1' ? pfValue : '0.000',
-          otherValue: resp?.isLast === '1' ? otherValue : '0.000',
-          insuranceValue: resp?.isLast === '1' ? insuranceValue : '0.000',
-          poCostType: formData.poCostType,
-          invoiceNumber: formData.invoiceNumber ? formData.invoiceNumber : '',
-          gst: resp?.isLast === '1' && parseFloat(igst) === 0 ? safeGst : '0.000',
-          igst: resp?.isLast === '1' ? safeIgst : '0.000',
-        },
-      })
+      try {
+        const response = await indentFileUpload({
+          requestPath: 'InsertPRA',
+          requestData: {
+            grnHdrId: selectedValues.join(','),
+            poId: projectList[0].poId,
+            paymentTerms: formData.paymentType,
+            deliveryType,
+            poDate: projectList[0].date,
+            dueDate: formData.dueDate
+              ? new Date(formData.dueDate).toISOString().split('T')[0]
+              : null,
+            // invoiceDate: formData.invoiceDate
+            //   ? new Date(formData.invoiceDate).toISOString().split('T')[0]
+            //   : null,
+            invoiceDate: formData.invoiceDate ? formData.invoiceDate.format('YYYY-MM-DD') : null,
+            potId: resp.potId,
+            isLast: isFinal,
+            pmHdrId: pmhdrId,
+            vendorCode: projectList[0].vendorCode,
+            tds: projectList[0].tds,
+            remarks: projectList[0].remarks,
+            tenantId: tenantid,
+            orderValue: projectList[0].totalValue,
+            praDate: moment(new Date()).format('YYYY-MM-DD'),
+            typeOfPayment: formData.paymentType,
+            enquiryId: enqId,
+            processCode: tab.processCode,
+            empId,
+            poCode: projectList[0].poCode,
+            isCompleted: '0',
+            invoiceValue,
+            transportValue: resp?.isLast === '1' ? transportValue : '0.000',
+            pfValue: resp?.isLast === '1' ? pfValue : '0.000',
+            otherValue: resp?.isLast === '1' ? otherValue : '0.000',
+            insuranceValue: resp?.isLast === '1' ? insuranceValue : '0.000',
+            poCostType: formData.poCostType,
+            invoiceNumber: formData.invoiceNumber ? formData.invoiceNumber : '',
+            gst: resp?.isLast === '1' && parseFloat(igst) === 0 ? safeGst : '0.000',
+            igst: resp?.isLast === '1' ? safeIgst : '0.000',
+          },
+        })
 
-      if (response.responseCode === '200') {
-        message.success(response.responseMessage)
-        setIsdisablebtn(false)
-        onCancel()
-      } else {
-        message.error(response.responseMessage)
+        if (response.responseCode === '200') {
+          message.success(response.responseMessage)
+          onCancel()
+        } else {
+          message.error(response.responseMessage)
+        }
+      } finally {
         setIsdisablebtn(false)
       }
     } else if (
@@ -561,283 +575,298 @@ const PaymentTermsPopUp = props => {
     }
   }
 
+  const safeOnCancel = () => {
+    if (isdisablebtn) return
+    onCancel()
+  }
+
   const title = `PRA Details - ${resp.poId} - ${resp.term} - ${resp.isLast}`
   const DetailsTableComponent = () => {
     return (
-      <Form form={form} onFinish={onFinish} layout="vertical">
-        <div className="container-fluid">
-          {/* First Row */}
-          <div className="row">
-            <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-              <Form.Item name="po" label="PO">
-                <Input type="text" disabled />
-              </Form.Item>
-            </div>
-            <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-              <Form.Item name="podate" label="PO Date">
-                <DatePicker format="DD-MM-YYYY" disabled />
-              </Form.Item>
-            </div>
-            <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-              <Form.Item name="paymentType" label="Payment Type">
-                <Input type="text" disabled />
-              </Form.Item>
-            </div>
-            <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-              <Form.Item name="paymentAmount" label={`Taxable Value ${Menulistdata[0].currency}`}>
-                <Input type="text" disabled />
-              </Form.Item>
-            </div>
-            <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-              <Form.Item name="pendingAmount" label={`Pending Value ${Menulistdata[0].currency}`}>
-                <Input type="text" disabled />
-              </Form.Item>
-              {resp.isLast === '1' && (
-                <div style={{ display: 'none', marginTop: '-24px' }}>
-                  <Checkbox checked={isPendingChecked} onChange={handleCheckboxChangePendingAmount}>
-                    <span>Without GST</span>
-                  </Checkbox>
+      <Spin spinning={isdisablebtn} size="large" tip="Please wait...">
+        <Form form={form} onFinish={onFinish} layout="vertical" disabled={isdisablebtn}>
+          <div className="container-fluid">
+            {/* First Row */}
+            <div className="row">
+              <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                <Form.Item name="po" label="PO">
+                  <Input type="text" disabled />
+                </Form.Item>
+              </div>
+              <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                <Form.Item name="podate" label="PO Date">
+                  <DatePicker format="DD-MM-YYYY" disabled />
+                </Form.Item>
+              </div>
+              <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                <Form.Item name="paymentType" label="Payment Type">
+                  <Input type="text" disabled />
+                </Form.Item>
+              </div>
+              <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                <Form.Item name="paymentAmount" label={`Taxable Value ${Menulistdata[0].currency}`}>
+                  <Input type="text" disabled />
+                </Form.Item>
+              </div>
+              <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                <Form.Item name="pendingAmount" label={`Pending Value ${Menulistdata[0].currency}`}>
+                  <Input type="text" disabled />
+                </Form.Item>
+                {resp.isLast === '1' && (
+                  <div style={{ display: 'none', marginTop: '-24px' }}>
+                    <Checkbox
+                      checked={isPendingChecked}
+                      onChange={handleCheckboxChangePendingAmount}
+                    >
+                      <span>Without GST</span>
+                    </Checkbox>
+                  </div>
+                )}
+              </div>
+              <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                <Form.Item
+                  name="invoiceValue"
+                  label={
+                    <span>
+                      {`Amount ${Menulistdata[0].currency}`}
+                      <span style={{ color: 'red' }}>*</span>
+                    </span>
+                  }
+                >
+                  <AutoComplete
+                    onBlur={handleAutoCompleteChangeValue}
+                    disabled={resp.pendingAmount === '0.000'}
+                  >
+                    <Input placeholder="Type here" type="Number" />
+                  </AutoComplete>
+                </Form.Item>
+              </div>
+              <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                <Form.Item
+                  name="deliveryType"
+                  label={
+                    <span>
+                      Delivery Type<span style={{ color: 'red' }}>*</span>
+                    </span>
+                  }
+                >
+                  <AutoComplete options={obj} onBlur={handleAutoCompleteChange}>
+                    <Input placeholder="Select or type here" />
+                  </AutoComplete>
+                </Form.Item>
+              </div>
+              <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                <Form.Item name="vendorName" label="Vendor Name">
+                  <Input type="text" disabled />
+                </Form.Item>
+              </div>
+              <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+                <Form.Item
+                  name="grn"
+                  label={
+                    <span>
+                      GRN<span style={{ color: 'red' }}>*</span>
+                    </span>
+                  }
+                  style={{ marginBottom: '10px' }}
+                >
+                  <Select
+                    id="approvalDropdown"
+                    style={{ width: '100%' }}
+                    placeholder="Select"
+                    mode="multiple"
+                    value={selectedValues}
+                    onChange={handleChange}
+                    disabled={grnDisabled}
+                  >
+                    {Multiselect.map(option => (
+                      <Option key="serial-number" value={option.grnHdrId}>
+                        {option.grnCode !== null ? option.grnCode : ''}
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+                <div style={{ marginTop: '-10px' }}>
+                  <Checkbox checked={grnDisabled} onChange={handleCheckboxChange} />
+                  <span>NA</span>
                 </div>
+              </div>
+              <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                <Form.Item name="invoiceNumber" label="Proforma / Invoice Number">
+                  <Input type="text" placeholder="Type here" disabled={isGrnSelected} />
+                </Form.Item>
+              </div>
+              <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+                <Form.Item
+                  name="poCostType"
+                  label={
+                    <span>
+                      Po Cost Type<span style={{ color: 'red' }}>*</span>
+                    </span>
+                  }
+                  style={{ marginBottom: '10px' }}
+                >
+                  <Select
+                    id="poCostTypeDropDown"
+                    style={{ width: '100%' }}
+                    placeholder="Select"
+                    // mode="multiple"
+                    value={poCostTypeValue}
+                    onChange={handlePoCostTypeChange}
+                    // disabled={grnDisabled}
+                  >
+                    {PoCostType.map(option => (
+                      <Option key={option.pctId} value={option.pctId}>
+                        {option.pctDesc !== null ? option.pctDesc : ''}
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              </div>
+              <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                <Form.Item name="invoiceDate" label="Proforma / Invoice Date">
+                  <DatePicker format="DD-MM-YYYY" disabled={isGrnSelected} />
+                </Form.Item>
+              </div>
+              <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                <Form.Item name="dueDate" label="Due Date">
+                  <DatePicker format="DD-MM-YYYY" />
+                </Form.Item>
+              </div>
+              {resp?.isLast === '1' && (
+                <>
+                  <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                    <Form.Item
+                      name="transportCharge"
+                      label={
+                        <span>
+                          {`Transport Charge`}
+                          {/* <span style={{ color: 'red' }}>*</span> */}
+                        </span>
+                      }
+                    >
+                      <AutoComplete
+                        onBlur={handlePendingValueForTransport}
+                        // eslint-disable-next-line
+                        disabled={form.getFieldValue('transportCharge') == 0}
+                      >
+                        <Input placeholder="Type here" type="Number" />
+                      </AutoComplete>
+                    </Form.Item>
+                  </div>
+                  <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                    <Form.Item
+                      name="pfCharge"
+                      label={
+                        <span>
+                          {`P&F`}
+                          {/* <span style={{ color: 'red' }}>*</span> */}
+                        </span>
+                      }
+                    >
+                      <AutoComplete
+                        onBlur={handlePendingValueForPf}
+                        // eslint-disable-next-line
+                        disabled={form.getFieldValue('pfCharge') == 0}
+                      >
+                        <Input placeholder="Type here" type="Number" />
+                      </AutoComplete>
+                    </Form.Item>
+                  </div>
+                  <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                    <Form.Item
+                      name="insuranceCharge"
+                      label={
+                        <span>
+                          {`Insurance`}
+                          {/* <span style={{ color: 'red' }}>*</span> */}
+                        </span>
+                      }
+                    >
+                      <AutoComplete
+                        onBlur={handlePendingValueForInsurance}
+                        // eslint-disable-next-line
+                        disabled={form.getFieldValue('insuranceCharge') == 0}
+                      >
+                        <Input placeholder="Type here" type="Number" />
+                      </AutoComplete>
+                    </Form.Item>
+                  </div>
+                  <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                    <Form.Item
+                      name="otherCharge"
+                      label={
+                        <span>
+                          {`Others`}
+                          {/* <span style={{ color: 'red' }}>*</span> */}
+                        </span>
+                      }
+                    >
+                      <AutoComplete
+                        onBlur={handlePendingValueForOther}
+                        // eslint-disable-next-line
+                        disabled={form.getFieldValue('otherCharge') == 0}
+                      >
+                        <Input placeholder="Type here" type="Number" />
+                      </AutoComplete>
+                    </Form.Item>
+                  </div>
+                  <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                    <Form.Item
+                      name="gstValue"
+                      label={
+                        <span>
+                          {`GST`}
+                          {/* <span style={{ color: 'red' }}>*</span> */}
+                        </span>
+                      }
+                    >
+                      <AutoComplete
+                        onBlur={handlePendingValueForGst}
+                        // eslint-disable-next-line
+                        disabled={form.getFieldValue('gstValue') == 0}
+                      >
+                        <Input placeholder="Type here" type="Number" />
+                      </AutoComplete>
+                    </Form.Item>
+                  </div>
+                  <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                    <Form.Item name="totalAmountPayable" label="Amount Payable">
+                      <Input type="text" disabled />
+                    </Form.Item>
+                  </div>
+                </>
               )}
             </div>
-            <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-              <Form.Item
-                name="invoiceValue"
-                label={
-                  <span>
-                    {`Amount ${Menulistdata[0].currency}`}
-                    <span style={{ color: 'red' }}>*</span>
-                  </span>
-                }
-              >
-                <AutoComplete
-                  onBlur={handleAutoCompleteChangeValue}
-                  disabled={resp.pendingAmount === '0.000'}
-                >
-                  <Input placeholder="Type here" type="Number" />
-                </AutoComplete>
-              </Form.Item>
-            </div>
-            <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-              <Form.Item
-                name="deliveryType"
-                label={
-                  <span>
-                    Delivery Type<span style={{ color: 'red' }}>*</span>
-                  </span>
-                }
-              >
-                <AutoComplete options={obj} onBlur={handleAutoCompleteChange}>
-                  <Input placeholder="Select or type here" />
-                </AutoComplete>
-              </Form.Item>
-            </div>
-            <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-              <Form.Item name="vendorName" label="Vendor Name">
-                <Input type="text" disabled />
-              </Form.Item>
-            </div>
-            <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
-              <Form.Item
-                name="grn"
-                label={
-                  <span>
-                    GRN<span style={{ color: 'red' }}>*</span>
-                  </span>
-                }
-                style={{ marginBottom: '10px' }}
-              >
-                <Select
-                  id="approvalDropdown"
-                  style={{ width: '100%' }}
-                  placeholder="Select"
-                  mode="multiple"
-                  value={selectedValues}
-                  onChange={handleChange}
-                  disabled={grnDisabled}
-                >
-                  {Multiselect.map(option => (
-                    <Option key="serial-number" value={option.grnHdrId}>
-                      {option.grnCode !== null ? option.grnCode : ''}
-                    </Option>
-                  ))}
-                </Select>
-              </Form.Item>
-              <div style={{ marginTop: '-10px' }}>
-                <Checkbox checked={grnDisabled} onChange={handleCheckboxChange} />
-                <span>NA</span>
+
+            {/* Third Row */}
+            {/* <div className="row">
+              <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+                <Form.Item name="grnNa" label="GRN NA" valuePropName="checked">
+                  <Checkbox />
+                </Form.Item>
               </div>
-            </div>
-            <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-              <Form.Item name="invoiceNumber" label="Proforma / Invoice Number">
-                <Input type="text" placeholder="Type here" disabled={isGrnSelected} />
-              </Form.Item>
-            </div>
-            <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
-              <Form.Item
-                name="poCostType"
-                label={
-                  <span>
-                    Po Cost Type<span style={{ color: 'red' }}>*</span>
-                  </span>
-                }
-                style={{ marginBottom: '10px' }}
+            </div> */}
+
+            {/* Button Row */}
+            <div
+              style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginTop: '20px' }}
+            >
+              <Button
+                type="primary"
+                htmlType="submit"
+                disabled={isdisablebtn}
+                loading={isdisablebtn}
               >
-                <Select
-                  id="poCostTypeDropDown"
-                  style={{ width: '100%' }}
-                  placeholder="Select"
-                  // mode="multiple"
-                  value={poCostTypeValue}
-                  onChange={handlePoCostTypeChange}
-                  // disabled={grnDisabled}
-                >
-                  {PoCostType.map(option => (
-                    <Option key={option.pctId} value={option.pctId}>
-                      {option.pctDesc !== null ? option.pctDesc : ''}
-                    </Option>
-                  ))}
-                </Select>
-              </Form.Item>
+                Submit
+              </Button>
+              <Button type="primary" disabled={isdisablebtn} onClick={safeOnCancel}>
+                Cancel
+              </Button>
             </div>
-            <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-              <Form.Item name="invoiceDate" label="Proforma / Invoice Date">
-                <DatePicker format="DD-MM-YYYY" disabled={isGrnSelected} />
-              </Form.Item>
-            </div>
-            <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-              <Form.Item name="dueDate" label="Due Date">
-                <DatePicker format="DD-MM-YYYY" />
-              </Form.Item>
-            </div>
-            {resp?.isLast === '1' && (
-              <>
-                <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-                  <Form.Item
-                    name="transportCharge"
-                    label={
-                      <span>
-                        {`Transport Charge`}
-                        {/* <span style={{ color: 'red' }}>*</span> */}
-                      </span>
-                    }
-                  >
-                    <AutoComplete
-                      onBlur={handlePendingValueForTransport}
-                      // eslint-disable-next-line
-                      disabled={form.getFieldValue('transportCharge') == 0}
-                    >
-                      <Input placeholder="Type here" type="Number" />
-                    </AutoComplete>
-                  </Form.Item>
-                </div>
-                <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-                  <Form.Item
-                    name="pfCharge"
-                    label={
-                      <span>
-                        {`P&F`}
-                        {/* <span style={{ color: 'red' }}>*</span> */}
-                      </span>
-                    }
-                  >
-                    <AutoComplete
-                      onBlur={handlePendingValueForPf}
-                      // eslint-disable-next-line
-                      disabled={form.getFieldValue('pfCharge') == 0}
-                    >
-                      <Input placeholder="Type here" type="Number" />
-                    </AutoComplete>
-                  </Form.Item>
-                </div>
-                <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-                  <Form.Item
-                    name="insuranceCharge"
-                    label={
-                      <span>
-                        {`Insurance`}
-                        {/* <span style={{ color: 'red' }}>*</span> */}
-                      </span>
-                    }
-                  >
-                    <AutoComplete
-                      onBlur={handlePendingValueForInsurance}
-                      // eslint-disable-next-line
-                      disabled={form.getFieldValue('insuranceCharge') == 0}
-                    >
-                      <Input placeholder="Type here" type="Number" />
-                    </AutoComplete>
-                  </Form.Item>
-                </div>
-                <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-                  <Form.Item
-                    name="otherCharge"
-                    label={
-                      <span>
-                        {`Others`}
-                        {/* <span style={{ color: 'red' }}>*</span> */}
-                      </span>
-                    }
-                  >
-                    <AutoComplete
-                      onBlur={handlePendingValueForOther}
-                      // eslint-disable-next-line
-                      disabled={form.getFieldValue('otherCharge') == 0}
-                    >
-                      <Input placeholder="Type here" type="Number" />
-                    </AutoComplete>
-                  </Form.Item>
-                </div>
-                <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-                  <Form.Item
-                    name="gstValue"
-                    label={
-                      <span>
-                        {`GST`}
-                        {/* <span style={{ color: 'red' }}>*</span> */}
-                      </span>
-                    }
-                  >
-                    <AutoComplete
-                      onBlur={handlePendingValueForGst}
-                      // eslint-disable-next-line
-                      disabled={form.getFieldValue('gstValue') == 0}
-                    >
-                      <Input placeholder="Type here" type="Number" />
-                    </AutoComplete>
-                  </Form.Item>
-                </div>
-                <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-                  <Form.Item name="totalAmountPayable" label="Amount Payable">
-                    <Input type="text" disabled />
-                  </Form.Item>
-                </div>
-              </>
-            )}
           </div>
-
-          {/* Third Row */}
-          {/* <div className="row">
-            <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
-              <Form.Item name="grnNa" label="GRN NA" valuePropName="checked">
-                <Checkbox />
-              </Form.Item>
-            </div>
-          </div> */}
-
-          {/* Button Row */}
-          <div
-            style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginTop: '20px' }}
-          >
-            <Button type="primary" htmlType="submit" disabled={isdisablebtn}>
-              Submit
-            </Button>
-            <Button type="primary" onClick={onCancel}>
-              Cancel
-            </Button>
-          </div>
-        </div>
-      </Form>
+        </Form>
+      </Spin>
     )
   }
 
@@ -846,7 +875,8 @@ const PaymentTermsPopUp = props => {
       <ModalPopup
         text={title}
         isModalVisible={isLoading}
-        onCancel={onCancel}
+        onCancel={safeOnCancel}
+        maskClosable={!isdisablebtn}
         FieldsComponent={DetailsTableComponent}
         width={1450}
       />

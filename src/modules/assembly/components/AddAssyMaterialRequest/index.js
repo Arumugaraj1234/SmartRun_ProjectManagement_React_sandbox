@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import store from 'store'
 // import _ from 'lodash'
 import { debounce } from 'lodash'
 
 // import { flushSync } from 'react-dom';
-import { Form, Select, Table, Input, message, Spin } from 'antd'
+import { Form, Select, Table, Input, message, Checkbox } from 'antd'
 import { useMediaQuery } from 'react-responsive'
 import ModalPopup from 'components/shared/ModalPopupComponent'
 import Buttons from 'components/shared/ButtonComponent'
@@ -23,9 +23,13 @@ const AddAssyIndent = ({ handleCancel, isModalVisible }) => {
   const [originalTableData, setOriginalTableData] = useState([])
   const [disableSbmtBtn, setDisableSbmtBtn] = useState(false)
   const [filtersinfo, setfilterinfo] = useState([])
+  const [showSelectedOnly, setShowSelectedOnly] = useState(false)
+  const [selectedSnos, setSelectedSnos] = useState(new Set())
+  const [searchText, setSearchText] = useState('')
+  const [searchInputValue, setSearchInputValue] = useState('')
   const isMobile = useMediaQuery({ query: '(max-width: 769px)' })
-  const searchInputRef = useRef(null)
-  // const [searchText, setSearchText] = useState('')
+  const handleSearchRef = useRef(debounce(value => setSearchText(value), 300))
+  const fieldsStateRef = useRef({})
   const { Option } = Select
   const tenantid = store.get('tenantId')
   const employeeId = store.get('employeeId')
@@ -41,6 +45,10 @@ const AddAssyIndent = ({ handleCancel, isModalVisible }) => {
     Addform.resetFields()
     inputForm.resetFields()
     getKeyareas()
+    setShowSelectedOnly(false)
+    setSelectedSnos(new Set())
+    setSearchText('')
+    setSearchInputValue('')
   }, [isModalVisible])
 
   const getKeyareas = async () => {
@@ -186,12 +194,17 @@ const AddAssyIndent = ({ handleCancel, isModalVisible }) => {
             <Input
               onChange={e => {
                 const { value } = e.target
-                if (/^\d+$/.test(value) || value === '') {
-                  handleReqQtyChange(record, e, record.sno)
-                }
+                // Form.Item auto-syncs whatever the raw input emits, so an invalid value (e.g.
+                // "-5") stays displayed unless we explicitly overwrite it back — stripping
+                // non-digits (including "-") here and always writing the sanitized value through
+                // handleReqQtyChange, instead of only calling it when the raw value already
+                // passed validation, is what makes that overwrite actually happen.
+                const sanitized = value.replace(/\D/g, '')
+                handleReqQtyChange(record, { target: { value: sanitized } }, record.sno)
               }}
               placeholder="Type here..."
-              type="number"
+              type="text"
+              inputMode="numeric"
             />
           </Form.Item>
         </Form>
@@ -199,104 +212,32 @@ const AddAssyIndent = ({ handleCancel, isModalVisible }) => {
     },
   ]
 
-  // const handleSearch = useCallback((value) => {
-  //   setSearchText(value);
-
-  //   if (!originalTableData) return;
-
-  //   const searchLower = value.toLowerCase();
-  //   const filtered =
-  //     value === ''
-  //       ? originalTableData
-  //       : originalTableData.filter(item => {
-  //           return Object.keys(item).some(key => {
-  //             if (!Object.prototype.hasOwnProperty.call(item, key)) return false;
-
-  //             const itemValue = item[key];
-  //             return (
-  //               itemValue != null &&
-  //               String(itemValue).toLowerCase().includes(searchLower)
-  //             );
-  //           });
-  //         });
-
-  //   setCreateTabledata(filtered);
-  // }, [originalTableData]);
-
-  // const debouncedSearch = useMemo(
-  //   () => _.debounce((value) => {
-  //     if (!originalTableData) return;
-
-  //     const searchLower = value.toLowerCase();
-  //     const filtered = value === ''
-  //       ? originalTableData
-  //       : originalTableData.filter(item =>
-  //           Object.keys(item).some(key => {
-  //             const itemValue = item[key];
-  //             return itemValue != null &&
-  //                    String(itemValue).toLowerCase().includes(searchLower);
-  //           })
-  //         );
-
-  //     setCreateTabledata(filtered);
-  //   }, 300),
-  //   [originalTableData]
-  // );
-
-  // const handleSearchChange = (e) => {
-  //   const { value, selectionStart } = e.target;
-
-  //   flushSync(() => {
-  //     setSearchText(value);
-  //   });
-
-  //   if (searchInputRef.current) {
-  //     searchInputRef.current.input.selectionStart = selectionStart;
-  //     searchInputRef.current.input.selectionEnd = selectionStart;
-  //   }
-
-  //   debouncedSearch(value);
-  // };
-
-  const FieldsComponent = () => {
-    const [finaldata, setFinalData] = useState(createTabledata)
-    const [loading, setLoading] = useState(false)
-    // const handleSearchChange = (e) => {
-    //   const { value } = e.target;
-    //   const filtered = createTabledata.filter((item) =>
-    //     Object.values(item).some((field) =>
-    //       String(field).toLowerCase().includes(value.toLowerCase())
-    //     )
-    //   );
-    //   console.log(filtered);
-    //   if(filtered && filtered.length > 0 ){
-    //     setFinalData(filtered);
-    //   }else{
-    //     setFinalData(createTabledata);
-    //   }
-    // };
-    const debouncedSearch = useMemo(
-      () =>
-        debounce(value => {
-          setLoading(true)
-
-          const filtered = originalTableData.filter(item =>
-            Object.values(item).some(field =>
-              String(field)
-                .toLowerCase()
-                .includes(value.toLowerCase()),
-            ),
-          )
-
-          setFinalData(filtered.length > 0 ? filtered : originalTableData)
-          setLoading(false)
-        }, 300),
-      [originalTableData],
-    )
-
-    const handleSearchChange = e => {
-      debouncedSearch(e.target.value)
-    }
+  // FieldsComponent must keep a stable identity across renders: it's rendered as
+  // <FieldsComponent /> inside ModalPopupComponent, and every reactive value it needs (station/sub
+  // assy lists, table data, filters, selection, search) is read fresh on each call via
+  // fieldsStateRef.current (reassigned every render, below) rather than closed over directly —
+  // otherwise any parent state update (e.g. selection tracking while typing a qty) would recreate
+  // this function, which React treats as a brand-new component type at the same position and fully
+  // remounts, wiping out anything with its own local state (previously: the search filter).
+  const FieldsComponent = useRef(() => {
+    const {
+      dataKeyArea: fsDataKeyArea,
+      dataKeySubArea: fsDataKeySubArea,
+      statnType: fsStatnType,
+      showPopUpTable: fsShowPopUpTable,
+      isMobile: fsIsMobile,
+      columns: fsColumns,
+      displayedData: fsDisplayedData,
+      handleChange: fsHandleChange,
+      showSelectedOnly: fsShowSelectedOnly,
+      selectedSnos: fsSelectedSnos,
+      searchInputValue: fsSearchInputValue,
+      handleSubmit: fsHandleSubmit,
+      handleClear: fsHandleClear,
+      setValuestoAll: fsSetValuestoAll,
+      getKeusubareas: fsGetKeusubareas,
+    } = fieldsStateRef.current
+    const handleSearch = handleSearchRef.current
     return (
       <div>
         <div>
@@ -311,19 +252,19 @@ const AddAssyIndent = ({ handleCancel, isModalVisible }) => {
                 }
               >
                 <Select
-                  value={statnType}
+                  value={fsStatnType}
                   onChange={(value, option) => {
                     Addform.resetFields(['subAssy'])
                     setStatnType(value)
-                    getKeusubareas(value, option.key)
+                    fsGetKeusubareas(value, option.key)
                   }}
                   placeholder="Select Station "
                   id="statintype"
                   style={{ marginRight: '10px', width: '180px' }}
                 >
                   <Option value="getall">Get All</Option>
-                  {dataKeyArea &&
-                    dataKeyArea.map(item => (
+                  {fsDataKeyArea &&
+                    fsDataKeyArea.map(item => (
                       <Option key={item.pkaId} value={item.pkaId}>
                         {item.keyName}({item.code})
                       </Option>
@@ -344,8 +285,8 @@ const AddAssyIndent = ({ handleCancel, isModalVisible }) => {
                   id="statintype"
                   style={{ marginRight: '10px', width: '180px' }}
                 >
-                  {dataKeySubArea &&
-                    dataKeySubArea.map(item => (
+                  {fsDataKeySubArea &&
+                    fsDataKeySubArea.map(item => (
                       <Option key={item.pkId} value={item.pkaId}>
                         {item.keyName}
                         {item.code ? `(${item.code})` : ''}
@@ -381,48 +322,64 @@ const AddAssyIndent = ({ handleCancel, isModalVisible }) => {
               gap: '12px',
             }}
           >
-            <Buttons text="Get Details" type="primary" onClick={handleSubmit} />
+            <Buttons text="Get Details" type="primary" onClick={fsHandleSubmit} />
             <Buttons
               text="Clear"
               type="primary"
               onClick={() => {
-                handleClear()
+                fsHandleClear()
               }}
             />
           </div>
         </div>
         <div
           className="custom_antd_Table"
-          style={{ marginTop: '25px', display: showPopUpTable ? 'block' : 'none' }}
+          style={{ marginTop: '25px', display: fsShowPopUpTable ? 'block' : 'none' }}
         >
-          <Buttons text="Request All" type="primary" onClick={setValuestoAll} />
-          <Input.Search
+          <Buttons text="Request All" type="primary" onClick={fsSetValuestoAll} />
+          <div
             style={{
-              margin: '0 0 10px 0',
-              width: isMobile ? '100%' : '30%',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
               float: 'right',
+              flexWrap: 'wrap',
               paddingTop: '5px',
             }}
-            ref={searchInputRef}
-            placeholder="Search..."
-            onChange={handleSearchChange}
-            // value={searchText}
-            enterButton
-          />
-          <Spin spinning={loading} tip="Loading data...">
-            <Table
-              columns={columns}
-              dataSource={finaldata}
-              pagination={false}
-              onChange={handleChange}
-              scroll={{ y: 400 }}
-              bordered
+          >
+            <Checkbox
+              checked={fsShowSelectedOnly}
+              disabled={fsSelectedSnos.size === 0}
+              onChange={e => setShowSelectedOnly(e.target.checked)}
+            >
+              Show selected only ({fsSelectedSnos.size})
+            </Checkbox>
+            <Input.Search
+              style={{
+                width: fsIsMobile ? '100%' : '260px',
+              }}
+              placeholder="Search..."
+              value={fsSearchInputValue}
+              onChange={e => {
+                const cleaned = e.target.value.replace(/\s+/g, '').toLowerCase()
+                setSearchInputValue(cleaned)
+                handleSearch(cleaned)
+              }}
+              enterButton
             />
-          </Spin>
+          </div>
+          <Table
+            columns={fsColumns}
+            dataSource={fsDisplayedData}
+            pagination={false}
+            onChange={fsHandleChange}
+            scroll={{ y: 400 }}
+            bordered
+          />
         </div>
       </div>
     )
-  }
+  }).current
   const ButtonsComponent = () => {
     return (
       <div style={{ display: showPopUpTable ? 'block' : 'none' }}>
@@ -458,6 +415,10 @@ const AddAssyIndent = ({ handleCancel, isModalVisible }) => {
       inputForm.setFieldsValue(Object.assign({}, ...updatedValues))
     }
     setshowPopUpTable(false)
+    setShowSelectedOnly(false)
+    setSelectedSnos(new Set())
+    setSearchText('')
+    setSearchInputValue('')
   }
   const handleCreate = async () => {
     setDisableSbmtBtn(true)
@@ -546,6 +507,10 @@ const AddAssyIndent = ({ handleCancel, isModalVisible }) => {
     // setSubAssyType(undefined)
     Addform.resetFields()
     inputForm.resetFields()
+    setShowSelectedOnly(false)
+    setSelectedSnos(new Set())
+    setSearchText('')
+    setSearchInputValue('')
   }
 
   const handleSubmit = async () => {
@@ -580,9 +545,6 @@ const AddAssyIndent = ({ handleCancel, isModalVisible }) => {
         requestPath: 'retriveFromStock',
         requestData: keyareaobj,
       })
-      setOriginalTableData(response?.responseData || [])
-      setCreateTabledata(response?.responseData || [])
-
       let data = []
 
       if (response && response.responseData !== null && response.responseData !== undefined) {
@@ -596,6 +558,11 @@ const AddAssyIndent = ({ handleCancel, isModalVisible }) => {
       } else {
         data = []
       }
+      // originalTableData must carry the same sno-tagged rows as createTabledata — the search
+      // box filters over originalTableData, and each row's Form.Item is keyed by record.sno, so
+      // filtered rows missing sno all collapsed onto the same field name ("requestedQtyundefined"),
+      // making one row's typed qty appear to apply to every filtered row.
+      setOriginalTableData(data)
       setCreateTabledata(data)
     } catch (error) {
       console.error('Error fetching data:', error)
@@ -607,9 +574,23 @@ const AddAssyIndent = ({ handleCancel, isModalVisible }) => {
     if (Number(event.target.value) > Number(record.availableQty)) {
       inputForm.setFieldsValue({ [`requestedQty${sno}`]: '' })
       messageReturn(629)
+      setSelectedSnos(prev => {
+        const next = new Set(prev)
+        next.delete(sno)
+        return next
+      })
     } else {
       // const setIndexId = `requestedQty${sno}`
       inputForm.setFieldsValue({ [`requestedQty${sno}`]: event.target.value })
+      setSelectedSnos(prev => {
+        const next = new Set(prev)
+        if (event.target.value !== '' && Number(event.target.value) > 0) {
+          next.add(sno)
+        } else {
+          next.delete(sno)
+        }
+        return next
+      })
     }
 
     /* const qtyform = inputForm.getFieldsValue()
@@ -626,7 +607,38 @@ const AddAssyIndent = ({ handleCancel, isModalVisible }) => {
         return { [fieldName]: requestedqty }
       })
       inputForm.setFieldsValue(Object.assign({}, ...updatedValues))
+      setSelectedSnos(new Set(createTabledata.map(record => record.sno)))
     }
+  }
+
+  const displayedData = (originalTableData || []).filter(item => {
+    const matchesSelection = !showSelectedOnly || selectedSnos.has(item.sno)
+    if (!matchesSelection) return false
+    if (!searchText) return true
+    return Object.values(item).some(field =>
+      String(field)
+        .replace(/\s+/g, '')
+        .toLowerCase()
+        .includes(searchText),
+    )
+  })
+
+  fieldsStateRef.current = {
+    dataKeyArea,
+    dataKeySubArea,
+    statnType,
+    showPopUpTable,
+    isMobile,
+    columns,
+    displayedData,
+    handleChange,
+    showSelectedOnly,
+    selectedSnos,
+    searchInputValue,
+    handleSubmit,
+    handleClear,
+    setValuestoAll,
+    getKeusubareas,
   }
 
   return (

@@ -52,6 +52,7 @@ const SupCompState = ({
   indentcode,
   onmodalCancel,
   ProcessCode1,
+  submittingRef,
 }) => {
   const [allPropForm] = Form.useForm()
   const [percentForm] = Form.useForm()
@@ -104,6 +105,14 @@ const SupCompState = ({
   const [formdisable, setFormdisable] = useState(false)
   const [loading, setLoading] = useState(true)
   const [isdisablebtn, setIsdisablebtn] = useState(false)
+  // Shared across Save/Approve/Previous Stage/Delete PJS — these all mutate the same PJS
+  // record and shouldn't run concurrently, so one flag blocks/loads all of them at once.
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  // Mirrors the submitting state onto the parent PJSComponent's ref, so its Modal's X/Esc
+  // close can ignore dismissal mid-request without lifting this state up into that parent.
+  useEffect(() => {
+    if (submittingRef) submittingRef.current = isdisablebtn || isSubmitting
+  }, [isdisablebtn, isSubmitting, submittingRef])
   const [igscpId, setIgscpId] = useState('')
   const [isOverDue, setIsOverDue] = useState(false)
   const [vendorQualify, setVendorQualify] = useState([])
@@ -924,26 +933,31 @@ const SupCompState = ({
   const AddRemarksComponent = seq => {
     return (
       <div>
-        <Card bordered={false} className="custom-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <div>
-              <h5>Add Remarks</h5>
-              <Form form={inputForm}>
-                <Form.Item name="remarks">
-                  <TextArea rows={4} />
-                </Form.Item>
-              </Form>
-              <div style={{ display: 'flex', justifyContent: 'center' }}>
-                <ButtonComponent
-                  text="Save"
-                  type="primary"
-                  disable={isdisablebtn}
-                  onClick={() => handlescsapproval(seq)}
-                />
+        {/* Renders through antd's Popover (a document.body portal), so it sits outside the
+        main Modal — this Spin has to cover it directly to be visible while submitting. */}
+        <Spin spinning={isSubmitting} size="large" tip="Please wait...">
+          <Card bordered={false} className="custom-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div>
+                <h5>Add Remarks</h5>
+                <Form form={inputForm}>
+                  <Form.Item name="remarks">
+                    <TextArea rows={4} />
+                  </Form.Item>
+                </Form>
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <ButtonComponent
+                    text="Save"
+                    type="primary"
+                    disable={isdisablebtn || isSubmitting}
+                    loading={isSubmitting}
+                    onClick={() => handlescsapproval(seq)}
+                  />
+                </div>
               </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        </Spin>
       </div>
     )
   }
@@ -951,26 +965,29 @@ const SupCompState = ({
   const AddRemarksprevComponent = seq => {
     return (
       <div>
-        <Card bordered={false} className="custom-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <div>
-              <h5>Add Remarks</h5>
-              <Form form={inputForm}>
-                <Form.Item name="remarks">
-                  <TextArea rows={4} />
-                </Form.Item>
-              </Form>
-              <div style={{ display: 'flex', justifyContent: 'center' }}>
-                <ButtonComponent
-                  text="Save"
-                  type="primary"
-                  disable={isdisablebtn}
-                  onClick={() => handlescsapproval(seq)}
-                />
+        <Spin spinning={isSubmitting} size="large" tip="Please wait...">
+          <Card bordered={false} className="custom-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div>
+                <h5>Add Remarks</h5>
+                <Form form={inputForm}>
+                  <Form.Item name="remarks">
+                    <TextArea rows={4} />
+                  </Form.Item>
+                </Form>
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <ButtonComponent
+                    text="Save"
+                    type="primary"
+                    disable={isdisablebtn || isSubmitting}
+                    loading={isSubmitting}
+                    onClick={() => handlescsapproval(seq)}
+                  />
+                </div>
               </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        </Spin>
       </div>
     )
   }
@@ -1158,85 +1175,90 @@ const SupCompState = ({
   // )
 
   const handlescsapproval = async seq => {
-    const insertCheck = await handleinsert(true)
-    console.log('finalval,,,.....', finalVal)
-    const formvalue = inputForm.getFieldValue()
-    let isValid = false
-    if (vendorQualified !== null && vendorQualified === 'L1') {
-      const landedCost = parseFloat(
-        (allPropForm.getFieldValue('landedCostL1fin') || '0').toString().replace(/,/g, ''),
-      )
-      isValid = landedCost >= parseFloat(praAmount)
-      console.log('L1 isValid', isValid, landedCost)
-    } else if (vendorQualified !== null && vendorQualified === 'L2') {
-      const landedCost = parseFloat(
-        (allPropForm.getFieldValue('landedCostL2fin') || '0').toString().replace(/,/g, ''),
-      )
-      isValid = landedCost >= parseFloat(praAmount)
-      console.log('L2 isValid', isValid, landedCost)
-    } else {
-      const landedCost = parseFloat(
-        (allPropForm.getFieldValue('landedCostL3fin') || '0').toString().replace(/,/g, ''),
-      )
-      isValid = landedCost >= parseFloat(praAmount)
-      console.log('L3 isValid', isValid, landedCost)
-    }
-
-    const props = {
-      currentseq: seq,
-      empId: employeeId,
-      tenantId,
-      scsFinalCost: finalcost,
-      hdrId: igscpId,
-      remarks: formvalue.remarks,
-      pmId: processCode,
-      processCode: ProcessCode1 === '8' ? ProcessCode1 : '5',
-
-      pmHdrId,
-      enquiryId,
-      docTypeCode,
-      mstId,
-    }
-    if (insertCheck && isValid) {
-      const httpapprovals = await IndentGroupgetDetails({
-        requestPath: 'updateScpSeqAndStatus',
-        requestData: props,
-      })
-
-      if (httpapprovals.responseCode === '200') {
-        message.success(httpapprovals.responseMessage)
-        if (
-          scmHdrdata?.[0]?.costFlowType === 'NEW' &&
-          docStatus?.[0]?.docStatusDesc === 'Project Approved'
-        ) {
-          // This PJS just crossed the "committed" threshold - add its own value to the
-          // project header's Actual Spent/Balance Available immediately, client-side,
-          // instead of refetching the whole project summary from the server. finalcost
-          // (L1/L2/L3_FINAL_SUB_TOTAL) is exactly what gets written into
-          // indent_hdr.SCM_BUDGET_ALLOCATED, which is the column every backend
-          // committed-PJS-total query sums into Actual Spent - see IndentGroupService
-          // updateInScp (~line 710-713) and IIndentGroupDAO.getCommittedScsTotalByProjectId.
-          const parseAmount = v => parseFloat(String(v).replace(/,/g, '')) || 0
-          const formatAmount = v => new Intl.NumberFormat('en-IN', { style: 'decimal' }).format(v)
-          const pjsValue = parseFloat(finalcost) || 0
-          const currentEnquiry = store.get('Enquiry') || []
-          const updatedEnquiry = currentEnquiry.map(item => {
-            if (item.key === 9) {
-              return { ...item, value: formatAmount(parseAmount(item.value) + pjsValue) }
-            }
-            if (item.key === 10) {
-              return { ...item, value: formatAmount(parseAmount(item.value) - pjsValue) }
-            }
-            return item
-          })
-          store.set('Enquiry', updatedEnquiry)
-          window.dispatchEvent(new CustomEvent('enquiry-refresh', { detail: updatedEnquiry }))
-        }
-        onmodalCancel()
+    setIsSubmitting(true)
+    try {
+      const insertCheck = await safeHandleInsert(true)
+      console.log('finalval,,,.....', finalVal)
+      const formvalue = inputForm.getFieldValue()
+      let isValid = false
+      if (vendorQualified !== null && vendorQualified === 'L1') {
+        const landedCost = parseFloat(
+          (allPropForm.getFieldValue('landedCostL1fin') || '0').toString().replace(/,/g, ''),
+        )
+        isValid = landedCost >= parseFloat(praAmount)
+        console.log('L1 isValid', isValid, landedCost)
+      } else if (vendorQualified !== null && vendorQualified === 'L2') {
+        const landedCost = parseFloat(
+          (allPropForm.getFieldValue('landedCostL2fin') || '0').toString().replace(/,/g, ''),
+        )
+        isValid = landedCost >= parseFloat(praAmount)
+        console.log('L2 isValid', isValid, landedCost)
       } else {
-        message.error(httpapprovals.responseMessage)
+        const landedCost = parseFloat(
+          (allPropForm.getFieldValue('landedCostL3fin') || '0').toString().replace(/,/g, ''),
+        )
+        isValid = landedCost >= parseFloat(praAmount)
+        console.log('L3 isValid', isValid, landedCost)
       }
-      setApproveRemarksCard(false)
+
+      const props = {
+        currentseq: seq,
+        empId: employeeId,
+        tenantId,
+        scsFinalCost: finalcost,
+        hdrId: igscpId,
+        remarks: formvalue.remarks,
+        pmId: processCode,
+        processCode: ProcessCode1 === '8' ? ProcessCode1 : '5',
+
+        pmHdrId,
+        enquiryId,
+        docTypeCode,
+        mstId,
+      }
+      if (insertCheck && isValid) {
+        const httpapprovals = await IndentGroupgetDetails({
+          requestPath: 'updateScpSeqAndStatus',
+          requestData: props,
+        })
+
+        if (httpapprovals.responseCode === '200') {
+          message.success(httpapprovals.responseMessage)
+          if (
+            scmHdrdata?.[0]?.costFlowType === 'NEW' &&
+            docStatus?.[0]?.docStatusDesc === 'Project Approved'
+          ) {
+            // This PJS just crossed the "committed" threshold - add its own value to the
+            // project header's Actual Spent/Balance Available immediately, client-side,
+            // instead of refetching the whole project summary from the server. finalcost
+            // (L1/L2/L3_FINAL_SUB_TOTAL) is exactly what gets written into
+            // indent_hdr.SCM_BUDGET_ALLOCATED, which is the column every backend
+            // committed-PJS-total query sums into Actual Spent - see IndentGroupService
+            // updateInScp (~line 710-713) and IIndentGroupDAO.getCommittedScsTotalByProjectId.
+            const parseAmount = v => parseFloat(String(v).replace(/,/g, '')) || 0
+            const formatAmount = v => new Intl.NumberFormat('en-IN', { style: 'decimal' }).format(v)
+            const pjsValue = parseFloat(finalcost) || 0
+            const currentEnquiry = store.get('Enquiry') || []
+            const updatedEnquiry = currentEnquiry.map(item => {
+              if (item.key === 9) {
+                return { ...item, value: formatAmount(parseAmount(item.value) + pjsValue) }
+              }
+              if (item.key === 10) {
+                return { ...item, value: formatAmount(parseAmount(item.value) - pjsValue) }
+              }
+              return item
+            })
+            store.set('Enquiry', updatedEnquiry)
+            window.dispatchEvent(new CustomEvent('enquiry-refresh', { detail: updatedEnquiry }))
+          }
+          onmodalCancel()
+        } else {
+          message.error(httpapprovals.responseMessage)
+        }
+        setApproveRemarksCard(false)
+      }
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -1706,6 +1728,17 @@ const SupCompState = ({
     setIsdisablebtn(false)
 
     return insertcheck
+  }
+
+  // handleinsert already resets isdisablebtn on every normal-completion path, but not if it
+  // throws (e.g. a network error) — this wrapper guarantees the reset either way, without
+  // having to touch handleinsert's own (very long) body.
+  const safeHandleInsert = async silent => {
+    try {
+      return await handleinsert(silent)
+    } finally {
+      setIsdisablebtn(false)
+    }
   }
 
   const paymentformclear = () => {
@@ -3702,23 +3735,28 @@ const SupCompState = ({
   ]
 
   const handleDeleteSCS = async () => {
-    const props = {
-      indScpId: igscpId,
-      empId: employeeId,
-      indentId,
-      tenantId,
-      mstId,
-    }
+    setIsSubmitting(true)
+    try {
+      const props = {
+        indScpId: igscpId,
+        empId: employeeId,
+        indentId,
+        tenantId,
+        mstId,
+      }
 
-    const httpDeleteScs = await IndentGroupgetDetails({
-      requestPath: 'deleteIndScpDtlId',
-      requestData: props,
-    })
-    if (httpDeleteScs.responseCode === '200') {
-      message.success(httpDeleteScs.responseMessage)
-      onmodalCancel()
-    } else {
-      message.error(httpDeleteScs.responseMessage)
+      const httpDeleteScs = await IndentGroupgetDetails({
+        requestPath: 'deleteIndScpDtlId',
+        requestData: props,
+      })
+      if (httpDeleteScs.responseCode === '200') {
+        message.success(httpDeleteScs.responseMessage)
+        onmodalCancel()
+      } else {
+        message.error(httpDeleteScs.responseMessage)
+      }
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -3843,1149 +3881,660 @@ const SupCompState = ({
   const SCSFieldsComponent = () => {
     return (
       <div>
-        <Skeleton loading={loading} active>
-          <Form
-            form={allPropForm}
-            layout="horizontal"
-            disabled={formdisable}
-            style={{ margin: '0px' }}
+        {isSubmitting && (
+          // The form is long enough to scroll, and antd's nested Spin indicator caps
+          // itself near the top of whatever it wraps — so once the page is scrolled
+          // down to Save/status/Delete PJS, that indicator scrolls out of view even
+          // though the dim/blur below still covers the whole form. This floats a
+          // second indicator fixed to the viewport so it's visible at any scroll depth.
+          <div
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              zIndex: 2000,
+            }}
           >
-            <Card>
-              <Divider orientation="left" style={{ margin: '0px' }}>
-                PROJECT DETAILS:
-              </Divider>
+            <Spin size="large" tip="Please wait..." />
+          </div>
+        )}
+        {/* Covers the whole PJS form while Save/Approve/Previous Stage/Delete PJS is
+        in flight — nested inside the existing fetch-loading Skeleton. */}
+        <Spin spinning={isSubmitting} size="large" tip="Please wait...">
+          <Skeleton loading={loading} active>
+            <Form
+              form={allPropForm}
+              layout="horizontal"
+              disabled={formdisable}
+              style={{ margin: '0px' }}
+            >
+              <Card>
+                <Divider orientation="left" style={{ margin: '0px' }}>
+                  PROJECT DETAILS:
+                </Divider>
 
-              <div className="row">
-                <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
-                      Project No:
-                    </p>
-                    <p style={{ marginBottom: '0' }}>
-                      {scmHdrdata && scmHdrdata.length > 0 ? scmHdrdata[0].projectCode : ''}
-                    </p>
-                  </div>
-                </div>
-                <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
-                      Project Name:
-                    </p>
-                    <p style={{ marginBottom: '0' }}>
-                      {scmHdrdata && scmHdrdata.length > 0 ? scmHdrdata[0].projectName : ''}
-                    </p>
-                  </div>
-                </div>
-                <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
-                      Indent Type:
-                    </p>
-                    <p style={{ marginBottom: '0' }}>{indentType}</p>
-                  </div>
-                </div>
-                <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
-                      Indent No.:
-                    </p>
-                    <p style={{ marginBottom: '0' }}>{indentcode}</p>
-                  </div>
-                  {scmHdrdata && scmHdrdata.length > 0 && scmHdrdata[0].pjsRefNo ? (
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                      <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
-                        PJS No.:
-                      </p>
-                      <p style={{ marginBottom: '0' }}>{scmHdrdata[0].pjsRefNo}</p>
-                    </div>
-                  ) : null}
-                </div>
-                <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
-                      Indent Date:
-                    </p>
-                    <p style={{ marginBottom: '0' }}>
-                      {scmHdrdata && scmHdrdata.length > 0
-                        ? moment(scmHdrdata[0].createdDate).format('DD-MMM-YYYY')
-                        : ''}
-                    </p>
-                  </div>
-                </div>
-                <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
-                      Expected Delivery:
-                    </p>
-                    <p style={{ marginBottom: '0' }}>
-                      {scmHdrdata && scmHdrdata.length > 0
-                        ? moment(scmHdrdata[0].expDeliveryDate).format('DD-MMM-YYYY')
-                        : ''}
-                    </p>
-                  </div>
-                </div>
-                <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
-                      Station:
-                    </p>
-                    <p style={{ marginBottom: '0' }}>{station}</p>
-                  </div>
-                </div>
-                <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
-                      Sub Assy. :
-                    </p>
-                    <p style={{ marginBottom: '0' }}>{subAssy}</p>
-                  </div>
-                </div>
-                {scmHdrdata?.[0]?.costFlowType !== 'NEW' ? (
+                <div className="row">
                   <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
                     <div style={{ display: 'flex', alignItems: 'center' }}>
                       <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
-                        Budget Cost (Rs.) :
+                        Project No:
                       </p>
-
                       <p style={{ marginBottom: '0' }}>
-                        {parseFloat(parseFloat(totalcost).toFixed(2)).toLocaleString('en-IN')}
+                        {scmHdrdata && scmHdrdata.length > 0 ? scmHdrdata[0].projectCode : ''}
                       </p>
                     </div>
                   </div>
-                ) : (
                   <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
                     <div style={{ display: 'flex', alignItems: 'center' }}>
                       <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
-                        Allocated Value (Rs.) :
+                        Project Name:
                       </p>
-
                       <p style={{ marginBottom: '0' }}>
-                        {scmHdrdata && scmHdrdata.length > 0 && scmHdrdata[0].allocatedValue
-                          ? parseFloat(
-                              parseFloat(scmHdrdata[0].allocatedValue).toFixed(2),
-                            ).toLocaleString('en-IN')
-                          : '0'}
+                        {scmHdrdata && scmHdrdata.length > 0 ? scmHdrdata[0].projectName : ''}
                       </p>
-                      {depCode === 'D03' &&
-                      docStatus?.[0]?.docStatusDesc === 'Project Approved' &&
-                      scmHdrdata?.[0]?.canAllocateFromSalesBudget === 'true' &&
-                      scmHdrdata?.[0]?.hasBudgetExcess !== 'true' ? (
-                        <Tooltip title="Allocate budget from Sales Value">
-                          <PlusCircleOutlined
-                            style={{ marginLeft: '8px', color: '#1890ff', cursor: 'pointer' }}
-                            onClick={() => setAllocateModalVisible(true)}
-                          />
-                        </Tooltip>
-                      ) : null}
                     </div>
                   </div>
-                )}
-                {scmHdrdata?.[0]?.costFlowType !== 'NEW' ? (
                   <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
                     <div style={{ display: 'flex', alignItems: 'center' }}>
                       <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
-                        Budget Consumed (Rs.) :
+                        Indent Type:
                       </p>
-
+                      <p style={{ marginBottom: '0' }}>{indentType}</p>
+                    </div>
+                  </div>
+                  <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
+                        Indent No.:
+                      </p>
+                      <p style={{ marginBottom: '0' }}>{indentcode}</p>
+                    </div>
+                    {scmHdrdata && scmHdrdata.length > 0 && scmHdrdata[0].pjsRefNo ? (
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
+                          PJS No.:
+                        </p>
+                        <p style={{ marginBottom: '0' }}>{scmHdrdata[0].pjsRefNo}</p>
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
+                        Indent Date:
+                      </p>
                       <p style={{ marginBottom: '0' }}>
-                        {scmHdrdata && scmHdrdata.length > 0 && scmHdrdata[0].totalBudgetConsumed
-                          ? parseFloat(
-                              parseFloat(scmHdrdata[0].totalBudgetConsumed).toFixed(2),
-                            ).toLocaleString('en-IN')
+                        {scmHdrdata && scmHdrdata.length > 0
+                          ? moment(scmHdrdata[0].createdDate).format('DD-MMM-YYYY')
                           : ''}
                       </p>
                     </div>
                   </div>
-                ) : docStatus?.[0]?.docStatusDesc === 'Project Approved' ? (
                   <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
                     <div style={{ display: 'flex', alignItems: 'center' }}>
                       <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
-                        Actual Consumed Value (Rs.) :
+                        Expected Delivery:
                       </p>
-
                       <p style={{ marginBottom: '0' }}>
-                        {scmHdrdata && scmHdrdata.length > 0 && scmHdrdata[0].actualConsumedValue
-                          ? parseFloat(
-                              parseFloat(scmHdrdata[0].actualConsumedValue).toFixed(2),
-                            ).toLocaleString('en-IN')
-                          : '0'}
+                        {scmHdrdata && scmHdrdata.length > 0
+                          ? moment(scmHdrdata[0].expDeliveryDate).format('DD-MMM-YYYY')
+                          : ''}
                       </p>
-                      {scmHdrdata && scmHdrdata.length > 0 ? (
-                        <Tooltip
-                          placement="bottom"
-                          overlayStyle={{ maxWidth: '320px' }}
-                          title={
-                            <div style={{ whiteSpace: 'nowrap' }}>
-                              {[
-                                ['PO Approved (Rs.)', scmHdrdata[0].approvedPoAmount],
-                                ['Project Approved, Pending PO (Rs.)', scmHdrdata[0].committedPjsAmount],
-                                ['Blocked by Other PJS (Rs.)', scmHdrdata[0].reservedPendingExcessAmount],
-                              ].map(([label, value]) => (
-                                <div
-                                  key={label}
-                                  style={{
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    gap: '16px',
-                                  }}
-                                >
-                                  <span>{label}:</span>
-                                  <span>
-                                    {parseFloat(parseFloat(value || 0).toFixed(2)).toLocaleString(
-                                      'en-IN',
-                                    )}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          }
-                        >
-                          <InfoCircleOutlined style={{ marginLeft: '8px', color: '#1890ff' }} />
-                        </Tooltip>
-                      ) : null}
                     </div>
                   </div>
-                ) : null}
-                {scmHdrdata?.[0]?.costFlowType === 'NEW' &&
-                docStatus?.[0]?.docStatusDesc === 'Project Approved'
-                  ? (() => {
-                      const allocated = parseFloat(scmHdrdata?.[0]?.allocatedValue) || 0
-                      const consumed = parseFloat(scmHdrdata?.[0]?.actualConsumedValue) || 0
-                      const quote = parseFloat(finalcost) || 0
-                      const available = allocated - consumed
-                      // Mirrors BudgetExcessSheetService.insertBudgetExcessSheetDtl's actual
-                      // raise-excess formula: scsActualCost = actualCost - max(remaining, 0).
-                      // A pre-existing station deficit (from other PJS/PO, not this one) is
-                      // clamped to zero rather than subtracted, so it isn't double-counted
-                      // into this PJS's own shortage.
-                      const shortage = quote - Math.max(available, 0)
-                      if (shortage <= 0) return null
-                      return (
-                        <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
-                          <div style={{ display: 'flex', alignItems: 'center' }}>
-                            <p
-                              style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}
-                            >
-                              Shortage Value (Rs.) :
-                            </p>
-                            <p style={{ marginBottom: '0', color: 'red', fontWeight: 'bold' }}>
-                              {shortage.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                            </p>
-                          </div>
-                        </div>
-                      )
-                    })()
-                  : null}
-                {scmHdrdata?.[0]?.costFlowType === 'NEW' &&
-                depCode === 'D03' &&
-                docStatus?.[0]?.docStatusDesc === 'Project Approved' &&
-                scmHdrdata?.[0]?.isShortfall === 'true' &&
-                scmHdrdata?.[0]?.hasBudgetExcess !== 'true' ? (
                   <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
                     <div style={{ display: 'flex', alignItems: 'center' }}>
-                      <Popconfirm
-                        title="Raise a Budget Excess for this PJS?"
-                        onConfirm={handleRaiseBudgetExcess}
-                        okText="Yes"
-                        cancelText="No"
-                        okButtonProps={{ disabled: false }}
-                        cancelButtonProps={{ disabled: false }}
-                      >
-                        <ButtonComponent
-                          type="primary"
-                          text="Raise Budget Excess"
-                          disable={false}
-                        />
-                      </Popconfirm>
+                      <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
+                        Station:
+                      </p>
+                      <p style={{ marginBottom: '0' }}>{station}</p>
                     </div>
                   </div>
-                ) : null}
-              </div>
+                  <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
+                        Sub Assy. :
+                      </p>
+                      <p style={{ marginBottom: '0' }}>{subAssy}</p>
+                    </div>
+                  </div>
+                  {scmHdrdata?.[0]?.costFlowType !== 'NEW' ? (
+                    <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
+                          Budget Cost (Rs.) :
+                        </p>
 
-              <Divider orientation="left" style={{ margin: '0px' }}>
-                PRODUCT / TECHNICAL:
-              </Divider>
-              <div className="row">
-                {/* <CustomFormItem name="techcomparison" label="Tech. Comparison" colspan="8" /> */}
-                {/* <CustomFormItem name="techicalrecom" label="Tech. Recommendation" colspan="8" /> */}
-                <CustomFormItem
-                  name="vendorevaluation"
-                  label="Vendor Evalutation"
-                  colspan="8"
-                  maxLength={2056}
-                />
-              </div>
+                        <p style={{ marginBottom: '0' }}>
+                          {parseFloat(parseFloat(totalcost).toFixed(2)).toLocaleString('en-IN')}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
+                          Allocated Value (Rs.) :
+                        </p>
 
-              <Divider orientation="left" style={{ margin: '0px' }}>
-                Vendor Shortlisted:
-              </Divider>
-              <div className="row">
-                <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
-                  <Form.Item
-                    name="vendorshortl1"
-                    labelCol={{ span: 4 }}
-                    wrapperCol={{ span: 14 }}
-                    label={
-                      <span style={{ textAlign: 'center' }}>
-                        L1{' '}
-                        <span
-                          style={{
-                            color: 'red',
-                            display: finalVal === 'L1' ? 'inline-block' : 'none',
-                          }}
+                        <p style={{ marginBottom: '0' }}>
+                          {scmHdrdata && scmHdrdata.length > 0 && scmHdrdata[0].allocatedValue
+                            ? parseFloat(
+                                parseFloat(scmHdrdata[0].allocatedValue).toFixed(2),
+                              ).toLocaleString('en-IN')
+                            : '0'}
+                        </p>
+                        {depCode === 'D03' &&
+                        docStatus?.[0]?.docStatusDesc === 'Project Approved' &&
+                        scmHdrdata?.[0]?.canAllocateFromSalesBudget === 'true' &&
+                        scmHdrdata?.[0]?.hasBudgetExcess !== 'true' ? (
+                          <Tooltip title="Allocate budget from Sales Value">
+                            <PlusCircleOutlined
+                              style={{ marginLeft: '8px', color: '#1890ff', cursor: 'pointer' }}
+                              onClick={() => setAllocateModalVisible(true)}
+                            />
+                          </Tooltip>
+                        ) : null}
+                      </div>
+                    </div>
+                  )}
+                  {scmHdrdata?.[0]?.costFlowType !== 'NEW' ? (
+                    <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
+                          Budget Consumed (Rs.) :
+                        </p>
+
+                        <p style={{ marginBottom: '0' }}>
+                          {scmHdrdata && scmHdrdata.length > 0 && scmHdrdata[0].totalBudgetConsumed
+                            ? parseFloat(
+                                parseFloat(scmHdrdata[0].totalBudgetConsumed).toFixed(2),
+                              ).toLocaleString('en-IN')
+                            : ''}
+                        </p>
+                      </div>
+                    </div>
+                  ) : docStatus?.[0]?.docStatusDesc === 'Project Approved' ? (
+                    <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
+                          Actual Consumed Value (Rs.) :
+                        </p>
+
+                        <p style={{ marginBottom: '0' }}>
+                          {scmHdrdata && scmHdrdata.length > 0 && scmHdrdata[0].actualConsumedValue
+                            ? parseFloat(
+                                parseFloat(scmHdrdata[0].actualConsumedValue).toFixed(2),
+                              ).toLocaleString('en-IN')
+                            : '0'}
+                        </p>
+                        {scmHdrdata && scmHdrdata.length > 0 ? (
+                          <Tooltip
+                            placement="bottom"
+                            overlayStyle={{ maxWidth: '320px' }}
+                            title={
+                              <div style={{ whiteSpace: 'nowrap' }}>
+                                {[
+                                  ['PO Approved (Rs.)', scmHdrdata[0].approvedPoAmount],
+                                  [
+                                    'Project Approved, Pending PO (Rs.)',
+                                    scmHdrdata[0].committedPjsAmount,
+                                  ],
+                                  [
+                                    'Blocked by Other PJS (Rs.)',
+                                    scmHdrdata[0].reservedPendingExcessAmount,
+                                  ],
+                                ].map(([label, value]) => (
+                                  <div
+                                    key={label}
+                                    style={{
+                                      display: 'flex',
+                                      justifyContent: 'space-between',
+                                      gap: '16px',
+                                    }}
+                                  >
+                                    <span>{label}:</span>
+                                    <span>
+                                      {parseFloat(parseFloat(value || 0).toFixed(2)).toLocaleString(
+                                        'en-IN',
+                                      )}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            }
+                          >
+                            <InfoCircleOutlined style={{ marginLeft: '8px', color: '#1890ff' }} />
+                          </Tooltip>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+                  {scmHdrdata?.[0]?.costFlowType === 'NEW' &&
+                  docStatus?.[0]?.docStatusDesc === 'Project Approved'
+                    ? (() => {
+                        const allocated = parseFloat(scmHdrdata?.[0]?.allocatedValue) || 0
+                        const consumed = parseFloat(scmHdrdata?.[0]?.actualConsumedValue) || 0
+                        const quote = parseFloat(finalcost) || 0
+                        const available = allocated - consumed
+                        // Mirrors BudgetExcessSheetService.insertBudgetExcessSheetDtl's actual
+                        // raise-excess formula: scsActualCost = actualCost - max(remaining, 0).
+                        // A pre-existing station deficit (from other PJS/PO, not this one) is
+                        // clamped to zero rather than subtracted, so it isn't double-counted
+                        // into this PJS's own shortage.
+                        const shortage = quote - Math.max(available, 0)
+                        if (shortage <= 0) return null
+                        return (
+                          <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                              <p
+                                style={{
+                                  marginRight: '10px',
+                                  fontWeight: 'bold',
+                                  marginBottom: '0',
+                                }}
+                              >
+                                Shortage Value (Rs.) :
+                              </p>
+                              <p style={{ marginBottom: '0', color: 'red', fontWeight: 'bold' }}>
+                                {shortage.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                              </p>
+                            </div>
+                          </div>
+                        )
+                      })()
+                    : null}
+                  {scmHdrdata?.[0]?.costFlowType === 'NEW' &&
+                  depCode === 'D03' &&
+                  docStatus?.[0]?.docStatusDesc === 'Project Approved' &&
+                  scmHdrdata?.[0]?.isShortfall === 'true' &&
+                  scmHdrdata?.[0]?.hasBudgetExcess !== 'true' ? (
+                    <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <Popconfirm
+                          title="Raise a Budget Excess for this PJS?"
+                          onConfirm={handleRaiseBudgetExcess}
+                          okText="Yes"
+                          cancelText="No"
+                          okButtonProps={{ disabled: false }}
+                          cancelButtonProps={{ disabled: false }}
                         >
-                          {' '}
-                          *
-                        </span>
-                      </span>
-                    }
-                    labelAlign="left"
-                  >
-                    <Select
-                      disabled={isPraCreated}
-                      style={{ width: '100%' }}
-                      onChange={(value, option) =>
-                        handlevendorchange(value, option, 'vendorshortl1')
-                      }
-                      placeholder="Select Vendor"
-                      showSearch
-                      filterOption={(input, option) =>
-                        (option?.children ?? '')?.toLowerCase()?.includes(input?.toLowerCase())
-                      }
-                    >
-                      {vendorlist?.map(item => (
-                        <Option
-                          key={item.key}
-                          value={item.value}
-                          country={item.country}
-                          currencyType={item.currencyType}
-                          disabled={vendorQualify?.some(v => v.key === item.value)}
-                        >
-                          {item.label}
-                        </Option>
-                      ))}
-                    </Select>
-                  </Form.Item>
-                  <Form.Item
-                    name="vendorshortl2"
-                    labelCol={{ span: 4 }}
-                    wrapperCol={{ span: 14 }}
-                    label={
-                      <span style={{ textAlign: 'center' }}>
-                        L2{' '}
-                        <span
-                          style={{
-                            color: 'red',
-                            display: finalVal === 'L2' ? 'inline-block' : 'none',
-                          }}
-                        >
-                          {' '}
-                          *
-                        </span>
-                      </span>
-                    }
-                    labelAlign="left"
-                  >
-                    <Select
-                      disabled={isPraCreated}
-                      style={{ width: '100%' }}
-                      placeholder="Select Vendor"
-                      onChange={(value, option) =>
-                        handlevendorchange(value, option, 'vendorshortl2')
-                      }
-                      showSearch
-                      filterOption={(input, option) =>
-                        (option?.children ?? '')?.toLowerCase()?.includes(input?.toLowerCase())
-                      }
-                    >
-                      {vendorlist?.map(item => (
-                        <Option
-                          key={item.key}
-                          value={item.value}
-                          country={item.country}
-                          currencyType={item.currencyType}
-                          disabled={vendorQualify?.some(v => v.key === item.value)}
-                        >
-                          {item.label}
-                        </Option>
-                      ))}
-                    </Select>
-                  </Form.Item>
-                  <Form.Item
-                    name="vendorshortl3"
-                    labelCol={{ span: 4 }}
-                    wrapperCol={{ span: 14 }}
-                    label={
-                      <span style={{ textAlign: 'center' }}>
-                        L3{' '}
-                        <span
-                          style={{
-                            color: 'red',
-                            display: finalVal === 'L3' ? 'inline-block' : 'none',
-                          }}
-                        >
-                          {' '}
-                          *
-                        </span>
-                      </span>
-                    }
-                    labelAlign="left"
-                  >
-                    <Select
-                      disabled={isPraCreated}
-                      style={{ width: '100%' }}
-                      placeholder="Select Vendor"
-                      onChange={(value, option) =>
-                        handlevendorchange(value, option, 'vendorshortl3')
-                      }
-                      showSearch
-                      filterOption={(input, option) =>
-                        (option?.children ?? '').toLowerCase()?.includes(input?.toLowerCase())
-                      }
-                    >
-                      {vendorlist?.map(item => (
-                        <Option
-                          key={item.key}
-                          value={item.value}
-                          country={item.country}
-                          currencyType={item.currencyType}
-                          disabled={vendorQualify?.some(v => v.key === item.value)}
-                        >
-                          {item.label}
-                        </Option>
-                      ))}
-                    </Select>
-                  </Form.Item>
+                          <ButtonComponent
+                            type="primary"
+                            text="Raise Budget Excess"
+                            disable={false}
+                          />
+                        </Popconfirm>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
-                <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
-                  <Form.Item
-                    name="vendorgstL1"
-                    labelCol={{ span: 10 }}
-                    wrapperCol={{ span: 12 }}
-                    label={
-                      <span style={{ textAlign: 'center' }}>
-                        Vendor L1 GST (%){' '}
-                        <span
-                          style={{
-                            color: 'red',
-                            display: finalVal === 'L1' ? 'inline-block' : 'none',
-                          }}
-                        >
-                          {' '}
-                          *
-                        </span>
-                      </span>
-                    }
-                    labelAlign="left"
-                  >
-                    <Select
-                      style={{ width: '100%' }}
-                      placeholder="Select L1 GST"
-                      onChange={() => {
-                        calculateSubTotalin('L1')
-                        calculateSubTotalfin('L1')
-                      }}
-                    >
-                      <Option key="0" value="0">
-                        0
-                      </Option>
-                      <Option key="1" value="5">
-                        5
-                      </Option>
-                      <Option key="2" value="12">
-                        12
-                      </Option>
-                      <Option key="1" value="18">
-                        18
-                      </Option>
-                      <Option key="2" value="28">
-                        28
-                      </Option>
-                    </Select>
-                  </Form.Item>
-                  <Form.Item
-                    name="vendorgstL2"
-                    labelCol={{ span: 10 }}
-                    wrapperCol={{ span: 12 }}
-                    label={
-                      <span style={{ textAlign: 'center' }}>
-                        Vendor L2 GST (%){' '}
-                        <span
-                          style={{
-                            color: 'red',
-                            display: finalVal === 'L2' ? 'inline-block' : 'none',
-                          }}
-                        >
-                          {' '}
-                          *
-                        </span>
-                      </span>
-                    }
-                    labelAlign="left"
-                  >
-                    <Select
-                      style={{ width: '100%' }}
-                      placeholder="Select L2 GST"
-                      onChange={() => {
-                        calculateSubTotalin('L2')
-                        calculateSubTotalfin('L2')
-                      }}
-                    >
-                      <Option key="0" value="0">
-                        0
-                      </Option>
-                      <Option key="1" value="5">
-                        5
-                      </Option>
-                      <Option key="2" value="12">
-                        12
-                      </Option>
-                      <Option key="1" value="18">
-                        18
-                      </Option>
-                      <Option key="2" value="28">
-                        28
-                      </Option>
-                    </Select>
-                  </Form.Item>
-                  <Form.Item
-                    name="vendorgstL3"
-                    labelCol={{ span: 10 }}
-                    wrapperCol={{ span: 12 }}
-                    label={
-                      <span style={{ textAlign: 'center' }}>
-                        Vendor L3 GST (%){' '}
-                        <span
-                          style={{
-                            color: 'red',
-                            display: finalVal === 'L3' ? 'inline-block' : 'none',
-                          }}
-                        >
-                          {' '}
-                          *
-                        </span>
-                      </span>
-                    }
-                    labelAlign="left"
-                  >
-                    <Select
-                      style={{ width: '100%' }}
-                      placeholder="Select L3 GST"
-                      onChange={() => {
-                        calculateSubTotalin('L3')
-                        calculateSubTotalfin('L3')
-                      }}
-                    >
-                      <Option key="0" value="0">
-                        0
-                      </Option>
-                      <Option key="1" value="5">
-                        5
-                      </Option>
-                      <Option key="2" value="12">
-                        12
-                      </Option>
-                      <Option key="1" value="18">
-                        18
-                      </Option>
-                      <Option key="2" value="28">
-                        28
-                      </Option>
-                    </Select>
-                  </Form.Item>
-                </div>
-                <div className="col-12 col-sm-12 col-md-6 col-lg-6 col-xl-6 col-xxl-6">
+
+                <Divider orientation="left" style={{ margin: '0px' }}>
+                  PRODUCT / TECHNICAL:
+                </Divider>
+                <div className="row">
+                  {/* <CustomFormItem name="techcomparison" label="Tech. Comparison" colspan="8" /> */}
+                  {/* <CustomFormItem name="techicalrecom" label="Tech. Recommendation" colspan="8" /> */}
                   <CustomFormItem
-                    name="justificationL1"
-                    label="Justification"
-                    colspan="24"
+                    name="vendorevaluation"
+                    label="Vendor Evalutation"
+                    colspan="8"
                     maxLength={2056}
                   />
-                  <Form.Item
-                    name="vendorqualifiedL1"
-                    labelCol={{ span: 8 }}
-                    wrapperCol={{ span: 16 }}
-                    label={
-                      <span style={{ textAlign: 'center' }}>
-                        Vendor Qualified <span style={{ color: 'red' }}> *</span>
-                      </span>
-                    }
-                    labelAlign="left"
-                  >
-                    {/* <Input type="text" className="custom-input" /> */}
-                    <Select
-                      style={{ width: '100%' }}
-                      placeholder="Select Vendor"
-                      onChange={(value, option) => handlevendorQualify(value, option)}
-                      // defaultValue={defaultSelectedOption && defaultSelectedOption.key}
-                    >
-                      {vendorQualify?.map(item => (
-                        <Option key={item.key} value={item.key}>
-                          {item.label}
-                        </Option>
-                      ))}
-                    </Select>
-                  </Form.Item>
-                  <Form.Item
-                    name="customerapprovedL1"
-                    labelCol={{ span: 8 }}
-                    wrapperCol={{ span: 16 }}
-                    labelAlign="left"
-                    label={<span style={{ textAlign: 'center' }}>Customer Preferred</span>}
-                  >
-                    <Input type="text" className="custom-input" maxLength={256} />
-                  </Form.Item>
-                  <Form.Item
-                    name="scstypeL1"
-                    labelCol={{ span: 8 }}
-                    wrapperCol={{ span: 16 }}
-                    label={
-                      <span style={{ textAlign: 'center' }}>
-                        Type <span style={{ color: 'red' }}> *</span>
-                      </span>
-                    }
-                    labelAlign="left"
-                  >
-                    <Select style={{ width: '100%' }} placeholder="Select Type">
-                      <Option key="1" value="PO Justification">
-                        PO
-                      </Option>
-                      <Option key="2" value="Cash Voucher">
-                        Cash Voucher
-                      </Option>
-                    </Select>
-                  </Form.Item>
                 </div>
-              </div>
-              <Divider orientation="left" style={{ margin: '0px' }}>
-                Vendor Terms
-              </Divider>
 
-              <table className="custom-form-container" style={{ width: '100%' }}>
-                <thead>
-                  <tr>
-                    <th style={{ textAlign: 'center' }}>&nbsp;</th>
-                    <th style={{ textAlign: 'center' }}>
-                      L1{' '}
-                      <span
-                        style={{
-                          color: 'red',
-                          display: finalVal === 'L1' ? 'inline-block' : 'none',
+                <Divider orientation="left" style={{ margin: '0px' }}>
+                  Vendor Shortlisted:
+                </Divider>
+                <div className="row">
+                  <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                    <Form.Item
+                      name="vendorshortl1"
+                      labelCol={{ span: 4 }}
+                      wrapperCol={{ span: 14 }}
+                      label={
+                        <span style={{ textAlign: 'center' }}>
+                          L1{' '}
+                          <span
+                            style={{
+                              color: 'red',
+                              display: finalVal === 'L1' ? 'inline-block' : 'none',
+                            }}
+                          >
+                            {' '}
+                            *
+                          </span>
+                        </span>
+                      }
+                      labelAlign="left"
+                    >
+                      <Select
+                        disabled={isPraCreated}
+                        style={{ width: '100%' }}
+                        onChange={(value, option) =>
+                          handlevendorchange(value, option, 'vendorshortl1')
+                        }
+                        placeholder="Select Vendor"
+                        showSearch
+                        filterOption={(input, option) =>
+                          (option?.children ?? '')?.toLowerCase()?.includes(input?.toLowerCase())
+                        }
+                      >
+                        {vendorlist?.map(item => (
+                          <Option
+                            key={item.key}
+                            value={item.value}
+                            country={item.country}
+                            currencyType={item.currencyType}
+                            disabled={vendorQualify?.some(v => v.key === item.value)}
+                          >
+                            {item.label}
+                          </Option>
+                        ))}
+                      </Select>
+                    </Form.Item>
+                    <Form.Item
+                      name="vendorshortl2"
+                      labelCol={{ span: 4 }}
+                      wrapperCol={{ span: 14 }}
+                      label={
+                        <span style={{ textAlign: 'center' }}>
+                          L2{' '}
+                          <span
+                            style={{
+                              color: 'red',
+                              display: finalVal === 'L2' ? 'inline-block' : 'none',
+                            }}
+                          >
+                            {' '}
+                            *
+                          </span>
+                        </span>
+                      }
+                      labelAlign="left"
+                    >
+                      <Select
+                        disabled={isPraCreated}
+                        style={{ width: '100%' }}
+                        placeholder="Select Vendor"
+                        onChange={(value, option) =>
+                          handlevendorchange(value, option, 'vendorshortl2')
+                        }
+                        showSearch
+                        filterOption={(input, option) =>
+                          (option?.children ?? '')?.toLowerCase()?.includes(input?.toLowerCase())
+                        }
+                      >
+                        {vendorlist?.map(item => (
+                          <Option
+                            key={item.key}
+                            value={item.value}
+                            country={item.country}
+                            currencyType={item.currencyType}
+                            disabled={vendorQualify?.some(v => v.key === item.value)}
+                          >
+                            {item.label}
+                          </Option>
+                        ))}
+                      </Select>
+                    </Form.Item>
+                    <Form.Item
+                      name="vendorshortl3"
+                      labelCol={{ span: 4 }}
+                      wrapperCol={{ span: 14 }}
+                      label={
+                        <span style={{ textAlign: 'center' }}>
+                          L3{' '}
+                          <span
+                            style={{
+                              color: 'red',
+                              display: finalVal === 'L3' ? 'inline-block' : 'none',
+                            }}
+                          >
+                            {' '}
+                            *
+                          </span>
+                        </span>
+                      }
+                      labelAlign="left"
+                    >
+                      <Select
+                        disabled={isPraCreated}
+                        style={{ width: '100%' }}
+                        placeholder="Select Vendor"
+                        onChange={(value, option) =>
+                          handlevendorchange(value, option, 'vendorshortl3')
+                        }
+                        showSearch
+                        filterOption={(input, option) =>
+                          (option?.children ?? '').toLowerCase()?.includes(input?.toLowerCase())
+                        }
+                      >
+                        {vendorlist?.map(item => (
+                          <Option
+                            key={item.key}
+                            value={item.value}
+                            country={item.country}
+                            currencyType={item.currencyType}
+                            disabled={vendorQualify?.some(v => v.key === item.value)}
+                          >
+                            {item.label}
+                          </Option>
+                        ))}
+                      </Select>
+                    </Form.Item>
+                  </div>
+                  <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                    <Form.Item
+                      name="vendorgstL1"
+                      labelCol={{ span: 10 }}
+                      wrapperCol={{ span: 12 }}
+                      label={
+                        <span style={{ textAlign: 'center' }}>
+                          Vendor L1 GST (%){' '}
+                          <span
+                            style={{
+                              color: 'red',
+                              display: finalVal === 'L1' ? 'inline-block' : 'none',
+                            }}
+                          >
+                            {' '}
+                            *
+                          </span>
+                        </span>
+                      }
+                      labelAlign="left"
+                    >
+                      <Select
+                        style={{ width: '100%' }}
+                        placeholder="Select L1 GST"
+                        onChange={() => {
+                          calculateSubTotalin('L1')
+                          calculateSubTotalfin('L1')
                         }}
                       >
-                        {' '}
-                        *
-                      </span>
-                    </th>
-                    <th style={{ textAlign: 'center' }}>
-                      L2{' '}
-                      <span
-                        style={{
-                          color: 'red',
-                          display: finalVal === 'L2' ? 'inline-block' : 'none',
+                        <Option key="0" value="0">
+                          0
+                        </Option>
+                        <Option key="1" value="5">
+                          5
+                        </Option>
+                        <Option key="2" value="12">
+                          12
+                        </Option>
+                        <Option key="1" value="18">
+                          18
+                        </Option>
+                        <Option key="2" value="28">
+                          28
+                        </Option>
+                      </Select>
+                    </Form.Item>
+                    <Form.Item
+                      name="vendorgstL2"
+                      labelCol={{ span: 10 }}
+                      wrapperCol={{ span: 12 }}
+                      label={
+                        <span style={{ textAlign: 'center' }}>
+                          Vendor L2 GST (%){' '}
+                          <span
+                            style={{
+                              color: 'red',
+                              display: finalVal === 'L2' ? 'inline-block' : 'none',
+                            }}
+                          >
+                            {' '}
+                            *
+                          </span>
+                        </span>
+                      }
+                      labelAlign="left"
+                    >
+                      <Select
+                        style={{ width: '100%' }}
+                        placeholder="Select L2 GST"
+                        onChange={() => {
+                          calculateSubTotalin('L2')
+                          calculateSubTotalfin('L2')
                         }}
                       >
-                        {' '}
-                        *
-                      </span>
-                    </th>
-                    <th style={{ textAlign: 'center' }}>
-                      L3{' '}
-                      <span
-                        style={{
-                          color: 'red',
-                          display: finalVal === 'L3' ? 'inline-block' : 'none',
+                        <Option key="0" value="0">
+                          0
+                        </Option>
+                        <Option key="1" value="5">
+                          5
+                        </Option>
+                        <Option key="2" value="12">
+                          12
+                        </Option>
+                        <Option key="1" value="18">
+                          18
+                        </Option>
+                        <Option key="2" value="28">
+                          28
+                        </Option>
+                      </Select>
+                    </Form.Item>
+                    <Form.Item
+                      name="vendorgstL3"
+                      labelCol={{ span: 10 }}
+                      wrapperCol={{ span: 12 }}
+                      label={
+                        <span style={{ textAlign: 'center' }}>
+                          Vendor L3 GST (%){' '}
+                          <span
+                            style={{
+                              color: 'red',
+                              display: finalVal === 'L3' ? 'inline-block' : 'none',
+                            }}
+                          >
+                            {' '}
+                            *
+                          </span>
+                        </span>
+                      }
+                      labelAlign="left"
+                    >
+                      <Select
+                        style={{ width: '100%' }}
+                        placeholder="Select L3 GST"
+                        onChange={() => {
+                          calculateSubTotalin('L3')
+                          calculateSubTotalfin('L3')
                         }}
                       >
-                        {' '}
-                        *
-                      </span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>
-                      Supplier Name <span style={{ color: 'red' }}> *</span>
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L1' ? 'gray' : 'white',
-                        padding: '3px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormInput name="suppliername1" readOnly />
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L2' ? 'gray' : 'white',
-                        padding: '3px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormInput name="suppliername2" readOnly />
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L3' ? 'gray' : 'white',
-                        padding: '3px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormInput name="suppliername3" readOnly />
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      Vendor Code <span style={{ color: 'red' }}> *</span>
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L1' ? 'gray' : 'white',
-                        padding: '0px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormInput name="vendorcode1" readOnly />
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L2' ? 'gray' : 'white',
-                        padding: '0px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormInput name="vendorcode2" readOnly />
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L3' ? 'gray' : 'white',
-                        padding: '0px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormInput name="vendorcode3" readOnly />
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      Initial Date <span style={{ color: 'red' }}> *</span>
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L1' ? 'gray' : 'white',
-                        padding: '0px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormDate
-                        name="initialdate1"
-                        readOnly={isEditable === '0' || isEditable === undefined}
-                        disabledate
-                      />
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L2' ? 'gray' : 'white',
-                        padding: '0px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormDate
-                        name="initialdate2"
-                        readOnly={isEditable === '0' || isEditable === undefined}
-                        disabledate
-                      />
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L3' ? 'gray' : 'white',
-                        padding: '0px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormDate
-                        name="initialdate3"
-                        readOnly={isEditable === '0' || isEditable === undefined}
-                        disabledate
-                      />
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      Initial Ref No. <span style={{ color: 'red' }}> *</span>
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L1' ? 'gray' : 'white',
-                        padding: '0px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormInput
-                        name="refno1"
-                        readOnly={isEditable === '0' || isEditable === undefined}
-                        maxLength={64}
-                      />
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L2' ? 'gray' : 'white',
-                        padding: '0px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormInput
-                        name="refno2"
-                        readOnly={isEditable === '0' || isEditable === undefined}
-                        maxLength={64}
-                      />
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L3' ? 'gray' : 'white',
-                        padding: '0px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormInput
-                        name="refno3"
-                        readOnly={isEditable === '0' || isEditable === undefined}
-                        maxLength={64}
-                      />
-                    </td>
-                  </tr>
-
-                  <tr>
-                    <td>
-                      Final Date <span style={{ color: 'red' }}> *</span>
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L1' ? 'gray' : 'white',
-                        padding: '0px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormDate
-                        name="finaldate1"
-                        readOnly={isEditable === '0' || isEditable === undefined}
-                        disabledate
-                      />
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L2' ? 'gray' : 'white',
-                        padding: '0px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormDate
-                        name="finaldate2"
-                        readOnly={isEditable === '0' || isEditable === undefined}
-                        disabledate
-                      />
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L3' ? 'gray' : 'white',
-                        padding: '0px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormDate
-                        name="finaldate3"
-                        readOnly={isEditable === '0' || isEditable === undefined}
-                        disabledate
-                      />
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      Final Ref No. <span style={{ color: 'red' }}> *</span>
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L1' ? 'gray' : 'white',
-                        padding: '0px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormInput
-                        name="finalref1"
-                        readOnly={isEditable === '0' || isEditable === undefined}
-                        maxLength={64}
-                      />
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L2' ? 'gray' : 'white',
-                        padding: '0px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormInput
-                        name="finalref2"
-                        readOnly={isEditable === '0' || isEditable === undefined}
-                        maxLength={64}
-                      />
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L3' ? 'gray' : 'white',
-                        padding: '0px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormInput
-                        name="finalref3"
-                        readOnly={isEditable === '0' || isEditable === undefined}
-                        maxLength={64}
-                      />
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      Delivery <span style={{ color: 'red' }}> *</span>
-                    </td>
-                    <td style={{ background: finalVal === 'L1' && isOverDue ? 'red' : 'white' }}>
-                      <CustomFormDate
-                        name="delivery1"
-                        readOnly={isEditable === '0' || isEditable === undefined}
-                        onChange
-                        vendoritem="L1"
-                      />
-                    </td>
-                    <td style={{ background: finalVal === 'L2' && isOverDue ? 'red' : 'white' }}>
-                      <CustomFormDate
-                        name="delivery2"
-                        readOnly={isEditable === '0' || isEditable === undefined}
-                        onChange
-                        vendoritem="L2"
-                      />
-                    </td>
-                    <td style={{ background: finalVal === 'L3' && isOverDue ? 'red' : 'white' }}>
-                      <CustomFormDate
-                        name="delivery3"
-                        readOnly={isEditable === '0' || isEditable === undefined}
-                        onChange
-                        vendoritem="L3"
-                      />
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      Warranty <span style={{ color: 'red' }}> *</span>
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L1' ? 'gray' : 'white',
-                        padding: '3px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormInput
-                        name="warantyl1"
-                        readOnly={isEditable === '0' || isEditable === undefined}
-                        maxLength={64}
-                      />
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L2' ? 'gray' : 'white',
-                        padding: '3px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormInput
-                        name="warantyl2"
-                        readOnly={isEditable === '0' || isEditable === undefined}
-                        maxLength={64}
-                      />
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L3' ? 'gray' : 'white',
-                        padding: '3px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormInput
-                        name="warantyl3"
-                        readOnly={isEditable === '0' || isEditable === undefined}
-                        maxLength={64}
-                      />
-                    </td>
-                  </tr>
-
-                  <tr>
-                    <td>
-                      LD <span style={{ color: 'red' }}> *</span>
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L1' ? 'gray' : 'white',
-                        padding: '3px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormInput
-                        name="ld1"
-                        readOnly={isEditable === '0' || isEditable === undefined}
-                        maxLength={64}
-                      />
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L2' ? 'gray' : 'white',
-                        padding: '3px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormInput
-                        name="ld2"
-                        readOnly={isEditable === '0' || isEditable === undefined}
-                        maxLength={64}
-                      />
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L3' ? 'gray' : 'white',
-                        padding: '3px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormInput
-                        name="ld3"
-                        readOnly={isEditable === '0' || isEditable === undefined}
-                        maxLength={64}
-                      />
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      Country <span style={{ color: 'red' }}> *</span>
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L1' ? 'gray' : 'white',
-                        padding: '3px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormInput name="country1" readOnly maxLength={64} />
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L2' ? 'gray' : 'white',
-                        padding: '3px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormInput name="country2" readOnly maxLength={64} />
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L3' ? 'gray' : 'white',
-                        padding: '3px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormInput name="country3" readOnly maxLength={64} />
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      Exchange Rate (Rs.) <span style={{ color: 'red' }}> *</span>
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L1' ? 'gray' : 'white',
-                        padding: '3px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormInput
-                        name="exchangeRate1"
-                        readOnly={isEditable === '0' || isEditable === undefined}
-                        disable={country1?.toLowerCase?.() === 'india' || formdisable}
-                        // disable={allPropForm.getFieldValue('country1') === 'india' || formdisable}
-                        maxLength={64}
-                      />
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L2' ? 'gray' : 'white',
-                        padding: '3px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormInput
-                        name="exchangeRate2"
-                        readOnly={isEditable === '0' || isEditable === undefined}
-                        disable={country2?.toLowerCase?.() === 'india' || formdisable}
-                        maxLength={64}
-                      />
-                    </td>
-                    <td
-                      style={{
-                        background: finalVal === 'L3' ? 'gray' : 'white',
-                        padding: '3px 3px 0px 3px',
-                      }}
-                    >
-                      <CustomFormInput
-                        name="exchangeRate3"
-                        readOnly={isEditable === '0' || isEditable === undefined}
-                        disable={country3?.toLowerCase?.() === 'india' || formdisable}
-                        maxLength={64}
-                      />
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      Payment Terms <span style={{ color: 'red' }}> *</span>
-                    </td>
-
-                    <PaymentTermsSection
-                      level="L1"
-                      data={paymenttermdatal1}
-                      columns={paymenttermcolumnsl1}
-                      visible={paymttermvisible1}
-                      setVisible={setPaymttermvisible1}
-                      openCard={Openpaymenttermcard1}
+                        <Option key="0" value="0">
+                          0
+                        </Option>
+                        <Option key="1" value="5">
+                          5
+                        </Option>
+                        <Option key="2" value="12">
+                          12
+                        </Option>
+                        <Option key="1" value="18">
+                          18
+                        </Option>
+                        <Option key="2" value="28">
+                          28
+                        </Option>
+                      </Select>
+                    </Form.Item>
+                  </div>
+                  <div className="col-12 col-sm-12 col-md-6 col-lg-6 col-xl-6 col-xxl-6">
+                    <CustomFormItem
+                      name="justificationL1"
+                      label="Justification"
+                      colspan="24"
+                      maxLength={2056}
                     />
-                    <PaymentTermsSection
-                      level="L2"
-                      data={paymenttermdatal2}
-                      columns={paymenttermcolumnsl2}
-                      visible={paymttermvisible2}
-                      setVisible={setPaymttermvisible2}
-                      openCard={Openpaymenttermcard2}
-                    />
-                    <PaymentTermsSection
-                      level="L3"
-                      data={paymenttermdatal3}
-                      columns={paymenttermcolumnsl3}
-                      visible={paymttermvisible3}
-                      setVisible={setPaymttermvisible3}
-                      openCard={Openpaymenttermcard3}
-                    />
-                  </tr>
-                </tbody>
-              </table>
-              <div className="custom_antd_Table">
-                <Form
-                  form={tableform}
-                  onValuesChange={(changedValues, allValues) => {
-                    handleTableChange(allValues)
-                    // setBaseTabVal(allValues);
-                  }}
-                  initialValues={{ priceTable }}
-                >
-                  {/* <TableComponent
-                    data={priceTable}
-                    columns={pricecolumns}
-                    scrollY={450}
-                    scrollX={1800}
-                    page={false}
-                    sticky
-                    onRow={(record, rowIndex) => ({
-                      rowIndex, // Pass the rowIndex here
-                    })}
-                  /> */}
-                  <Table
-                    columns={pricecolumns}
-                    dataSource={priceTable}
-                    pagination={{
-                      pageSizeOptions: ['10', '20', '30', '50', [priceTable.length]],
-                      showSizeChanger: true,
-                      defaultPageSize: priceTable.length,
-                    }}
-                    // onChange={handleChange}
-                    scroll={{ y: 450, x: 3000 }}
-                    // rowClassName={rowClass}
-                    bordered
-                  />
-                </Form>
-              </div>
-              <div>
+                    <Form.Item
+                      name="vendorqualifiedL1"
+                      labelCol={{ span: 8 }}
+                      wrapperCol={{ span: 16 }}
+                      label={
+                        <span style={{ textAlign: 'center' }}>
+                          Vendor Qualified <span style={{ color: 'red' }}> *</span>
+                        </span>
+                      }
+                      labelAlign="left"
+                    >
+                      {/* <Input type="text" className="custom-input" /> */}
+                      <Select
+                        style={{ width: '100%' }}
+                        placeholder="Select Vendor"
+                        onChange={(value, option) => handlevendorQualify(value, option)}
+                        // defaultValue={defaultSelectedOption && defaultSelectedOption.key}
+                      >
+                        {vendorQualify?.map(item => (
+                          <Option key={item.key} value={item.key}>
+                            {item.label}
+                          </Option>
+                        ))}
+                      </Select>
+                    </Form.Item>
+                    <Form.Item
+                      name="customerapprovedL1"
+                      labelCol={{ span: 8 }}
+                      wrapperCol={{ span: 16 }}
+                      labelAlign="left"
+                      label={<span style={{ textAlign: 'center' }}>Customer Preferred</span>}
+                    >
+                      <Input type="text" className="custom-input" maxLength={256} />
+                    </Form.Item>
+                    <Form.Item
+                      name="scstypeL1"
+                      labelCol={{ span: 8 }}
+                      wrapperCol={{ span: 16 }}
+                      label={
+                        <span style={{ textAlign: 'center' }}>
+                          Type <span style={{ color: 'red' }}> *</span>
+                        </span>
+                      }
+                      labelAlign="left"
+                    >
+                      <Select style={{ width: '100%' }} placeholder="Select Type">
+                        <Option key="1" value="PO Justification">
+                          PO
+                        </Option>
+                        <Option key="2" value="Cash Voucher">
+                          Cash Voucher
+                        </Option>
+                      </Select>
+                    </Form.Item>
+                  </div>
+                </div>
+                <Divider orientation="left" style={{ margin: '0px' }}>
+                  Vendor Terms
+                </Divider>
+
                 <table className="custom-form-container" style={{ width: '100%' }}>
                   <thead>
                     <tr>
                       <th style={{ textAlign: 'center' }}>&nbsp;</th>
-                      <th colSpan="8" style={{ textAlign: 'center' }}>
+                      <th style={{ textAlign: 'center' }}>
                         L1{' '}
                         <span
                           style={{
@@ -4997,7 +4546,7 @@ const SupCompState = ({
                           *
                         </span>
                       </th>
-                      <th colSpan="8" style={{ textAlign: 'center' }}>
+                      <th style={{ textAlign: 'center' }}>
                         L2{' '}
                         <span
                           style={{
@@ -5009,7 +4558,7 @@ const SupCompState = ({
                           *
                         </span>
                       </th>
-                      <th colSpan="8" style={{ textAlign: 'center' }}>
+                      <th style={{ textAlign: 'center' }}>
                         L3{' '}
                         <span
                           style={{
@@ -5026,1108 +4575,1646 @@ const SupCompState = ({
                   <tbody>
                     <tr>
                       <td>
-                        Basic Total <span style={{ color: 'red' }}> *</span>
+                        Supplier Name <span style={{ color: 'red' }}> *</span>
                       </td>
                       <td
-                        colSpan="1"
-                        style={{
-                          // width:'100%',
-                          background: finalVal === 'L1' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="basicTotalL1inunitFx" readOnly />
-                      </td>
-                      <td
-                        colSpan="1"
                         style={{
                           background: finalVal === 'L1' ? 'gray' : 'white',
                           padding: '3px 3px 0px 3px',
                         }}
                       >
-                        <CustomFormNumberInput name="basicTotalL1inextdFx" readOnly />
+                        <CustomFormInput name="suppliername1" readOnly />
                       </td>
                       <td
-                        colSpan="1"
-                        style={{
-                          background: finalVal === 'L1' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="basicTotalL1inunit" readOnly />
-                      </td>
-                      <td
-                        colSpan="1"
-                        style={{
-                          background: finalVal === 'L1' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="basicTotalL1inextd" readOnly />
-                      </td>
-                      <td
-                        colSpan="1"
-                        style={{
-                          background: finalVal === 'L1' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="basicTotalL1finunitFx" readOnly />
-                      </td>
-                      <td
-                        colSpan="1"
-                        style={{
-                          background: finalVal === 'L1' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="basicTotalL1finextdFx" readOnly />
-                      </td>
-                      <td
-                        colSpan="1"
-                        style={{
-                          background: finalVal === 'L1' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="basicTotalL1finunit" readOnly />
-                      </td>
-                      <td
-                        colSpan="1"
-                        style={{
-                          background: finalVal === 'L1' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="basicTotalL1finextd" readOnly />
-                      </td>
-                      <td
-                        colSpan="1"
                         style={{
                           background: finalVal === 'L2' ? 'gray' : 'white',
                           padding: '3px 3px 0px 3px',
                         }}
                       >
-                        <CustomFormNumberInput name="basicTotalL2inunitFx" readOnly />
+                        <CustomFormInput name="suppliername2" readOnly />
                       </td>
                       <td
-                        colSpan="1"
+                        style={{
+                          background: finalVal === 'L3' ? 'gray' : 'white',
+                          padding: '3px 3px 0px 3px',
+                        }}
+                      >
+                        <CustomFormInput name="suppliername3" readOnly />
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>
+                        Vendor Code <span style={{ color: 'red' }}> *</span>
+                      </td>
+                      <td
+                        style={{
+                          background: finalVal === 'L1' ? 'gray' : 'white',
+                          padding: '0px 3px 0px 3px',
+                        }}
+                      >
+                        <CustomFormInput name="vendorcode1" readOnly />
+                      </td>
+                      <td
+                        style={{
+                          background: finalVal === 'L2' ? 'gray' : 'white',
+                          padding: '0px 3px 0px 3px',
+                        }}
+                      >
+                        <CustomFormInput name="vendorcode2" readOnly />
+                      </td>
+                      <td
+                        style={{
+                          background: finalVal === 'L3' ? 'gray' : 'white',
+                          padding: '0px 3px 0px 3px',
+                        }}
+                      >
+                        <CustomFormInput name="vendorcode3" readOnly />
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>
+                        Initial Date <span style={{ color: 'red' }}> *</span>
+                      </td>
+                      <td
+                        style={{
+                          background: finalVal === 'L1' ? 'gray' : 'white',
+                          padding: '0px 3px 0px 3px',
+                        }}
+                      >
+                        <CustomFormDate
+                          name="initialdate1"
+                          readOnly={isEditable === '0' || isEditable === undefined}
+                          disabledate
+                        />
+                      </td>
+                      <td
+                        style={{
+                          background: finalVal === 'L2' ? 'gray' : 'white',
+                          padding: '0px 3px 0px 3px',
+                        }}
+                      >
+                        <CustomFormDate
+                          name="initialdate2"
+                          readOnly={isEditable === '0' || isEditable === undefined}
+                          disabledate
+                        />
+                      </td>
+                      <td
+                        style={{
+                          background: finalVal === 'L3' ? 'gray' : 'white',
+                          padding: '0px 3px 0px 3px',
+                        }}
+                      >
+                        <CustomFormDate
+                          name="initialdate3"
+                          readOnly={isEditable === '0' || isEditable === undefined}
+                          disabledate
+                        />
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>
+                        Initial Ref No. <span style={{ color: 'red' }}> *</span>
+                      </td>
+                      <td
+                        style={{
+                          background: finalVal === 'L1' ? 'gray' : 'white',
+                          padding: '0px 3px 0px 3px',
+                        }}
+                      >
+                        <CustomFormInput
+                          name="refno1"
+                          readOnly={isEditable === '0' || isEditable === undefined}
+                          maxLength={64}
+                        />
+                      </td>
+                      <td
+                        style={{
+                          background: finalVal === 'L2' ? 'gray' : 'white',
+                          padding: '0px 3px 0px 3px',
+                        }}
+                      >
+                        <CustomFormInput
+                          name="refno2"
+                          readOnly={isEditable === '0' || isEditable === undefined}
+                          maxLength={64}
+                        />
+                      </td>
+                      <td
+                        style={{
+                          background: finalVal === 'L3' ? 'gray' : 'white',
+                          padding: '0px 3px 0px 3px',
+                        }}
+                      >
+                        <CustomFormInput
+                          name="refno3"
+                          readOnly={isEditable === '0' || isEditable === undefined}
+                          maxLength={64}
+                        />
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td>
+                        Final Date <span style={{ color: 'red' }}> *</span>
+                      </td>
+                      <td
+                        style={{
+                          background: finalVal === 'L1' ? 'gray' : 'white',
+                          padding: '0px 3px 0px 3px',
+                        }}
+                      >
+                        <CustomFormDate
+                          name="finaldate1"
+                          readOnly={isEditable === '0' || isEditable === undefined}
+                          disabledate
+                        />
+                      </td>
+                      <td
+                        style={{
+                          background: finalVal === 'L2' ? 'gray' : 'white',
+                          padding: '0px 3px 0px 3px',
+                        }}
+                      >
+                        <CustomFormDate
+                          name="finaldate2"
+                          readOnly={isEditable === '0' || isEditable === undefined}
+                          disabledate
+                        />
+                      </td>
+                      <td
+                        style={{
+                          background: finalVal === 'L3' ? 'gray' : 'white',
+                          padding: '0px 3px 0px 3px',
+                        }}
+                      >
+                        <CustomFormDate
+                          name="finaldate3"
+                          readOnly={isEditable === '0' || isEditable === undefined}
+                          disabledate
+                        />
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>
+                        Final Ref No. <span style={{ color: 'red' }}> *</span>
+                      </td>
+                      <td
+                        style={{
+                          background: finalVal === 'L1' ? 'gray' : 'white',
+                          padding: '0px 3px 0px 3px',
+                        }}
+                      >
+                        <CustomFormInput
+                          name="finalref1"
+                          readOnly={isEditable === '0' || isEditable === undefined}
+                          maxLength={64}
+                        />
+                      </td>
+                      <td
+                        style={{
+                          background: finalVal === 'L2' ? 'gray' : 'white',
+                          padding: '0px 3px 0px 3px',
+                        }}
+                      >
+                        <CustomFormInput
+                          name="finalref2"
+                          readOnly={isEditable === '0' || isEditable === undefined}
+                          maxLength={64}
+                        />
+                      </td>
+                      <td
+                        style={{
+                          background: finalVal === 'L3' ? 'gray' : 'white',
+                          padding: '0px 3px 0px 3px',
+                        }}
+                      >
+                        <CustomFormInput
+                          name="finalref3"
+                          readOnly={isEditable === '0' || isEditable === undefined}
+                          maxLength={64}
+                        />
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>
+                        Delivery <span style={{ color: 'red' }}> *</span>
+                      </td>
+                      <td style={{ background: finalVal === 'L1' && isOverDue ? 'red' : 'white' }}>
+                        <CustomFormDate
+                          name="delivery1"
+                          readOnly={isEditable === '0' || isEditable === undefined}
+                          onChange
+                          vendoritem="L1"
+                        />
+                      </td>
+                      <td style={{ background: finalVal === 'L2' && isOverDue ? 'red' : 'white' }}>
+                        <CustomFormDate
+                          name="delivery2"
+                          readOnly={isEditable === '0' || isEditable === undefined}
+                          onChange
+                          vendoritem="L2"
+                        />
+                      </td>
+                      <td style={{ background: finalVal === 'L3' && isOverDue ? 'red' : 'white' }}>
+                        <CustomFormDate
+                          name="delivery3"
+                          readOnly={isEditable === '0' || isEditable === undefined}
+                          onChange
+                          vendoritem="L3"
+                        />
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>
+                        Warranty <span style={{ color: 'red' }}> *</span>
+                      </td>
+                      <td
+                        style={{
+                          background: finalVal === 'L1' ? 'gray' : 'white',
+                          padding: '3px 3px 0px 3px',
+                        }}
+                      >
+                        <CustomFormInput
+                          name="warantyl1"
+                          readOnly={isEditable === '0' || isEditable === undefined}
+                          maxLength={64}
+                        />
+                      </td>
+                      <td
                         style={{
                           background: finalVal === 'L2' ? 'gray' : 'white',
                           padding: '3px 3px 0px 3px',
                         }}
                       >
-                        <CustomFormNumberInput name="basicTotalL2inunit" readOnly />
+                        <CustomFormInput
+                          name="warantyl2"
+                          readOnly={isEditable === '0' || isEditable === undefined}
+                          maxLength={64}
+                        />
                       </td>
                       <td
-                        colSpan="1"
+                        style={{
+                          background: finalVal === 'L3' ? 'gray' : 'white',
+                          padding: '3px 3px 0px 3px',
+                        }}
+                      >
+                        <CustomFormInput
+                          name="warantyl3"
+                          readOnly={isEditable === '0' || isEditable === undefined}
+                          maxLength={64}
+                        />
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td>
+                        LD <span style={{ color: 'red' }}> *</span>
+                      </td>
+                      <td
+                        style={{
+                          background: finalVal === 'L1' ? 'gray' : 'white',
+                          padding: '3px 3px 0px 3px',
+                        }}
+                      >
+                        <CustomFormInput
+                          name="ld1"
+                          readOnly={isEditable === '0' || isEditable === undefined}
+                          maxLength={64}
+                        />
+                      </td>
+                      <td
                         style={{
                           background: finalVal === 'L2' ? 'gray' : 'white',
                           padding: '3px 3px 0px 3px',
                         }}
                       >
-                        <CustomFormNumberInput name="basicTotalL2inextdFx" readOnly />
+                        <CustomFormInput
+                          name="ld2"
+                          readOnly={isEditable === '0' || isEditable === undefined}
+                          maxLength={64}
+                        />
                       </td>
                       <td
-                        colSpan="1"
+                        style={{
+                          background: finalVal === 'L3' ? 'gray' : 'white',
+                          padding: '3px 3px 0px 3px',
+                        }}
+                      >
+                        <CustomFormInput
+                          name="ld3"
+                          readOnly={isEditable === '0' || isEditable === undefined}
+                          maxLength={64}
+                        />
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>
+                        Country <span style={{ color: 'red' }}> *</span>
+                      </td>
+                      <td
+                        style={{
+                          background: finalVal === 'L1' ? 'gray' : 'white',
+                          padding: '3px 3px 0px 3px',
+                        }}
+                      >
+                        <CustomFormInput name="country1" readOnly maxLength={64} />
+                      </td>
+                      <td
                         style={{
                           background: finalVal === 'L2' ? 'gray' : 'white',
                           padding: '3px 3px 0px 3px',
                         }}
                       >
-                        <CustomFormNumberInput name="basicTotalL2inextd" readOnly />
+                        <CustomFormInput name="country2" readOnly maxLength={64} />
+                      </td>
+                      <td
+                        style={{
+                          background: finalVal === 'L3' ? 'gray' : 'white',
+                          padding: '3px 3px 0px 3px',
+                        }}
+                      >
+                        <CustomFormInput name="country3" readOnly maxLength={64} />
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>
+                        Exchange Rate (Rs.) <span style={{ color: 'red' }}> *</span>
+                      </td>
+                      <td
+                        style={{
+                          background: finalVal === 'L1' ? 'gray' : 'white',
+                          padding: '3px 3px 0px 3px',
+                        }}
+                      >
+                        <CustomFormInput
+                          name="exchangeRate1"
+                          readOnly={isEditable === '0' || isEditable === undefined}
+                          disable={country1?.toLowerCase?.() === 'india' || formdisable}
+                          // disable={allPropForm.getFieldValue('country1') === 'india' || formdisable}
+                          maxLength={64}
+                        />
+                      </td>
+                      <td
+                        style={{
+                          background: finalVal === 'L2' ? 'gray' : 'white',
+                          padding: '3px 3px 0px 3px',
+                        }}
+                      >
+                        <CustomFormInput
+                          name="exchangeRate2"
+                          readOnly={isEditable === '0' || isEditable === undefined}
+                          disable={country2?.toLowerCase?.() === 'india' || formdisable}
+                          maxLength={64}
+                        />
+                      </td>
+                      <td
+                        style={{
+                          background: finalVal === 'L3' ? 'gray' : 'white',
+                          padding: '3px 3px 0px 3px',
+                        }}
+                      >
+                        <CustomFormInput
+                          name="exchangeRate3"
+                          readOnly={isEditable === '0' || isEditable === undefined}
+                          disable={country3?.toLowerCase?.() === 'india' || formdisable}
+                          maxLength={64}
+                        />
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>
+                        Payment Terms <span style={{ color: 'red' }}> *</span>
                       </td>
 
-                      <td
-                        colSpan="1"
-                        style={{
-                          background: finalVal === 'L2' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="basicTotalL2finunitFx" readOnly />
-                      </td>
-                      <td
-                        colSpan="1"
-                        style={{
-                          background: finalVal === 'L2' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="basicTotalL2finunit" readOnly />
-                      </td>
-                      <td
-                        colSpan="1"
-                        style={{
-                          background: finalVal === 'L2' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="basicTotalL2finextdFx" readOnly />
-                      </td>
-                      <td
-                        colSpan="1"
-                        style={{
-                          background: finalVal === 'L2' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="basicTotalL2finextd" readOnly />
-                      </td>
-                      <td
-                        colSpan="1"
-                        style={{
-                          background: finalVal === 'L3' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="basicTotalL3inunitFx" readOnly />
-                      </td>
-                      <td
-                        colSpan="1"
-                        style={{
-                          background: finalVal === 'L3' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="basicTotalL3inunit" readOnly />
-                      </td>
-                      <td
-                        colSpan="1"
-                        style={{
-                          background: finalVal === 'L3' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="basicTotalL3inextdFx" readOnly />
-                      </td>
-                      <td
-                        colSpan="1"
-                        style={{
-                          background: finalVal === 'L3' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="basicTotalL3inextd" readOnly />
-                      </td>
-
-                      <td
-                        colSpan="1"
-                        style={{
-                          background: finalVal === 'L3' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="basicTotalL3finunitFx" readOnly />
-                      </td>
-                      <td
-                        colSpan="1"
-                        style={{
-                          background: finalVal === 'L3' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="basicTotalL3finunit" readOnly />
-                      </td>
-                      <td
-                        colSpan="1"
-                        style={{
-                          background: finalVal === 'L3' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="basicTotalL3finextdFx" readOnly />
-                      </td>
-                      <td
-                        colSpan="1"
-                        style={{
-                          background: finalVal === 'L3' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="basicTotalL3finextd" readOnly />
-                      </td>
-                    </tr>
-                    <tr>
-                      <td>
-                        Transport Charge <span style={{ color: 'red' }}> *</span>
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L1' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="transportChargeL1inFx"
-                          functionname={e => {
-                            calculateSubTotalin('L1')
-                            onChangeFxCalculationForTransport('L1', e)
-                          }}
-                          readOnly={isEditable === '0' || isEditable === undefined || countryL1}
-                          maxLength={15}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L1' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="transportChargeL1in"
-                          functionname={() => calculateSubTotalin('L1')}
-                          readOnly={isEditable === '0' || isEditable === undefined}
-                          maxLength={15}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L1' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="transportChargeL1finFx"
-                          functionname={e => {
-                            calculateSubTotalin('L1')
-                            onChangeFinalFxCalculationForTransport('L1', e)
-                          }}
-                          readOnly={isEditable === '0' || isEditable === undefined || countryL1}
-                          maxLength={15}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L1' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="transportChargeL1fin"
-                          functionname={() => calculateSubTotalfin('L1')}
-                          readOnly={isEditable === '0' || isEditable === undefined}
-                          maxLength={15}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L2' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="transportChargeL2inFx"
-                          functionname={e => {
-                            calculateSubTotalin('L2')
-                            onChangeFxCalculationForTransport('L2', e)
-                          }}
-                          readOnly={isEditable === '0' || isEditable === undefined || countryL2}
-                          maxLength={15}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L2' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="transportChargeL2in"
-                          functionname={() => calculateSubTotalin('L2')}
-                          readOnly={isEditable === '0' || isEditable === undefined}
-                          maxLength={15}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L2' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="transportChargeL2finFx"
-                          functionname={e => {
-                            calculateSubTotalin('L2')
-                            onChangeFinalFxCalculationForTransport('L2', e)
-                          }}
-                          readOnly={isEditable === '0' || isEditable === undefined || countryL2}
-                          maxLength={15}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L2' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="transportChargeL2fin"
-                          functionname={() => calculateSubTotalfin('L2')}
-                          readOnly={isEditable === '0' || isEditable === undefined}
-                          maxLength={15}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L3' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="transportChargeL3inFx"
-                          functionname={e => {
-                            calculateSubTotalin('L3')
-                            onChangeFxCalculationForTransport('L3', e)
-                          }}
-                          readOnly={isEditable === '0' || isEditable === undefined || countryL3}
-                          maxLength={15}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L3' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="transportChargeL3in"
-                          functionname={() => calculateSubTotalin('L3')}
-                          readOnly={isEditable === '0' || isEditable === undefined}
-                          maxLength={15}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L3' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="transportChargeL3finFx"
-                          functionname={e => {
-                            calculateSubTotalin('L3')
-                            onChangeFinalFxCalculationForTransport('L3', e)
-                          }}
-                          readOnly={isEditable === '0' || isEditable === undefined || countryL3}
-                          maxLength={15}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L3' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="transportChargeL3fin"
-                          functionname={() => calculateSubTotalfin('L3')}
-                          readOnly={isEditable === '0' || isEditable === undefined}
-                          maxLength={15}
-                        />
-                      </td>
-                    </tr>
-                    <tr>
-                      <td>
-                        P&F <span style={{ color: 'red' }}> *</span>
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L1' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="pfL1inFx"
-                          functionname={e => {
-                            calculateSubTotalin('L1')
-                            onChangeFxCalculationForPandF('L1', e)
-                          }}
-                          readOnly={isEditable === '0' || isEditable === undefined || countryL1}
-                          maxLength={15}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L1' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="pfL1in"
-                          functionname={() => calculateSubTotalin('L1')}
-                          readOnly={isEditable === '0' || isEditable === undefined}
-                          maxLength={15}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L1' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="pfL1finFx"
-                          functionname={e => {
-                            onChangeFinalFxCalculationForPandF('L1', e)
-                          }}
-                          readOnly={isEditable === '0' || isEditable === undefined || countryL1}
-                          maxLength={15}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L1' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="pfL1fin"
-                          functionname={() => calculateSubTotalfin('L1')}
-                          readOnly={isEditable === '0' || isEditable === undefined}
-                          maxLength={15}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L2' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="pfL2inFx"
-                          functionname={e => {
-                            calculateSubTotalin('L2')
-                            onChangeFxCalculationForPandF('L2', e)
-                          }}
-                          readOnly={isEditable === '0' || isEditable === undefined || countryL2}
-                          maxLength={15}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L2' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="pfL2in"
-                          functionname={() => calculateSubTotalin('L2')}
-                          readOnly={isEditable === '0' || isEditable === undefined}
-                          maxLength={15}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L2' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="pfL2finFx"
-                          functionname={e => {
-                            onChangeFinalFxCalculationForPandF('L2', e)
-                          }}
-                          readOnly={isEditable === '0' || isEditable === undefined || countryL2}
-                          maxLength={15}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L2' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="pfL2fin"
-                          functionname={() => calculateSubTotalfin('L2')}
-                          readOnly={isEditable === '0' || isEditable === undefined}
-                          maxLength={15}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L3' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="pfL3inFx"
-                          functionname={e => {
-                            calculateSubTotalin('L3')
-                            onChangeFxCalculationForPandF('L3', e)
-                          }}
-                          readOnly={isEditable === '0' || isEditable === undefined || countryL3}
-                          maxLength={15}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L3' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="pfL3in"
-                          functionname={() => calculateSubTotalin('L3')}
-                          readOnly={isEditable === '0' || isEditable === undefined}
-                          maxLength={15}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L3' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="pfL3finFx"
-                          functionname={e => {
-                            onChangeFinalFxCalculationForPandF('L3', e)
-                          }}
-                          readOnly={isEditable === '0' || isEditable === undefined || countryL3}
-                          maxLength={15}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L3' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="pfL3fin"
-                          functionname={() => calculateSubTotalfin('L3')}
-                          readOnly={isEditable === '0' || isEditable === undefined}
-                          maxLength={15}
-                        />
-                      </td>
-                    </tr>
-                    <tr>
-                      <td>
-                        Sub Total <span style={{ color: 'red' }}> *</span>
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L1' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="subTotalL1inFx" readOnly />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L1' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="subTotalL1in" readOnly />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L1' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="subTotalL1finFx" readOnly />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L1' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="subTotalL1fin" readOnly />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L2' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="subTotalL2inFx" readOnly />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L2' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="subTotalL2in" readOnly />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L2' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="subTotalL2finFx" readOnly />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L2' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="subTotalL2fin" readOnly />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L3' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="subTotalL3inFx" readOnly />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L3' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="subTotalL3in" readOnly />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L3' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="subTotalL3fin" readOnly />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L3' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="subTotalL3finFx" readOnly />
-                      </td>
-                    </tr>
-                    <tr style={{ display: 'none' }}>
-                      <td>
-                        GST Value <span style={{ color: 'red' }}> *</span>
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L1' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="gst18L1inFx"
-                          functionname={() => calculateSubTotalin('L1')}
-                          readOnly={isEditable === '0' || isEditable === undefined}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L1' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="gst18L1in"
-                          functionname={() => calculateSubTotalin('L1')}
-                          readOnly={isEditable === '0' || isEditable === undefined}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L1' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="gst18L1finFx"
-                          functionname={() => calculateSubTotalfin('L1')}
-                          readOnly={isEditable === '0' || isEditable === undefined}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L1' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="gst18L1fin"
-                          functionname={() => calculateSubTotalfin('L1')}
-                          readOnly={isEditable === '0' || isEditable === undefined}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L2' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="gst18L2inFx"
-                          functionname={() => calculateSubTotalin('L2')}
-                          readOnly={isEditable === '0' || isEditable === undefined}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L2' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="gst18L2in"
-                          functionname={() => calculateSubTotalin('L2')}
-                          readOnly={isEditable === '0' || isEditable === undefined}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L2' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="gst18L2finFx"
-                          functionname={() => calculateSubTotalfin('L2')}
-                          readOnly={isEditable === '0' || isEditable === undefined}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L2' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="gst18L2fin"
-                          functionname={() => calculateSubTotalfin('L2')}
-                          readOnly={isEditable === '0' || isEditable === undefined}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L3' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="gst18L3inFx"
-                          functionname={() => calculateSubTotalin('L3')}
-                          readOnly={isEditable === '0' || isEditable === undefined}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L3' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="gst18L3in"
-                          functionname={() => calculateSubTotalin('L3')}
-                          readOnly={isEditable === '0' || isEditable === undefined}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L3' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="gst18L3finFx"
-                          functionname={() => calculateSubTotalfin('L3')}
-                          readOnly={isEditable === '0' || isEditable === undefined}
-                        />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L3' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput
-                          name="gst18L3fin"
-                          functionname={() => calculateSubTotalfin('L3')}
-                          readOnly={isEditable === '0' || isEditable === undefined}
-                        />
-                      </td>
-                    </tr>
-                    <tr style={{ display: 'none' }}>
-                      <td>
-                        Landed Cost<span style={{ color: 'red' }}>*</span>
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L1' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="landedCostL1inFx" readOnly />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L1' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="landedCostL1in" readOnly />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L1' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="landedCostL1finFx" readOnly />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L1' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="landedCostL1fin" readOnly />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L2' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="landedCostL2inFx" readOnly />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L2' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="landedCostL2in" readOnly />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L2' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="landedCostL2finFx" readOnly />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L2' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="landedCostL2fin" readOnly />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L3' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="landedCostL3inFx" readOnly />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L3' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="landedCostL3in" readOnly />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L3' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="landedCostL3finFx" readOnly />
-                      </td>
-                      <td
-                        colSpan="2"
-                        style={{
-                          background: finalVal === 'L3' ? 'gray' : 'white',
-                          padding: '3px 3px 0px 3px',
-                        }}
-                      >
-                        <CustomFormNumberInput name="landedCostL3fin" readOnly />
-                      </td>
+                      <PaymentTermsSection
+                        level="L1"
+                        data={paymenttermdatal1}
+                        columns={paymenttermcolumnsl1}
+                        visible={paymttermvisible1}
+                        setVisible={setPaymttermvisible1}
+                        openCard={Openpaymenttermcard1}
+                      />
+                      <PaymentTermsSection
+                        level="L2"
+                        data={paymenttermdatal2}
+                        columns={paymenttermcolumnsl2}
+                        visible={paymttermvisible2}
+                        setVisible={setPaymttermvisible2}
+                        openCard={Openpaymenttermcard2}
+                      />
+                      <PaymentTermsSection
+                        level="L3"
+                        data={paymenttermdatal3}
+                        columns={paymenttermcolumnsl3}
+                        visible={paymttermvisible3}
+                        setVisible={setPaymttermvisible3}
+                        openCard={Openpaymenttermcard3}
+                      />
                     </tr>
                   </tbody>
                 </table>
-              </div>
-            </Card>
-          </Form>
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <h6 style={{ marginBottom: '0px', marginTop: '10px' }}>
-              <span style={{ fontWeight: 'bold' }}> Current Status : </span> {scsStatus}
-            </h6>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'center', marginTop: '10px' }}>
-            {docStatus && docStatus.length > 0 && (
-              <ButtonComponent
-                type="primary"
-                text={docStatus[0].docStatusDesc}
-                onClick={() => addRemarksSubmit(docStatus[0].currSequence)}
-              />
-            )}
-
-            <Popuptable
-              onClose={() => setApproveRemarksCard(false)}
-              cardLabel=""
-              component={AddRemarksComponent(
-                docStatus && docStatus.length > 0 ? docStatus[0].currSequence : '',
-              )}
-              visible={approveRemarksCard}
-            />
-            <span style={{ margin: '0 8px' }} />
-
-            <ButtonComponent
-              type="primary"
-              icon={<CommentOutlined />}
-              onClick={() => {
-                OpenDetailCard()
-              }}
-            />
-            <Popuptable
-              onClose={() => setdetailCard(false)}
-              cardLabel=""
-              component={
-                <div className="custom_antd_Table" style={{ width: isMobile ? '280px' : '500px' }}>
-                  {' '}
-                  <TableComponent data={rmkDetaillist} columns={remarksColumns} scrollY={300} />
+                <div className="custom_antd_Table">
+                  <Form
+                    form={tableform}
+                    onValuesChange={(changedValues, allValues) => {
+                      handleTableChange(allValues)
+                      // setBaseTabVal(allValues);
+                    }}
+                    initialValues={{ priceTable }}
+                  >
+                    {/* <TableComponent
+                      data={priceTable}
+                      columns={pricecolumns}
+                      scrollY={450}
+                      scrollX={1800}
+                      page={false}
+                      sticky
+                      onRow={(record, rowIndex) => ({
+                        rowIndex, // Pass the rowIndex here
+                      })}
+                    /> */}
+                    <Table
+                      columns={pricecolumns}
+                      dataSource={priceTable}
+                      pagination={{
+                        pageSizeOptions: ['10', '20', '30', '50', [priceTable.length]],
+                        showSizeChanger: true,
+                        defaultPageSize: priceTable.length,
+                      }}
+                      // onChange={handleChange}
+                      scroll={{ y: 450, x: 3000 }}
+                      // rowClassName={rowClass}
+                      bordered
+                    />
+                  </Form>
                 </div>
-              }
-              visible={detailCard}
-            />
-            <span style={{ margin: '0 8px' }} />
-            <div style={{ display: isEditable === '0' ? 'none' : 'inline' }}>
-              <ButtonComponent
-                text="Save"
-                disable={isdisablebtn}
-                type="primary"
-                onClick={() => handleinsert()}
-              />
-            </div>
+                <div>
+                  <table className="custom-form-container" style={{ width: '100%' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: 'center' }}>&nbsp;</th>
+                        <th colSpan="8" style={{ textAlign: 'center' }}>
+                          L1{' '}
+                          <span
+                            style={{
+                              color: 'red',
+                              display: finalVal === 'L1' ? 'inline-block' : 'none',
+                            }}
+                          >
+                            {' '}
+                            *
+                          </span>
+                        </th>
+                        <th colSpan="8" style={{ textAlign: 'center' }}>
+                          L2{' '}
+                          <span
+                            style={{
+                              color: 'red',
+                              display: finalVal === 'L2' ? 'inline-block' : 'none',
+                            }}
+                          >
+                            {' '}
+                            *
+                          </span>
+                        </th>
+                        <th colSpan="8" style={{ textAlign: 'center' }}>
+                          L3{' '}
+                          <span
+                            style={{
+                              color: 'red',
+                              display: finalVal === 'L3' ? 'inline-block' : 'none',
+                            }}
+                          >
+                            {' '}
+                            *
+                          </span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>
+                          Basic Total <span style={{ color: 'red' }}> *</span>
+                        </td>
+                        <td
+                          colSpan="1"
+                          style={{
+                            // width:'100%',
+                            background: finalVal === 'L1' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="basicTotalL1inunitFx" readOnly />
+                        </td>
+                        <td
+                          colSpan="1"
+                          style={{
+                            background: finalVal === 'L1' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="basicTotalL1inextdFx" readOnly />
+                        </td>
+                        <td
+                          colSpan="1"
+                          style={{
+                            background: finalVal === 'L1' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="basicTotalL1inunit" readOnly />
+                        </td>
+                        <td
+                          colSpan="1"
+                          style={{
+                            background: finalVal === 'L1' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="basicTotalL1inextd" readOnly />
+                        </td>
+                        <td
+                          colSpan="1"
+                          style={{
+                            background: finalVal === 'L1' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="basicTotalL1finunitFx" readOnly />
+                        </td>
+                        <td
+                          colSpan="1"
+                          style={{
+                            background: finalVal === 'L1' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="basicTotalL1finextdFx" readOnly />
+                        </td>
+                        <td
+                          colSpan="1"
+                          style={{
+                            background: finalVal === 'L1' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="basicTotalL1finunit" readOnly />
+                        </td>
+                        <td
+                          colSpan="1"
+                          style={{
+                            background: finalVal === 'L1' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="basicTotalL1finextd" readOnly />
+                        </td>
+                        <td
+                          colSpan="1"
+                          style={{
+                            background: finalVal === 'L2' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="basicTotalL2inunitFx" readOnly />
+                        </td>
+                        <td
+                          colSpan="1"
+                          style={{
+                            background: finalVal === 'L2' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="basicTotalL2inunit" readOnly />
+                        </td>
+                        <td
+                          colSpan="1"
+                          style={{
+                            background: finalVal === 'L2' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="basicTotalL2inextdFx" readOnly />
+                        </td>
+                        <td
+                          colSpan="1"
+                          style={{
+                            background: finalVal === 'L2' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="basicTotalL2inextd" readOnly />
+                        </td>
 
-            <span style={{ margin: '0 8px' }} />
-            {docStatus && docStatus.length > 0 && docStatus?.[0]?.cancelSeq && (
-              <ButtonComponent
-                type="danger"
-                text="Previous Stage"
-                onClick={() => addprevRemarksSubmit(docStatus[0].cancelSeq)}
-              />
-            )}
-            <Popuptable
-              onClose={() => setPrevRemarksCard(false)}
-              cardLabel=""
-              component={AddRemarksprevComponent(
-                docStatus && docStatus.length > 0 ? docStatus[0].cancelSeq : '',
+                        <td
+                          colSpan="1"
+                          style={{
+                            background: finalVal === 'L2' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="basicTotalL2finunitFx" readOnly />
+                        </td>
+                        <td
+                          colSpan="1"
+                          style={{
+                            background: finalVal === 'L2' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="basicTotalL2finunit" readOnly />
+                        </td>
+                        <td
+                          colSpan="1"
+                          style={{
+                            background: finalVal === 'L2' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="basicTotalL2finextdFx" readOnly />
+                        </td>
+                        <td
+                          colSpan="1"
+                          style={{
+                            background: finalVal === 'L2' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="basicTotalL2finextd" readOnly />
+                        </td>
+                        <td
+                          colSpan="1"
+                          style={{
+                            background: finalVal === 'L3' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="basicTotalL3inunitFx" readOnly />
+                        </td>
+                        <td
+                          colSpan="1"
+                          style={{
+                            background: finalVal === 'L3' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="basicTotalL3inunit" readOnly />
+                        </td>
+                        <td
+                          colSpan="1"
+                          style={{
+                            background: finalVal === 'L3' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="basicTotalL3inextdFx" readOnly />
+                        </td>
+                        <td
+                          colSpan="1"
+                          style={{
+                            background: finalVal === 'L3' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="basicTotalL3inextd" readOnly />
+                        </td>
+
+                        <td
+                          colSpan="1"
+                          style={{
+                            background: finalVal === 'L3' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="basicTotalL3finunitFx" readOnly />
+                        </td>
+                        <td
+                          colSpan="1"
+                          style={{
+                            background: finalVal === 'L3' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="basicTotalL3finunit" readOnly />
+                        </td>
+                        <td
+                          colSpan="1"
+                          style={{
+                            background: finalVal === 'L3' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="basicTotalL3finextdFx" readOnly />
+                        </td>
+                        <td
+                          colSpan="1"
+                          style={{
+                            background: finalVal === 'L3' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="basicTotalL3finextd" readOnly />
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          Transport Charge <span style={{ color: 'red' }}> *</span>
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L1' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="transportChargeL1inFx"
+                            functionname={e => {
+                              calculateSubTotalin('L1')
+                              onChangeFxCalculationForTransport('L1', e)
+                            }}
+                            readOnly={isEditable === '0' || isEditable === undefined || countryL1}
+                            maxLength={15}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L1' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="transportChargeL1in"
+                            functionname={() => calculateSubTotalin('L1')}
+                            readOnly={isEditable === '0' || isEditable === undefined}
+                            maxLength={15}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L1' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="transportChargeL1finFx"
+                            functionname={e => {
+                              calculateSubTotalin('L1')
+                              onChangeFinalFxCalculationForTransport('L1', e)
+                            }}
+                            readOnly={isEditable === '0' || isEditable === undefined || countryL1}
+                            maxLength={15}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L1' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="transportChargeL1fin"
+                            functionname={() => calculateSubTotalfin('L1')}
+                            readOnly={isEditable === '0' || isEditable === undefined}
+                            maxLength={15}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L2' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="transportChargeL2inFx"
+                            functionname={e => {
+                              calculateSubTotalin('L2')
+                              onChangeFxCalculationForTransport('L2', e)
+                            }}
+                            readOnly={isEditable === '0' || isEditable === undefined || countryL2}
+                            maxLength={15}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L2' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="transportChargeL2in"
+                            functionname={() => calculateSubTotalin('L2')}
+                            readOnly={isEditable === '0' || isEditable === undefined}
+                            maxLength={15}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L2' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="transportChargeL2finFx"
+                            functionname={e => {
+                              calculateSubTotalin('L2')
+                              onChangeFinalFxCalculationForTransport('L2', e)
+                            }}
+                            readOnly={isEditable === '0' || isEditable === undefined || countryL2}
+                            maxLength={15}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L2' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="transportChargeL2fin"
+                            functionname={() => calculateSubTotalfin('L2')}
+                            readOnly={isEditable === '0' || isEditable === undefined}
+                            maxLength={15}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L3' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="transportChargeL3inFx"
+                            functionname={e => {
+                              calculateSubTotalin('L3')
+                              onChangeFxCalculationForTransport('L3', e)
+                            }}
+                            readOnly={isEditable === '0' || isEditable === undefined || countryL3}
+                            maxLength={15}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L3' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="transportChargeL3in"
+                            functionname={() => calculateSubTotalin('L3')}
+                            readOnly={isEditable === '0' || isEditable === undefined}
+                            maxLength={15}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L3' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="transportChargeL3finFx"
+                            functionname={e => {
+                              calculateSubTotalin('L3')
+                              onChangeFinalFxCalculationForTransport('L3', e)
+                            }}
+                            readOnly={isEditable === '0' || isEditable === undefined || countryL3}
+                            maxLength={15}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L3' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="transportChargeL3fin"
+                            functionname={() => calculateSubTotalfin('L3')}
+                            readOnly={isEditable === '0' || isEditable === undefined}
+                            maxLength={15}
+                          />
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          P&F <span style={{ color: 'red' }}> *</span>
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L1' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="pfL1inFx"
+                            functionname={e => {
+                              calculateSubTotalin('L1')
+                              onChangeFxCalculationForPandF('L1', e)
+                            }}
+                            readOnly={isEditable === '0' || isEditable === undefined || countryL1}
+                            maxLength={15}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L1' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="pfL1in"
+                            functionname={() => calculateSubTotalin('L1')}
+                            readOnly={isEditable === '0' || isEditable === undefined}
+                            maxLength={15}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L1' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="pfL1finFx"
+                            functionname={e => {
+                              onChangeFinalFxCalculationForPandF('L1', e)
+                            }}
+                            readOnly={isEditable === '0' || isEditable === undefined || countryL1}
+                            maxLength={15}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L1' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="pfL1fin"
+                            functionname={() => calculateSubTotalfin('L1')}
+                            readOnly={isEditable === '0' || isEditable === undefined}
+                            maxLength={15}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L2' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="pfL2inFx"
+                            functionname={e => {
+                              calculateSubTotalin('L2')
+                              onChangeFxCalculationForPandF('L2', e)
+                            }}
+                            readOnly={isEditable === '0' || isEditable === undefined || countryL2}
+                            maxLength={15}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L2' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="pfL2in"
+                            functionname={() => calculateSubTotalin('L2')}
+                            readOnly={isEditable === '0' || isEditable === undefined}
+                            maxLength={15}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L2' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="pfL2finFx"
+                            functionname={e => {
+                              onChangeFinalFxCalculationForPandF('L2', e)
+                            }}
+                            readOnly={isEditable === '0' || isEditable === undefined || countryL2}
+                            maxLength={15}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L2' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="pfL2fin"
+                            functionname={() => calculateSubTotalfin('L2')}
+                            readOnly={isEditable === '0' || isEditable === undefined}
+                            maxLength={15}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L3' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="pfL3inFx"
+                            functionname={e => {
+                              calculateSubTotalin('L3')
+                              onChangeFxCalculationForPandF('L3', e)
+                            }}
+                            readOnly={isEditable === '0' || isEditable === undefined || countryL3}
+                            maxLength={15}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L3' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="pfL3in"
+                            functionname={() => calculateSubTotalin('L3')}
+                            readOnly={isEditable === '0' || isEditable === undefined}
+                            maxLength={15}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L3' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="pfL3finFx"
+                            functionname={e => {
+                              onChangeFinalFxCalculationForPandF('L3', e)
+                            }}
+                            readOnly={isEditable === '0' || isEditable === undefined || countryL3}
+                            maxLength={15}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L3' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="pfL3fin"
+                            functionname={() => calculateSubTotalfin('L3')}
+                            readOnly={isEditable === '0' || isEditable === undefined}
+                            maxLength={15}
+                          />
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          Sub Total <span style={{ color: 'red' }}> *</span>
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L1' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="subTotalL1inFx" readOnly />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L1' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="subTotalL1in" readOnly />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L1' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="subTotalL1finFx" readOnly />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L1' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="subTotalL1fin" readOnly />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L2' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="subTotalL2inFx" readOnly />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L2' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="subTotalL2in" readOnly />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L2' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="subTotalL2finFx" readOnly />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L2' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="subTotalL2fin" readOnly />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L3' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="subTotalL3inFx" readOnly />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L3' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="subTotalL3in" readOnly />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L3' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="subTotalL3fin" readOnly />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L3' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="subTotalL3finFx" readOnly />
+                        </td>
+                      </tr>
+                      <tr style={{ display: 'none' }}>
+                        <td>
+                          GST Value <span style={{ color: 'red' }}> *</span>
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L1' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="gst18L1inFx"
+                            functionname={() => calculateSubTotalin('L1')}
+                            readOnly={isEditable === '0' || isEditable === undefined}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L1' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="gst18L1in"
+                            functionname={() => calculateSubTotalin('L1')}
+                            readOnly={isEditable === '0' || isEditable === undefined}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L1' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="gst18L1finFx"
+                            functionname={() => calculateSubTotalfin('L1')}
+                            readOnly={isEditable === '0' || isEditable === undefined}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L1' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="gst18L1fin"
+                            functionname={() => calculateSubTotalfin('L1')}
+                            readOnly={isEditable === '0' || isEditable === undefined}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L2' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="gst18L2inFx"
+                            functionname={() => calculateSubTotalin('L2')}
+                            readOnly={isEditable === '0' || isEditable === undefined}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L2' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="gst18L2in"
+                            functionname={() => calculateSubTotalin('L2')}
+                            readOnly={isEditable === '0' || isEditable === undefined}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L2' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="gst18L2finFx"
+                            functionname={() => calculateSubTotalfin('L2')}
+                            readOnly={isEditable === '0' || isEditable === undefined}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L2' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="gst18L2fin"
+                            functionname={() => calculateSubTotalfin('L2')}
+                            readOnly={isEditable === '0' || isEditable === undefined}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L3' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="gst18L3inFx"
+                            functionname={() => calculateSubTotalin('L3')}
+                            readOnly={isEditable === '0' || isEditable === undefined}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L3' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="gst18L3in"
+                            functionname={() => calculateSubTotalin('L3')}
+                            readOnly={isEditable === '0' || isEditable === undefined}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L3' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="gst18L3finFx"
+                            functionname={() => calculateSubTotalfin('L3')}
+                            readOnly={isEditable === '0' || isEditable === undefined}
+                          />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L3' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput
+                            name="gst18L3fin"
+                            functionname={() => calculateSubTotalfin('L3')}
+                            readOnly={isEditable === '0' || isEditable === undefined}
+                          />
+                        </td>
+                      </tr>
+                      <tr style={{ display: 'none' }}>
+                        <td>
+                          Landed Cost<span style={{ color: 'red' }}>*</span>
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L1' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="landedCostL1inFx" readOnly />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L1' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="landedCostL1in" readOnly />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L1' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="landedCostL1finFx" readOnly />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L1' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="landedCostL1fin" readOnly />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L2' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="landedCostL2inFx" readOnly />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L2' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="landedCostL2in" readOnly />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L2' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="landedCostL2finFx" readOnly />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L2' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="landedCostL2fin" readOnly />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L3' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="landedCostL3inFx" readOnly />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L3' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="landedCostL3in" readOnly />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L3' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="landedCostL3finFx" readOnly />
+                        </td>
+                        <td
+                          colSpan="2"
+                          style={{
+                            background: finalVal === 'L3' ? 'gray' : 'white',
+                            padding: '3px 3px 0px 3px',
+                          }}
+                        >
+                          <CustomFormNumberInput name="landedCostL3fin" readOnly />
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            </Form>
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <h6 style={{ marginBottom: '0px', marginTop: '10px' }}>
+                <span style={{ fontWeight: 'bold' }}> Current Status : </span> {scsStatus}
+              </h6>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '10px' }}>
+              {docStatus && docStatus.length > 0 && (
+                <ButtonComponent
+                  type="primary"
+                  text={docStatus[0].docStatusDesc}
+                  onClick={() => addRemarksSubmit(docStatus[0].currSequence)}
+                  disable={isdisablebtn || isSubmitting}
+                />
               )}
-              visible={prevRemarksCard}
-            />
-            <span style={{ margin: '0 8px' }} />
-            {isEditable === '1' && (
-              <ButtonComponent type="primary" text="Delete PJS" onClick={() => handleDeleteSCS()} />
-            )}
-          </div>
-        </Skeleton>
+
+              <Popuptable
+                onClose={() => {
+                  // A click landing outside the popover while Save is running would
+                  // otherwise dismiss it mid-request — ignore that until it finishes.
+                  if (isSubmitting) return
+                  setApproveRemarksCard(false)
+                }}
+                cardLabel=""
+                component={AddRemarksComponent(
+                  docStatus && docStatus.length > 0 ? docStatus[0].currSequence : '',
+                )}
+                visible={approveRemarksCard}
+              />
+              <span style={{ margin: '0 8px' }} />
+
+              <ButtonComponent
+                type="primary"
+                icon={<CommentOutlined />}
+                onClick={() => {
+                  OpenDetailCard()
+                }}
+                disable={isdisablebtn || isSubmitting}
+              />
+              <Popuptable
+                onClose={() => setdetailCard(false)}
+                cardLabel=""
+                component={
+                  <div
+                    className="custom_antd_Table"
+                    style={{ width: isMobile ? '280px' : '500px' }}
+                  >
+                    {' '}
+                    <TableComponent data={rmkDetaillist} columns={remarksColumns} scrollY={300} />
+                  </div>
+                }
+                visible={detailCard}
+              />
+              <span style={{ margin: '0 8px' }} />
+              <div style={{ display: isEditable === '0' ? 'none' : 'inline' }}>
+                <ButtonComponent
+                  text="Save"
+                  disable={isdisablebtn || isSubmitting}
+                  loading={isdisablebtn || isSubmitting}
+                  type="primary"
+                  onClick={() => safeHandleInsert()}
+                />
+              </div>
+
+              <span style={{ margin: '0 8px' }} />
+              {docStatus && docStatus.length > 0 && docStatus?.[0]?.cancelSeq && (
+                <ButtonComponent
+                  type="danger"
+                  text="Previous Stage"
+                  onClick={() => addprevRemarksSubmit(docStatus[0].cancelSeq)}
+                  disable={isdisablebtn || isSubmitting}
+                />
+              )}
+              <Popuptable
+                onClose={() => {
+                  if (isSubmitting) return
+                  setPrevRemarksCard(false)
+                }}
+                cardLabel=""
+                component={AddRemarksprevComponent(
+                  docStatus && docStatus.length > 0 ? docStatus[0].cancelSeq : '',
+                )}
+                visible={prevRemarksCard}
+              />
+              <span style={{ margin: '0 8px' }} />
+              {isEditable === '1' && (
+                <ButtonComponent
+                  type="primary"
+                  text="Delete PJS"
+                  onClick={() => handleDeleteSCS()}
+                  disable={isdisablebtn || isSubmitting}
+                  loading={isSubmitting}
+                />
+              )}
+            </div>
+          </Skeleton>
+        </Spin>
       </div>
     )
   }
 
   return (
     <div>
-      {isdisablebtn ? (
-        <Spin>
-          <SCSFieldsComponent />
-        </Spin>
-      ) : (
-        <div>
-          <SCSFieldsComponent />
-          {partnummodal ? (
-            <ModalPopup
-              FieldsComponent={PartnumFieldsComponent}
-              isModalVisible={partnummodal}
-              text="Product - PO History"
-              onCancel={() => {
-                setPartnumModal(false)
-                setProductCostDetails([])
-              }}
-            />
-          ) : null}
-          {allocateModalVisible ? (
-            <AllocateStationBudgetModal
-              visible={allocateModalVisible}
-              onCancel={() => setAllocateModalVisible(false)}
-              pkaId={scmHdrdata?.[0]?.pkaId}
-              stationLabel={station}
-              onSaved={getscshdrleveldata}
-            />
-          ) : null}
-        </div>
-      )}
+      {/* isdisablebtn/isSubmitting loading is now handled inside SCSFieldsComponent itself
+      (a Spin nested in its own Skeleton), so this no longer needs to swap the whole tree
+      for a bare always-spinning <Spin> — that was unmounting/remounting the form on every
+      Save click and didn't cover Approve/Previous Stage/Delete PJS at all. */}
+      <SCSFieldsComponent />
+      {partnummodal ? (
+        <ModalPopup
+          FieldsComponent={PartnumFieldsComponent}
+          isModalVisible={partnummodal}
+          text="Product - PO History"
+          onCancel={() => {
+            setPartnumModal(false)
+            setProductCostDetails([])
+          }}
+        />
+      ) : null}
+      {allocateModalVisible ? (
+        <AllocateStationBudgetModal
+          visible={allocateModalVisible}
+          onCancel={() => setAllocateModalVisible(false)}
+          pkaId={scmHdrdata?.[0]?.pkaId}
+          stationLabel={station}
+          onSaved={getscshdrleveldata}
+        />
+      ) : null}
     </div>
   )
 }

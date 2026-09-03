@@ -17,6 +17,7 @@ import {
   Row,
   Col,
   InputNumber,
+  Spin,
 } from 'antd'
 import store from 'store'
 import moment from 'moment'
@@ -53,6 +54,7 @@ const Poservice = ({ rowData, onClose, calldetailapi, isView }) => {
   const [prevRemarksCard, setPrevRemarksCard] = useState(false)
   const [componentDisabled, setComponentDisabled] = useState(true)
   const [isLoading, setIsLoading] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [dclist, setDcList] = useState([])
   const [addressList, setAddressList] = useState([])
   const [hsnCode, setHsnCode] = useState([])
@@ -1569,53 +1571,102 @@ const Poservice = ({ rowData, onClose, calldetailapi, isView }) => {
   const AddRemarksComponent = seq => {
     return (
       <div>
-        <Card bordered={false} className="custom-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <div>
-              <h5>Add Remarks</h5>
-              <Form form={inputForm}>
-                <Form.Item name="remarks">
-                  <TextArea rows={4} />
-                </Form.Item>
-              </Form>
-              <div style={{ display: 'flex', justifyContent: 'center' }}>
-                <ButtonComponent
-                  text="Save"
-                  type="primary"
-                  onClick={() => handlescsapproval(seq, 'Approve')}
-                />
+        <Spin spinning={isSubmitting}>
+          <Card bordered={false} className="custom-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div>
+                <h5>Add Remarks</h5>
+                <Form form={inputForm}>
+                  <Form.Item name="remarks">
+                    <TextArea rows={4} disabled={isSubmitting} />
+                  </Form.Item>
+                </Form>
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <ButtonComponent
+                    text="Save"
+                    type="primary"
+                    disable={isSubmitting}
+                    loading={isSubmitting}
+                    onClick={() => safeApprovalAction(seq, 'Approve')}
+                  />
+                </div>
               </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        </Spin>
       </div>
     )
   }
   const AddRemarksprevComponent = seq => {
     return (
       <div>
-        <Card bordered={false} className="custom-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <div>
-              <h5>Add Remarks</h5>
-              <Form form={inputForm}>
-                <Form.Item name="remarks">
-                  <TextArea rows={4} />
-                </Form.Item>
-              </Form>
-              <div style={{ display: 'flex', justifyContent: 'center' }}>
-                <ButtonComponent
-                  text="Save"
-                  type="primary"
-                  onClick={() => handlescsapproval(seq, 'Reject')}
-                />
+        <Spin spinning={isSubmitting}>
+          <Card bordered={false} className="custom-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div>
+                <h5>Add Remarks</h5>
+                <Form form={inputForm}>
+                  <Form.Item name="remarks">
+                    <TextArea rows={4} disabled={isSubmitting} />
+                  </Form.Item>
+                </Form>
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <ButtonComponent
+                    text="Save"
+                    type="primary"
+                    disable={isSubmitting}
+                    loading={isSubmitting}
+                    onClick={() => safeApprovalAction(seq, 'Reject')}
+                  />
+                </div>
               </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        </Spin>
       </div>
     )
   }
+
+  const safeSave = async () => {
+    setIsSubmitting(true)
+    try {
+      await handleinsert()
+    } catch (e) {
+      // validation/error already messaged inside handleinsert
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const safeApprovalAction = async (seq, type) => {
+    setIsSubmitting(true)
+    try {
+      await handlescsapproval(seq, type)
+    } catch (e) {
+      // errors already messaged inside handleinsert/updatePoSeqAndStatus
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const safeDebitNoteSubmit = async () => {
+    setIsSubmitting(true)
+    try {
+      await debitNoteSubmit()
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const safeDownloadReport = async () => {
+    setIsSubmitting(true)
+    try {
+      await downloadreport()
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   const isFieldValueChanged = fieldname => {
     if (!prevEntity || !mainEntity) return false
     if (!prevEntity[fieldname] && !mainEntity[fieldname]) return false
@@ -1624,950 +1675,984 @@ const Poservice = ({ rowData, onClose, calldetailapi, isView }) => {
   return (
     <div className="mt-3">
       <Skeleton loading={isLoading} active>
-        <Card title="Purchase Order - Service" className="customize">
-          <Form
-            layout="horizontal"
-            className="custom-form-container"
-            form={poform}
-            onFinish={onFinish}
-            disabled={componentDisabled}
-          >
-            <Card>
-              <div className="row address">
-                <div className="col-md-4">
-                  <h5>SUPPLIER ADDRESS</h5>
-                  {projectList[0]?.vendorName}
-                  <br />
-                  {projectList[0]?.vendorAddressLine}
-                  <br />
-                  {projectList[0]?.vendorCity}
-                  <br />
-                  {projectList[0]?.vendorPincode}
-                  <br />
-                  {projectList[0]?.vendorState}
-                  <br />
-                  GST No. : {projectList[0]?.vendorGst}
-                  <br />
-                  {projectList[0]?.vendorContactNo}
-                </div>
-                <div className="col-md-4">
-                  <h5>BUYER / BILLING ADDRESS</h5>
-                  {projectList[0]?.billingName}
-                  <br />
-                  {projectList[0]?.billingAddressLine}
-                  <br />
-                  {projectList[0]?.billingCity}
-                  <br />
-                  {projectList[0]?.billingPincode}
-                  <br />
-                  {projectList[0]?.billingState}
-                  <br />
-                  GST No. : {projectList[0]?.billingGst}
-                  <br />
-                  {projectList[0]?.billingContactNo}
-                </div>
-                <div className="col-md-4">
-                  {/* <h5>SHIPPING ADDRESS</h5> */}
-                  <Form.Item
-                    name="AddressType"
-                    label={
-                      <h5 style={{ marginBottom: '0px' }}>
-                        SHIPPING ADDRESS<span style={{ color: 'red' }}>*</span>
-                      </h5>
-                    }
-                    // initialValue={dclist[0]?.dcCode}
-                  >
-                    <Select
-                      placeholder="Select"
-                      onChange={handleDcChange}
-                      // disabled={false}
-                      style={
-                        isFieldValueChanged('AddressType') ? HighlightStyle : { width: '100%' }
-                      }
-                    >
-                      {dclist?.map(item => (
-                        <Option key={item.dcCode} value={item.dcCode}>
-                          {item.dcDesc}
-                        </Option>
-                      ))}
-                    </Select>
-                  </Form.Item>
-                  <Form.Item
-                    name="deliveryName"
-                    label={
-                      <span>
-                        Name<span style={{ color: 'red' }}>*</span>
-                      </span>
-                    }
-                    labelCol={{ span: 8 }}
-                    wrapperCol={{ span: 16 }}
-                    labelAlign="left"
-                  >
-                    <Select
-                      placeholder="Select"
-                      showSearch
-                      optionFilterProp="children"
-                      filterOption={(input, option) =>
-                        option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
-                      }
-                      onChange={handleAddressChange}
-                      style={
-                        isFieldValueChanged('deliveryName') ? HighlightStyle : { width: '100%' }
-                      }
-                    >
-                      {addressList?.map((item, index) => (
-                        // eslint-disable-next-line react/no-array-index-key
-                        <Option key={index} value={item.name}>
-                          {item.name}
-                        </Option>
-                      ))}
-                    </Select>
-                  </Form.Item>
-                  {/* <CustomFormItem
-                    name="deliveryName"
-                    label={
-                      <span style={{ textAlign: 'center' }}>
-                        Name <span style={{ color: 'red' }}> *</span>
-                      </span>
-                    }
-                  /> */}
-                  <CustomFormItem
-                    name="deliveryAddressLine"
-                    label={
-                      <span style={{ textAlign: 'center' }}>
-                        Address <span style={{ color: 'red' }}> *</span>
-                      </span>
-                    }
-                    NewChange={isFieldValueChanged('deliveryAddressLine')}
-                  />
-                  <CustomFormItem
-                    name="deliveryCity"
-                    label={
-                      <span style={{ textAlign: 'center' }}>
-                        City <span style={{ color: 'red' }}> *</span>
-                      </span>
-                    }
-                    NewChange={isFieldValueChanged('deliveryCity')}
-                  />
-                  <CustomFormItem
-                    name="deliveryPincode"
-                    label={
-                      <span style={{ textAlign: 'center' }}>
-                        Pincode <span style={{ color: 'red' }}> *</span>
-                      </span>
-                    }
-                    NewChange={isFieldValueChanged('deliveryPincode')}
-                  />
-                  <CustomFormItem
-                    name="deliveryState"
-                    label={
-                      <span style={{ textAlign: 'center' }}>
-                        State <span style={{ color: 'red' }}> *</span>
-                      </span>
-                    }
-                    NewChange={isFieldValueChanged('deliveryState')}
-                  />
-                  <CustomFormItem
-                    name="deliveryGst"
-                    label={
-                      <span style={{ textAlign: 'center' }}>
-                        GST No. <span style={{ color: 'red' }}> *</span>
-                      </span>
-                    }
-                    NewChange={isFieldValueChanged('deliveryGst')}
-                  />
-                  <Form.Item
-                    name="deliveryContactno"
-                    label={
-                      <span style={{ marginBottom: '0px' }}>
-                        Delivery Contact No<span style={{ color: 'red' }}>*</span>
-                      </span>
-                    }
-                    labelAlign="left"
-                    labelCol={{ span: 8 }}
-                    wrapperCol={{ span: 16 }}
-                  >
-                    <Input
-                      type="text"
-                      maxLength={10}
-                      style={
-                        isFieldValueChanged('deliveryContact') ? HighlightStyle : { width: '100%' }
-                      }
-                    />
-                  </Form.Item>
-                </div>
-              </div>
-            </Card>
-            <Card>
-              <div className="row costom-form-body">
-                <div className="col-md-5">
-                  <h5 className="mb-3">PURCHASE ORDER</h5>
-                  {/* <CustomFormItem
-                    name="Division"
-                    label={
-                      <span style={{ textAlign: 'center' }}>
-                        Division <span style={{ color: 'red' }}> *</span>
-                      </span>
-                    }
-                  /> */}
-                  <Form.Item
-                    labelCol={{ span: 8 }}
-                    wrapperCol={{ span: 16 }}
-                    labelAlign="left"
-                    name="Division"
-                    label={
-                      <span style={{ textAlign: 'center' }}>
-                        Division <span style={{ color: 'red' }}> *</span>
-                      </span>
-                    }
-                  >
-                    <AutoComplete
-                      options={divisionList}
-                      onChange={e => {
-                        poform.setFieldsValue({
-                          [`Division`]: e,
-                        })
-                      }}
-                    >
-                      <Input
-                        placeholder="Select here"
-                        style={
-                          isFieldValueChanged('divisionDesc') ? HighlightStyle : { width: '100%' }
-                        }
-                      />
-                    </AutoComplete>
-                  </Form.Item>
-                  <CustomFormItem
-                    name="OrderNumber"
-                    label={
-                      <span style={{ textAlign: 'center' }}>
-                        Order Number <span style={{ color: 'red' }}> *</span>
-                      </span>
-                    }
-                    readOnly
-                    NewChange={isFieldValueChanged('orderNo')}
-                  />
-                  <Form.Item
-                    labelCol={{ span: 8 }}
-                    wrapperCol={{ span: 16 }}
-                    labelAlign="left"
-                    name="Date"
-                    label={
-                      <span style={{ textAlign: 'center' }}>
-                        Date <span style={{ color: 'red' }}> *</span>
-                      </span>
-                    }
-                  >
-                    <DatePicker
-                      format="DD-MMM-YYYY"
-                      className="custom-input"
-                      style={isFieldValueChanged('date') ? HighlightStyle : { width: '100%' }}
-                    />
-                  </Form.Item>
-                  <CustomFormItem
-                    name="revision"
-                    disabled
-                    label={<span style={{ textAlign: 'center' }}>Revision</span>}
-                    NewChange={isFieldValueChanged('revision')}
-                  />
-                  <Form.Item
-                    labelCol={{ span: 8 }}
-                    wrapperCol={{ span: 16 }}
-                    labelAlign="left"
-                    name="revisionDate"
-                    label={<span style={{ textAlign: 'center' }}>Revision Date</span>}
-                  >
-                    <DatePicker
-                      format="DD-MMM-YYYY"
-                      className="custom-input"
-                      style={
-                        isFieldValueChanged('revisionDate') ? HighlightStyle : { width: '100%' }
-                      }
-                      disabled
-                    />
-                  </Form.Item>
-                  <Form.Item
-                    labelCol={{ span: 8 }}
-                    wrapperCol={{ span: 16 }}
-                    labelAlign="left"
-                    name="refDate"
-                    label={
-                      <span style={{ textAlign: 'center' }}>
-                        Ref Date <span style={{ color: 'red' }}> *</span>
-                      </span>
-                    }
-                  >
-                    <DatePicker
-                      format="DD-MMM-YYYY"
-                      className="custom-input"
-                      disabled
-                      style={isFieldValueChanged('refDate') ? HighlightStyle : { width: '100%' }}
-                    />
-                  </Form.Item>
-                  <CustomFormItem
-                    name="refNo"
-                    label={<span style={{ textAlign: 'center' }}>Ref No.</span>}
-                    disabled
-                    NewChange={isFieldValueChanged('refNo')}
-                  />
-                  <CustomFormItem
-                    name="ranDivCommte"
-                    label={<span style={{ textAlign: 'center' }}>Ran/Div/Commte</span>}
-                    NewChange={isFieldValueChanged('ranDivCommte')}
-                  />
-                  <CustomFormItem
-                    name="pan"
-                    label={<span style={{ textAlign: 'center' }}>PAN</span>}
-                    NewChange={isFieldValueChanged('pan')}
-                  />
-                </div>
-                <div className="col-md-5">
-                  <CustomFormItem
-                    name="deliveryTerms"
-                    label={<span style={{ textAlign: 'center' }}>Delivery Terms</span>}
-                    NewChange={isFieldValueChanged('deliveryTerms')}
-                  />
-                  <CustomFormItem
-                    name="PaymentTerms"
-                    label={
-                      <span style={{ textAlign: 'center' }}>
-                        Payment Terms <span style={{ color: 'red' }}> *</span>
-                      </span>
-                    }
-                    disabled
-                    NewChange={isFieldValueChanged('PaymentTerms')}
-                  />
-                  <CustomFormItem
-                    name="LiquidatedDamages"
-                    label={
-                      <span style={{ textAlign: 'center' }}>
-                        Liquidated Damages <span style={{ color: 'red' }}> *</span>
-                      </span>
-                    }
-                    NewChange={isFieldValueChanged('liqDamages')}
-                  />
-                  <CustomFormItem
-                    name="guarantee"
-                    label={
-                      <span style={{ textAlign: 'center' }}>
-                        Guarantee <span style={{ color: 'red' }}> *</span>
-                      </span>
-                    }
-                    NewChange={isFieldValueChanged('guarantee')}
-                  />
-                  <CustomFormItem
-                    name="Warranty"
-                    label={
-                      <span style={{ textAlign: 'center' }}>
-                        Warranty <span style={{ color: 'red' }}> *</span>
-                      </span>
-                    }
-                    NewChange={isFieldValueChanged('warrenty')}
-                  />
-
-                  <Form.Item
-                    labelCol={{ span: 8 }}
-                    wrapperCol={{ span: 16 }}
-                    labelAlign="left"
-                    name="dispatchMode"
-                    label={
-                      <span style={{ textAlign: 'center' }}>
-                        Mode of Dispatch <span style={{ color: 'red' }}> *</span>
-                      </span>
-                    }
-                  >
-                    <AutoComplete
-                      options={dispatchlist}
-                      onChange={e => {
-                        poform.setFieldsValue({
-                          [`dispatchMode`]: e,
-                        })
-                      }}
-                    >
-                      <Input
-                        placeholder="Select here"
-                        style={
-                          isFieldValueChanged('dispatchModeDesc')
-                            ? HighlightStyle
-                            : { width: '100%' }
-                        }
-                      />
-                    </AutoComplete>
-                  </Form.Item>
-                  <CustomFormItem
-                    name="priceBasis"
-                    label={<span style={{ textAlign: 'center' }}>Price Basis</span>}
-                    NewChange={isFieldValueChanged('priceBasis')}
-                  />
-                  <Form.Item
-                    labelCol={{ span: 8 }}
-                    wrapperCol={{ span: 16 }}
-                    labelAlign="left"
-                    name="Insurance"
-                    label={<span style={{ textAlign: 'center' }}>Transit Insurance</span>}
-                  >
-                    <AutoComplete
-                      options={insurancelist}
-                      onChange={e => {
-                        poform.setFieldsValue({
-                          [`Insurance`]: e,
-                        })
-                      }}
-                    >
-                      <Input
-                        placeholder="Select here"
-                        style={
-                          isFieldValueChanged('transitInsuranceDesc')
-                            ? HighlightStyle
-                            : { width: '100%' }
-                        }
-                      />
-                    </AutoComplete>
-                  </Form.Item>
-                  {/* <CustomFormItem
-                    name="Inspection"
-                    label={
-                      <span style={{ textAlign: 'center' }}>
-                        Inspection <span style={{ color: 'red' }}> *</span>
-                      </span>
-                    }
-                  /> */}
-                  <Form.Item
-                    labelCol={{ span: 8 }}
-                    wrapperCol={{ span: 16 }}
-                    labelAlign="left"
-                    name="Inspection"
-                    label={<span style={{ textAlign: 'center' }}>Inspection</span>}
-                  >
-                    <AutoComplete
-                      options={inspectionlist}
-                      onChange={e => {
-                        poform.setFieldsValue({
-                          [`Inspection`]: e,
-                        })
-                      }}
-                    >
-                      <Input
-                        placeholder="Select here"
-                        style={
-                          isFieldValueChanged('inspectionScopeDesc')
-                            ? HighlightStyle
-                            : { width: '100%' }
-                        }
-                      />
-                    </AutoComplete>
-                  </Form.Item>
-                </div>
-              </div>
-            </Card>
-            <Card className="custom_antd_Table">
-              <Table
-                rowSelection={isDebitClicked ? rowSelection : null}
-                columns={columns}
-                dataSource={potabel}
-                rowKey="poDtlId"
-                bordered
-              />
-              <div className="costom-form-body mt-3">
-                <div className="col-md-5">
-                  <div className="custom-form-container">
-                    <div className="amount_words">
-                      <Form.Item
-                        label={
-                          <div>
-                            <h5 className="mt-2">ENCLOSURES</h5>
-                          </div>
-                        }
-                      />
-                    </div>
-                    <CustomFormItem
-                      name="CTC"
-                      label={
-                        <span style={{ textAlign: 'center' }}>
-                          1. CTC <span style={{ color: 'red' }}> *</span>
-                        </span>
-                      }
-                      type="text"
-                      NewChange={isFieldValueChanged('ctc')}
-                    />
-                    <CustomFormItem
-                      name="TDC"
-                      label={
-                        <span style={{ textAlign: 'center' }}>
-                          2. TDC <span style={{ color: 'red' }}> *</span>
-                        </span>
-                      }
-                      type="text"
-                      NewChange={isFieldValueChanged('tdc')}
-                    />
-                    <CustomFormItem
-                      name="TDS"
-                      label={
-                        <span style={{ textAlign: 'center' }}>
-                          3. TDS <span style={{ color: 'red' }}> *</span>
-                        </span>
-                      }
-                      type="text"
-                      NewChange={isFieldValueChanged('tds')}
-                    />
-                    <CustomFormItem
-                      name="QAP"
-                      label={
-                        <span style={{ textAlign: 'center' }}>
-                          4. QAP <span style={{ color: 'red' }}> *</span>
-                        </span>
-                      }
-                      type="text"
-                      NewChange={isFieldValueChanged('qap')}
-                    />
-                    <CustomFormItem
-                      name="DWGS"
-                      label={
-                        <span style={{ textAlign: 'center' }}>
-                          5. DWGS <span style={{ color: 'red' }}> *</span>
-                        </span>
-                      }
-                      type="text"
-                      NewChange={isFieldValueChanged('dwgs')}
-                    />
-                    <CustomFormItem
-                      name="GTC"
-                      label={
-                        <span style={{ textAlign: 'center' }}>
-                          6. GTC <span style={{ color: 'red' }}> *</span>
-                        </span>
-                      }
-                      type="text"
-                      NewChange={isFieldValueChanged('gtc')}
-                    />
-
-                    {/* <CustomFormItem name="QAP" label="3.QAP" onChange={amountonchange} />
-                    <CustomFormItem name="GTC" label="4.GTC" onChange={amountonchange} /> */}
-                    <div className="shipping_section">
-                      <h5>
-                        SPECIAL REMARKS<span style={{ color: 'red' }}> *</span>
-                      </h5>
-                      <Form.Item name="specialremarks">
-                        <TextArea
-                          className="custom-input"
-                          style={
-                            isFieldValueChanged('remarks') ? HighlightStyle : { width: '100%' }
-                          }
-                        />
-                      </Form.Item>
-                    </div>
-                    <div className="shipping_section">
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          marginTop: '10px',
-                        }}
-                      >
-                        <h5>PAYMENT TERMS</h5>
-                        {!isView &&
-                          (['1'].includes(String(mainEntity?.sequenceNo)) ? (
-                            <Popover
-                              placement="top"
-                              content={
-                                <div className="custom_antd_Table">
-                                  <Table dataSource={paymentterms} columns={paymentcolumns} />
-                                </div>
-                              }
-                              trigger="click"
-                            >
-                              <Button type="primary">Add Payment Terms</Button>
-                            </Popover>
-                          ) : (
-                            <Button type="primary" disabled>
-                              Add Payment Terms
-                            </Button>
-                          ))}
-                      </div>
-                      {/* {paymentterms.slice(0, -1).map((item, index) => (
-                        <div key={item.potId} style={{ display: 'flex', flexDirection: 'column' }}>
-                          {`${index + 1}) ${item.term}- ${item.percentage}% `}
-                        </div>
-                      ))} */}
-
-                      <div>
-                        <div className="custom_antd_Table">
-                          <Table
-                            dataSource={paymentterms.slice(0, -1)}
-                            columns={paymentTermColumns}
-                          />
-                        </div>
-                      </div>
-                    </div>
+        <Spin spinning={isSubmitting} size="large" tip="Please wait...">
+          <Card title="Purchase Order - Service" className="customize">
+            <Form
+              layout="horizontal"
+              className="custom-form-container"
+              form={poform}
+              onFinish={onFinish}
+              disabled={componentDisabled}
+            >
+              <Card>
+                <div className="row address">
+                  <div className="col-md-4">
+                    <h5>SUPPLIER ADDRESS</h5>
+                    {projectList[0]?.vendorName}
+                    <br />
+                    {projectList[0]?.vendorAddressLine}
+                    <br />
+                    {projectList[0]?.vendorCity}
+                    <br />
+                    {projectList[0]?.vendorPincode}
+                    <br />
+                    {projectList[0]?.vendorState}
+                    <br />
+                    GST No. : {projectList[0]?.vendorGst}
+                    <br />
+                    {projectList[0]?.vendorContactNo}
                   </div>
-                  {mainEntity.isApproved === '0' ? null : !isDebitClicked ? (
-                    !isView && (
-                      <Button type="primary" onClick={handleDebitNote}>
-                        Add Debit Note
-                      </Button>
-                    )
-                  ) : (
-                    <>
-                      <h5>Debit Note</h5>
-                      <Form form={debitForm} layout="vertical">
-                        <Row gutter={16}>
-                          <Col span={8}>
-                            <Form.Item
-                              label={
-                                <>
-                                  Select Reason <span style={{ color: 'red' }}>*</span>
-                                </>
-                              }
-                              name="debitNoteReason"
-                            >
-                              <AutoComplete
-                                placeholder="Select or type a reason"
-                                options={reasonList.map(reason => ({
-                                  label: reason.dnrDesc,
-                                  value: reason.dnrDesc,
-                                }))}
-                                value={selectedReasonObj?.dnrDesc || ''}
-                                onChange={value => {
-                                  const match = reasonList.find(r => r.dnrDesc === value)
-                                  if (match) {
-                                    setSelectedReasonObj(match) // selected from list
-                                  } else {
-                                    setSelectedReasonObj({ dnrId: null, dnrDesc: value }) // user-typed
-                                  }
-                                }}
-                                filterOption={false}
-                              />
-                            </Form.Item>
-                          </Col>
-
-                          <Col span={12}>
-                            <Form.Item label="Upload File" name="file">
-                              <Upload
-                                beforeUpload={file => {
-                                  setFileList([file]) // Ensure `originFileObj` is available
-                                  return false // prevent auto upload
-                                }}
-                                fileList={fileList}
-                                onChange={({ fileList: newFileList }) => setFileList(newFileList)}
-                              >
-                                <Button type="primary" icon={<UploadOutlined />} />
-                              </Upload>
-                            </Form.Item>
-                          </Col>
-
-                          <Col span={8}>
-                            <Form.Item
-                              label={
-                                <>
-                                  Enter Value <span style={{ color: 'red' }}>*</span>
-                                </>
-                              }
-                              name="valueForDebitNote"
-                            >
-                              <InputNumber
-                                style={{ width: '100%' }}
-                                min={1}
-                                placeholder="Enter Value"
-                                formatter={value => value.replace(/[^\d.]/g, '')}
-                                parser={value => value.replace(/[^\d.]/g, '')}
-                              />
-                            </Form.Item>
-                          </Col>
-                        </Row>
-                      </Form>
-                    </>
-                  )}
-                </div>
-                <div className="col-md-5 custom-form-container">
-                  <div className="amount_words">
+                  <div className="col-md-4">
+                    <h5>BUYER / BILLING ADDRESS</h5>
+                    {projectList[0]?.billingName}
+                    <br />
+                    {projectList[0]?.billingAddressLine}
+                    <br />
+                    {projectList[0]?.billingCity}
+                    <br />
+                    {projectList[0]?.billingPincode}
+                    <br />
+                    {projectList[0]?.billingState}
+                    <br />
+                    GST No. : {projectList[0]?.billingGst}
+                    <br />
+                    {projectList[0]?.billingContactNo}
+                  </div>
+                  <div className="col-md-4">
+                    {/* <h5>SHIPPING ADDRESS</h5> */}
                     <Form.Item
-                      name="amountInWords"
+                      name="AddressType"
                       label={
-                        <div>
-                          <h5 className="mt-2">Amount in Words</h5>
-                        </div>
+                        <h5 style={{ marginBottom: '0px' }}>
+                          SHIPPING ADDRESS<span style={{ color: 'red' }}>*</span>
+                        </h5>
                       }
+                      // initialValue={dclist[0]?.dcCode}
                     >
-                      <TextArea
-                        className="custom-input"
-                        disabled
+                      <Select
+                        placeholder="Select"
+                        onChange={handleDcChange}
+                        // disabled={false}
                         style={
-                          isFieldValueChanged('amountinwords') ? HighlightStyle : { width: '100%' }
+                          isFieldValueChanged('AddressType') ? HighlightStyle : { width: '100%' }
+                        }
+                      >
+                        {dclist?.map(item => (
+                          <Option key={item.dcCode} value={item.dcCode}>
+                            {item.dcDesc}
+                          </Option>
+                        ))}
+                      </Select>
+                    </Form.Item>
+                    <Form.Item
+                      name="deliveryName"
+                      label={
+                        <span>
+                          Name<span style={{ color: 'red' }}>*</span>
+                        </span>
+                      }
+                      labelCol={{ span: 8 }}
+                      wrapperCol={{ span: 16 }}
+                      labelAlign="left"
+                    >
+                      <Select
+                        placeholder="Select"
+                        showSearch
+                        optionFilterProp="children"
+                        filterOption={(input, option) =>
+                          option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+                        }
+                        onChange={handleAddressChange}
+                        style={
+                          isFieldValueChanged('deliveryName') ? HighlightStyle : { width: '100%' }
+                        }
+                      >
+                        {addressList?.map((item, index) => (
+                          // eslint-disable-next-line react/no-array-index-key
+                          <Option key={index} value={item.name}>
+                            {item.name}
+                          </Option>
+                        ))}
+                      </Select>
+                    </Form.Item>
+                    {/* <CustomFormItem
+                      name="deliveryName"
+                      label={
+                        <span style={{ textAlign: 'center' }}>
+                          Name <span style={{ color: 'red' }}> *</span>
+                        </span>
+                      }
+                    /> */}
+                    <CustomFormItem
+                      name="deliveryAddressLine"
+                      label={
+                        <span style={{ textAlign: 'center' }}>
+                          Address <span style={{ color: 'red' }}> *</span>
+                        </span>
+                      }
+                      NewChange={isFieldValueChanged('deliveryAddressLine')}
+                    />
+                    <CustomFormItem
+                      name="deliveryCity"
+                      label={
+                        <span style={{ textAlign: 'center' }}>
+                          City <span style={{ color: 'red' }}> *</span>
+                        </span>
+                      }
+                      NewChange={isFieldValueChanged('deliveryCity')}
+                    />
+                    <CustomFormItem
+                      name="deliveryPincode"
+                      label={
+                        <span style={{ textAlign: 'center' }}>
+                          Pincode <span style={{ color: 'red' }}> *</span>
+                        </span>
+                      }
+                      NewChange={isFieldValueChanged('deliveryPincode')}
+                    />
+                    <CustomFormItem
+                      name="deliveryState"
+                      label={
+                        <span style={{ textAlign: 'center' }}>
+                          State <span style={{ color: 'red' }}> *</span>
+                        </span>
+                      }
+                      NewChange={isFieldValueChanged('deliveryState')}
+                    />
+                    <CustomFormItem
+                      name="deliveryGst"
+                      label={
+                        <span style={{ textAlign: 'center' }}>
+                          GST No. <span style={{ color: 'red' }}> *</span>
+                        </span>
+                      }
+                      NewChange={isFieldValueChanged('deliveryGst')}
+                    />
+                    <Form.Item
+                      name="deliveryContactno"
+                      label={
+                        <span style={{ marginBottom: '0px' }}>
+                          Delivery Contact No<span style={{ color: 'red' }}>*</span>
+                        </span>
+                      }
+                      labelAlign="left"
+                      labelCol={{ span: 8 }}
+                      wrapperCol={{ span: 16 }}
+                    >
+                      <Input
+                        type="text"
+                        maxLength={10}
+                        style={
+                          isFieldValueChanged('deliveryContact')
+                            ? HighlightStyle
+                            : { width: '100%' }
                         }
                       />
                     </Form.Item>
                   </div>
-                  <CustomFormItem
-                    onChange={amountonchange}
-                    name="subtotal"
-                    label="SUB TOTAL"
-                    disabled
-                    type="text"
-                    NewChange={isFieldValueChanged('basicTotal')}
-                  />
-                  <CustomFormItem
-                    onChange={amountonchange}
-                    name="lessdiscounts"
-                    label="Discount"
-                    placeholder="0.00"
-                    type="text"
-                    NewChange={isFieldValueChanged('discount')}
-                  />
-                  <CustomFormItem
-                    onChange={amountonchange}
-                    name="transportCharges"
-                    label="Transport Charges"
-                    placeholder="0.00"
-                    type="text"
-                    disabled
-                    NewChange={isFieldValueChanged('transportCharges')}
-                  />
-                  <CustomFormItem
-                    onChange={amountonchange}
-                    name="pf"
-                    label="P & F"
-                    placeholder="0.00"
-                    type="text"
-                    disabled
-                    NewChange={isFieldValueChanged('pf')}
-                  />
-                  {/* <CustomFormItem
-                    onChange={amountonchange}
-                    name="frieght"
-                    label="Frieght"
-                    placeholder="0.00"
-                    type="text"
-                  /> */}
-                  {/* <CustomFormItem
-                    onChange={amountonchange}
-                    name="others"
-                    label="Others"
-                    placeholder="0.00"
-                    type="text"
-                    NewChange={isFieldValueChanged('others')}
-                  /> */}
-                  <CustomFormItem
-                    // onChange={amountonchange}
-                    disabled
-                    name="terminalTax"
-                    label="Taxable Value"
-                    placeholder="0.00"
-                    type="text"
-                    NewChange={isFieldValueChanged('terminalTax')}
-                  />
-                  {/* <CustomFormItem
-                    onChange={amountonchange}
-                    name="gst"
-                    label={`SGST ${Menulistdata[0].currency}`}
-                    placeholder="0.00"
-                    type="text"
-                    disabled
-                  />
-                  <CustomFormItem
-                    onChange={amountonchange}
-                    name="gst"
-                    label={`CGST ${Menulistdata[0].currency}`}
-                    placeholder="0.00"
-                    type="text"
-                    disabled
-                  /> */}
-                  <Checkbox
-                    style={{ position: 'relative', top: '30px', left: '-30px' }}
-                    disabled={false}
-                    onClick={() => gstChange('GST')}
-                    checked={selectedGST === 'GST'}
-                  />{' '}
-                  <Form.Item
-                    name="gst"
-                    label={`SGST ${Menulistdata[0].currency}`}
-                    onChange={amountonchange}
-                    labelCol={{ span: 8 }}
-                    wrapperCol={{ span: 16 }}
-                    labelAlign="left"
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px' }}>
-                      <Input
-                        value={formatValue2(selectedGST === 'GST' ? gstValue / 2 : 0)}
-                        className="custom-input"
-                        disabled
-                        style={isFieldValueChanged('gst') ? HighlightStyle : { width: '100%' }}
-                      />
-                    </div>
-                  </Form.Item>
-                  <Form.Item
-                    name="gst"
-                    label={`CGST ${Menulistdata[0].currency}`}
-                    onChange={amountonchange}
-                    labelCol={{ span: 8 }}
-                    wrapperCol={{ span: 16 }}
-                    labelAlign="left"
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px' }}>
-                      <Input
-                        value={formatValue2(selectedGST === 'GST' ? gstValue / 2 : 0)}
-                        className="custom-input"
-                        disabled
-                        style={isFieldValueChanged('gst') ? HighlightStyle : { width: '100%' }}
-                      />
-                    </div>
-                  </Form.Item>
-                  <Checkbox
-                    style={{ position: 'relative', top: '30px', left: '-30px' }}
-                    disabled={false}
-                    onClick={() => gstChange('IGST')}
-                    checked={selectedGST === 'IGST'}
-                  />
-                  <Form.Item
-                    name="IGST"
-                    label={`IGST ${Menulistdata[0].currency}`}
-                    labelCol={{ span: 8 }}
-                    wrapperCol={{ span: 16 }}
-                    labelAlign="left"
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px' }}>
-                      <Input
-                        value={formatValue2(selectedGST === 'IGST' ? gstValue : 0)}
-                        className="custom-input"
-                        disabled
-                        style={isFieldValueChanged('igst') ? HighlightStyle : { width: '100%' }}
-                      />
-                    </div>
-                  </Form.Item>
-                  <CustomFormItem
-                    onChange={amountonchange}
-                    name="cess"
-                    label="CESS"
-                    placeholder="0.00"
-                    type="text"
-                    NewChange={isFieldValueChanged('cess')}
-                  />
-                  <CustomFormItem
-                    name="Total"
-                    label="Total"
-                    // value={totalamount}
-                    placeholder="0.00"
-                    type="text"
-                    disabled
-                    NewChange={isFieldValueChanged('totalValue')}
-                  />
                 </div>
-              </div>
-            </Card>
-          </Form>
-          {/* when currSequence is 3 po was cancelled */}
-          {!isView && (
-            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
-              {docStatus &&
-                docStatus.length > 0 &&
-                docStatus[0].cancelSeq !== '' &&
-                docStatus[0].currSequence !== '3' && (
-                  <div style={{ display: 'flex' }}>
-                    <Select
-                      id="approvalDropdown"
-                      style={{ width: '150px' }}
-                      dropdownStyle={{ textAlign: 'left' }}
-                      onChange={value => handleDropdownChange(value)}
-                      value={selectedOption}
-                      placeholder="Select"
+              </Card>
+              <Card>
+                <div className="row costom-form-body">
+                  <div className="col-md-5">
+                    <h5 className="mb-3">PURCHASE ORDER</h5>
+                    {/* <CustomFormItem
+                      name="Division"
+                      label={
+                        <span style={{ textAlign: 'center' }}>
+                          Division <span style={{ color: 'red' }}> *</span>
+                        </span>
+                      }
+                    /> */}
+                    <Form.Item
+                      labelCol={{ span: 8 }}
+                      wrapperCol={{ span: 16 }}
+                      labelAlign="left"
+                      name="Division"
+                      label={
+                        <span style={{ textAlign: 'center' }}>
+                          Division <span style={{ color: 'red' }}> *</span>
+                        </span>
+                      }
                     >
-                      <Option value="" key="defaultOption">
-                        Select
-                      </Option>
-                      {docStatus.map(option => (
-                        <Option key={option.currSequence} value={option.currSequence}>
-                          {option.docStatusDesc}
-                        </Option>
-                      ))}
-                    </Select>
-                    <div style={{ marginLeft: '10px' }}>
-                      <ButtonComponent
-                        type="primary"
-                        // text={docStatus[0].docStatusDesc}
-                        text="Update"
-                        disable={
-                          docStatus?.length > 0 && String(docStatus[0]?.previousSeq ?? '') === '2'
-                            ? apprvBtnEnabled
-                            : false
-                        }
-                        onClick={() => addRemarksSubmit(docStatus[0].currSequence)}
+                      <AutoComplete
+                        options={divisionList}
+                        onChange={e => {
+                          poform.setFieldsValue({
+                            [`Division`]: e,
+                          })
+                        }}
+                      >
+                        <Input
+                          placeholder="Select here"
+                          style={
+                            isFieldValueChanged('divisionDesc') ? HighlightStyle : { width: '100%' }
+                          }
+                        />
+                      </AutoComplete>
+                    </Form.Item>
+                    <CustomFormItem
+                      name="OrderNumber"
+                      label={
+                        <span style={{ textAlign: 'center' }}>
+                          Order Number <span style={{ color: 'red' }}> *</span>
+                        </span>
+                      }
+                      readOnly
+                      NewChange={isFieldValueChanged('orderNo')}
+                    />
+                    <Form.Item
+                      labelCol={{ span: 8 }}
+                      wrapperCol={{ span: 16 }}
+                      labelAlign="left"
+                      name="Date"
+                      label={
+                        <span style={{ textAlign: 'center' }}>
+                          Date <span style={{ color: 'red' }}> *</span>
+                        </span>
+                      }
+                    >
+                      <DatePicker
+                        format="DD-MMM-YYYY"
+                        className="custom-input"
+                        style={isFieldValueChanged('date') ? HighlightStyle : { width: '100%' }}
                       />
+                    </Form.Item>
+                    <CustomFormItem
+                      name="revision"
+                      disabled
+                      label={<span style={{ textAlign: 'center' }}>Revision</span>}
+                      NewChange={isFieldValueChanged('revision')}
+                    />
+                    <Form.Item
+                      labelCol={{ span: 8 }}
+                      wrapperCol={{ span: 16 }}
+                      labelAlign="left"
+                      name="revisionDate"
+                      label={<span style={{ textAlign: 'center' }}>Revision Date</span>}
+                    >
+                      <DatePicker
+                        format="DD-MMM-YYYY"
+                        className="custom-input"
+                        style={
+                          isFieldValueChanged('revisionDate') ? HighlightStyle : { width: '100%' }
+                        }
+                        disabled
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      labelCol={{ span: 8 }}
+                      wrapperCol={{ span: 16 }}
+                      labelAlign="left"
+                      name="refDate"
+                      label={
+                        <span style={{ textAlign: 'center' }}>
+                          Ref Date <span style={{ color: 'red' }}> *</span>
+                        </span>
+                      }
+                    >
+                      <DatePicker
+                        format="DD-MMM-YYYY"
+                        className="custom-input"
+                        disabled
+                        style={isFieldValueChanged('refDate') ? HighlightStyle : { width: '100%' }}
+                      />
+                    </Form.Item>
+                    <CustomFormItem
+                      name="refNo"
+                      label={<span style={{ textAlign: 'center' }}>Ref No.</span>}
+                      disabled
+                      NewChange={isFieldValueChanged('refNo')}
+                    />
+                    <CustomFormItem
+                      name="ranDivCommte"
+                      label={<span style={{ textAlign: 'center' }}>Ran/Div/Commte</span>}
+                      NewChange={isFieldValueChanged('ranDivCommte')}
+                    />
+                    <CustomFormItem
+                      name="pan"
+                      label={<span style={{ textAlign: 'center' }}>PAN</span>}
+                      NewChange={isFieldValueChanged('pan')}
+                    />
+                  </div>
+                  <div className="col-md-5">
+                    <CustomFormItem
+                      name="deliveryTerms"
+                      label={<span style={{ textAlign: 'center' }}>Delivery Terms</span>}
+                      NewChange={isFieldValueChanged('deliveryTerms')}
+                    />
+                    <CustomFormItem
+                      name="PaymentTerms"
+                      label={
+                        <span style={{ textAlign: 'center' }}>
+                          Payment Terms <span style={{ color: 'red' }}> *</span>
+                        </span>
+                      }
+                      disabled
+                      NewChange={isFieldValueChanged('PaymentTerms')}
+                    />
+                    <CustomFormItem
+                      name="LiquidatedDamages"
+                      label={
+                        <span style={{ textAlign: 'center' }}>
+                          Liquidated Damages <span style={{ color: 'red' }}> *</span>
+                        </span>
+                      }
+                      NewChange={isFieldValueChanged('liqDamages')}
+                    />
+                    <CustomFormItem
+                      name="guarantee"
+                      label={
+                        <span style={{ textAlign: 'center' }}>
+                          Guarantee <span style={{ color: 'red' }}> *</span>
+                        </span>
+                      }
+                      NewChange={isFieldValueChanged('guarantee')}
+                    />
+                    <CustomFormItem
+                      name="Warranty"
+                      label={
+                        <span style={{ textAlign: 'center' }}>
+                          Warranty <span style={{ color: 'red' }}> *</span>
+                        </span>
+                      }
+                      NewChange={isFieldValueChanged('warrenty')}
+                    />
+
+                    <Form.Item
+                      labelCol={{ span: 8 }}
+                      wrapperCol={{ span: 16 }}
+                      labelAlign="left"
+                      name="dispatchMode"
+                      label={
+                        <span style={{ textAlign: 'center' }}>
+                          Mode of Dispatch <span style={{ color: 'red' }}> *</span>
+                        </span>
+                      }
+                    >
+                      <AutoComplete
+                        options={dispatchlist}
+                        onChange={e => {
+                          poform.setFieldsValue({
+                            [`dispatchMode`]: e,
+                          })
+                        }}
+                      >
+                        <Input
+                          placeholder="Select here"
+                          style={
+                            isFieldValueChanged('dispatchModeDesc')
+                              ? HighlightStyle
+                              : { width: '100%' }
+                          }
+                        />
+                      </AutoComplete>
+                    </Form.Item>
+                    <CustomFormItem
+                      name="priceBasis"
+                      label={<span style={{ textAlign: 'center' }}>Price Basis</span>}
+                      NewChange={isFieldValueChanged('priceBasis')}
+                    />
+                    <Form.Item
+                      labelCol={{ span: 8 }}
+                      wrapperCol={{ span: 16 }}
+                      labelAlign="left"
+                      name="Insurance"
+                      label={<span style={{ textAlign: 'center' }}>Transit Insurance</span>}
+                    >
+                      <AutoComplete
+                        options={insurancelist}
+                        onChange={e => {
+                          poform.setFieldsValue({
+                            [`Insurance`]: e,
+                          })
+                        }}
+                      >
+                        <Input
+                          placeholder="Select here"
+                          style={
+                            isFieldValueChanged('transitInsuranceDesc')
+                              ? HighlightStyle
+                              : { width: '100%' }
+                          }
+                        />
+                      </AutoComplete>
+                    </Form.Item>
+                    {/* <CustomFormItem
+                      name="Inspection"
+                      label={
+                        <span style={{ textAlign: 'center' }}>
+                          Inspection <span style={{ color: 'red' }}> *</span>
+                        </span>
+                      }
+                    /> */}
+                    <Form.Item
+                      labelCol={{ span: 8 }}
+                      wrapperCol={{ span: 16 }}
+                      labelAlign="left"
+                      name="Inspection"
+                      label={<span style={{ textAlign: 'center' }}>Inspection</span>}
+                    >
+                      <AutoComplete
+                        options={inspectionlist}
+                        onChange={e => {
+                          poform.setFieldsValue({
+                            [`Inspection`]: e,
+                          })
+                        }}
+                      >
+                        <Input
+                          placeholder="Select here"
+                          style={
+                            isFieldValueChanged('inspectionScopeDesc')
+                              ? HighlightStyle
+                              : { width: '100%' }
+                          }
+                        />
+                      </AutoComplete>
+                    </Form.Item>
+                  </div>
+                </div>
+              </Card>
+              <Card className="custom_antd_Table">
+                <Table
+                  rowSelection={isDebitClicked ? rowSelection : null}
+                  columns={columns}
+                  dataSource={potabel}
+                  rowKey="poDtlId"
+                  bordered
+                />
+                <div className="costom-form-body mt-3">
+                  <div className="col-md-5">
+                    <div className="custom-form-container">
+                      <div className="amount_words">
+                        <Form.Item
+                          label={
+                            <div>
+                              <h5 className="mt-2">ENCLOSURES</h5>
+                            </div>
+                          }
+                        />
+                      </div>
+                      <CustomFormItem
+                        name="CTC"
+                        label={
+                          <span style={{ textAlign: 'center' }}>
+                            1. CTC <span style={{ color: 'red' }}> *</span>
+                          </span>
+                        }
+                        type="text"
+                        NewChange={isFieldValueChanged('ctc')}
+                      />
+                      <CustomFormItem
+                        name="TDC"
+                        label={
+                          <span style={{ textAlign: 'center' }}>
+                            2. TDC <span style={{ color: 'red' }}> *</span>
+                          </span>
+                        }
+                        type="text"
+                        NewChange={isFieldValueChanged('tdc')}
+                      />
+                      <CustomFormItem
+                        name="TDS"
+                        label={
+                          <span style={{ textAlign: 'center' }}>
+                            3. TDS <span style={{ color: 'red' }}> *</span>
+                          </span>
+                        }
+                        type="text"
+                        NewChange={isFieldValueChanged('tds')}
+                      />
+                      <CustomFormItem
+                        name="QAP"
+                        label={
+                          <span style={{ textAlign: 'center' }}>
+                            4. QAP <span style={{ color: 'red' }}> *</span>
+                          </span>
+                        }
+                        type="text"
+                        NewChange={isFieldValueChanged('qap')}
+                      />
+                      <CustomFormItem
+                        name="DWGS"
+                        label={
+                          <span style={{ textAlign: 'center' }}>
+                            5. DWGS <span style={{ color: 'red' }}> *</span>
+                          </span>
+                        }
+                        type="text"
+                        NewChange={isFieldValueChanged('dwgs')}
+                      />
+                      <CustomFormItem
+                        name="GTC"
+                        label={
+                          <span style={{ textAlign: 'center' }}>
+                            6. GTC <span style={{ color: 'red' }}> *</span>
+                          </span>
+                        }
+                        type="text"
+                        NewChange={isFieldValueChanged('gtc')}
+                      />
+
+                      {/* <CustomFormItem name="QAP" label="3.QAP" onChange={amountonchange} />
+                      <CustomFormItem name="GTC" label="4.GTC" onChange={amountonchange} /> */}
+                      <div className="shipping_section">
+                        <h5>
+                          SPECIAL REMARKS<span style={{ color: 'red' }}> *</span>
+                        </h5>
+                        <Form.Item name="specialremarks">
+                          <TextArea
+                            className="custom-input"
+                            style={
+                              isFieldValueChanged('remarks') ? HighlightStyle : { width: '100%' }
+                            }
+                          />
+                        </Form.Item>
+                      </div>
+                      <div className="shipping_section">
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            marginTop: '10px',
+                          }}
+                        >
+                          <h5>PAYMENT TERMS</h5>
+                          {!isView &&
+                            (['1'].includes(String(mainEntity?.sequenceNo)) ? (
+                              <Popover
+                                placement="top"
+                                content={
+                                  <div className="custom_antd_Table">
+                                    <Table dataSource={paymentterms} columns={paymentcolumns} />
+                                  </div>
+                                }
+                                trigger="click"
+                              >
+                                <Button type="primary">Add Payment Terms</Button>
+                              </Popover>
+                            ) : (
+                              <Button type="primary" disabled>
+                                Add Payment Terms
+                              </Button>
+                            ))}
+                        </div>
+                        {/* {paymentterms.slice(0, -1).map((item, index) => (
+                          <div key={item.potId} style={{ display: 'flex', flexDirection: 'column' }}>
+                            {`${index + 1}) ${item.term}- ${item.percentage}% `}
+                          </div>
+                        ))} */}
+
+                        <div>
+                          <div className="custom_antd_Table">
+                            <Table
+                              dataSource={paymentterms.slice(0, -1)}
+                              columns={paymentTermColumns}
+                            />
+                          </div>
+                        </div>
+                      </div>
                     </div>
+                    {mainEntity.isApproved === '0' ? null : !isDebitClicked ? (
+                      !isView && (
+                        <Button type="primary" disabled={isSubmitting} onClick={handleDebitNote}>
+                          Add Debit Note
+                        </Button>
+                      )
+                    ) : (
+                      <>
+                        <h5>Debit Note</h5>
+                        <Form form={debitForm} layout="vertical">
+                          <Row gutter={16}>
+                            <Col span={8}>
+                              <Form.Item
+                                label={
+                                  <>
+                                    Select Reason <span style={{ color: 'red' }}>*</span>
+                                  </>
+                                }
+                                name="debitNoteReason"
+                              >
+                                <AutoComplete
+                                  placeholder="Select or type a reason"
+                                  options={reasonList.map(reason => ({
+                                    label: reason.dnrDesc,
+                                    value: reason.dnrDesc,
+                                  }))}
+                                  value={selectedReasonObj?.dnrDesc || ''}
+                                  onChange={value => {
+                                    const match = reasonList.find(r => r.dnrDesc === value)
+                                    if (match) {
+                                      setSelectedReasonObj(match) // selected from list
+                                    } else {
+                                      setSelectedReasonObj({ dnrId: null, dnrDesc: value }) // user-typed
+                                    }
+                                  }}
+                                  filterOption={false}
+                                />
+                              </Form.Item>
+                            </Col>
+
+                            <Col span={12}>
+                              <Form.Item label="Upload File" name="file">
+                                <Upload
+                                  beforeUpload={file => {
+                                    setFileList([file]) // Ensure `originFileObj` is available
+                                    return false // prevent auto upload
+                                  }}
+                                  fileList={fileList}
+                                  onChange={({ fileList: newFileList }) => setFileList(newFileList)}
+                                >
+                                  <Button type="primary" icon={<UploadOutlined />} />
+                                </Upload>
+                              </Form.Item>
+                            </Col>
+
+                            <Col span={8}>
+                              <Form.Item
+                                label={
+                                  <>
+                                    Enter Value <span style={{ color: 'red' }}>*</span>
+                                  </>
+                                }
+                                name="valueForDebitNote"
+                              >
+                                <InputNumber
+                                  style={{ width: '100%' }}
+                                  min={1}
+                                  placeholder="Enter Value"
+                                  formatter={value => value.replace(/[^\d.]/g, '')}
+                                  parser={value => value.replace(/[^\d.]/g, '')}
+                                />
+                              </Form.Item>
+                            </Col>
+                          </Row>
+                        </Form>
+                      </>
+                    )}
                   </div>
-                )}
-              <Popuptable
-                onClose={() => setApproveRemarksCard(false)}
-                cardLabel=""
-                component={AddRemarksComponent(
-                  docStatus && docStatus.length > 0 ? docStatus[0].currSequence : '',
-                )}
-                visible={approveRemarksCard}
-              />
-              <span style={{ margin: '0 8px' }} />
-              <ButtonComponent
-                type="primary"
-                icon={<CommentOutlined />}
-                onClick={() => {
-                  OpenDetailCard()
-                }}
-              />
-              <Popuptable
-                onClose={() => setdetailCard(false)}
-                cardLabel=""
-                component={
-                  <div className="custom_antd_Table" style={{ width: '500px' }}>
-                    <Table dataSource={rmkDetaillist} columns={remarksColumns} scrollY={300} />
+                  <div className="col-md-5 custom-form-container">
+                    <div className="amount_words">
+                      <Form.Item
+                        name="amountInWords"
+                        label={
+                          <div>
+                            <h5 className="mt-2">Amount in Words</h5>
+                          </div>
+                        }
+                      >
+                        <TextArea
+                          className="custom-input"
+                          disabled
+                          style={
+                            isFieldValueChanged('amountinwords')
+                              ? HighlightStyle
+                              : { width: '100%' }
+                          }
+                        />
+                      </Form.Item>
+                    </div>
+                    <CustomFormItem
+                      onChange={amountonchange}
+                      name="subtotal"
+                      label="SUB TOTAL"
+                      disabled
+                      type="text"
+                      NewChange={isFieldValueChanged('basicTotal')}
+                    />
+                    <CustomFormItem
+                      onChange={amountonchange}
+                      name="lessdiscounts"
+                      label="Discount"
+                      placeholder="0.00"
+                      type="text"
+                      NewChange={isFieldValueChanged('discount')}
+                    />
+                    <CustomFormItem
+                      onChange={amountonchange}
+                      name="transportCharges"
+                      label="Transport Charges"
+                      placeholder="0.00"
+                      type="text"
+                      disabled
+                      NewChange={isFieldValueChanged('transportCharges')}
+                    />
+                    <CustomFormItem
+                      onChange={amountonchange}
+                      name="pf"
+                      label="P & F"
+                      placeholder="0.00"
+                      type="text"
+                      disabled
+                      NewChange={isFieldValueChanged('pf')}
+                    />
+                    {/* <CustomFormItem
+                      onChange={amountonchange}
+                      name="frieght"
+                      label="Frieght"
+                      placeholder="0.00"
+                      type="text"
+                    /> */}
+                    {/* <CustomFormItem
+                      onChange={amountonchange}
+                      name="others"
+                      label="Others"
+                      placeholder="0.00"
+                      type="text"
+                      NewChange={isFieldValueChanged('others')}
+                    /> */}
+                    <CustomFormItem
+                      // onChange={amountonchange}
+                      disabled
+                      name="terminalTax"
+                      label="Taxable Value"
+                      placeholder="0.00"
+                      type="text"
+                      NewChange={isFieldValueChanged('terminalTax')}
+                    />
+                    {/* <CustomFormItem
+                      onChange={amountonchange}
+                      name="gst"
+                      label={`SGST ${Menulistdata[0].currency}`}
+                      placeholder="0.00"
+                      type="text"
+                      disabled
+                    />
+                    <CustomFormItem
+                      onChange={amountonchange}
+                      name="gst"
+                      label={`CGST ${Menulistdata[0].currency}`}
+                      placeholder="0.00"
+                      type="text"
+                      disabled
+                    /> */}
+                    <Checkbox
+                      style={{ position: 'relative', top: '30px', left: '-30px' }}
+                      disabled={false}
+                      onClick={() => gstChange('GST')}
+                      checked={selectedGST === 'GST'}
+                    />{' '}
+                    <Form.Item
+                      name="gst"
+                      label={`SGST ${Menulistdata[0].currency}`}
+                      onChange={amountonchange}
+                      labelCol={{ span: 8 }}
+                      wrapperCol={{ span: 16 }}
+                      labelAlign="left"
+                    >
+                      <div
+                        style={{ display: 'flex', justifyContent: 'space-between', gap: '10px' }}
+                      >
+                        <Input
+                          value={formatValue2(selectedGST === 'GST' ? gstValue / 2 : 0)}
+                          className="custom-input"
+                          disabled
+                          style={isFieldValueChanged('gst') ? HighlightStyle : { width: '100%' }}
+                        />
+                      </div>
+                    </Form.Item>
+                    <Form.Item
+                      name="gst"
+                      label={`CGST ${Menulistdata[0].currency}`}
+                      onChange={amountonchange}
+                      labelCol={{ span: 8 }}
+                      wrapperCol={{ span: 16 }}
+                      labelAlign="left"
+                    >
+                      <div
+                        style={{ display: 'flex', justifyContent: 'space-between', gap: '10px' }}
+                      >
+                        <Input
+                          value={formatValue2(selectedGST === 'GST' ? gstValue / 2 : 0)}
+                          className="custom-input"
+                          disabled
+                          style={isFieldValueChanged('gst') ? HighlightStyle : { width: '100%' }}
+                        />
+                      </div>
+                    </Form.Item>
+                    <Checkbox
+                      style={{ position: 'relative', top: '30px', left: '-30px' }}
+                      disabled={false}
+                      onClick={() => gstChange('IGST')}
+                      checked={selectedGST === 'IGST'}
+                    />
+                    <Form.Item
+                      name="IGST"
+                      label={`IGST ${Menulistdata[0].currency}`}
+                      labelCol={{ span: 8 }}
+                      wrapperCol={{ span: 16 }}
+                      labelAlign="left"
+                    >
+                      <div
+                        style={{ display: 'flex', justifyContent: 'space-between', gap: '10px' }}
+                      >
+                        <Input
+                          value={formatValue2(selectedGST === 'IGST' ? gstValue : 0)}
+                          className="custom-input"
+                          disabled
+                          style={isFieldValueChanged('igst') ? HighlightStyle : { width: '100%' }}
+                        />
+                      </div>
+                    </Form.Item>
+                    <CustomFormItem
+                      onChange={amountonchange}
+                      name="cess"
+                      label="CESS"
+                      placeholder="0.00"
+                      type="text"
+                      NewChange={isFieldValueChanged('cess')}
+                    />
+                    <CustomFormItem
+                      name="Total"
+                      label="Total"
+                      // value={totalamount}
+                      placeholder="0.00"
+                      type="text"
+                      disabled
+                      NewChange={isFieldValueChanged('totalValue')}
+                    />
                   </div>
-                }
-                visible={detailCard}
-              />
-              <span style={{ margin: '0 8px' }} />
-              <ButtonComponent
-                text="Save"
-                type="primary"
-                disable={
-                  componentDisabled ||
-                  ((docStatus?.[0]?.previousSeq ?? '') === '2' ? apprvBtnEnabled : false)
-                }
-                onClick={() => handleinsert()}
-              />
-              {mainEntity.isApproved === '0' ? null : (
-                <>
-                  <span style={{ margin: '0 8px' }} />
+                </div>
+              </Card>
+            </Form>
+            {/* when currSequence is 3 po was cancelled */}
+            {!isView && (
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
+                {docStatus &&
+                  docStatus.length > 0 &&
+                  docStatus[0].cancelSeq !== '' &&
+                  docStatus[0].currSequence !== '3' && (
+                    <div style={{ display: 'flex' }}>
+                      <Select
+                        id="approvalDropdown"
+                        style={{ width: '150px' }}
+                        dropdownStyle={{ textAlign: 'left' }}
+                        onChange={value => handleDropdownChange(value)}
+                        value={selectedOption}
+                        placeholder="Select"
+                      >
+                        <Option value="" key="defaultOption">
+                          Select
+                        </Option>
+                        {docStatus.map(option => (
+                          <Option key={option.currSequence} value={option.currSequence}>
+                            {option.docStatusDesc}
+                          </Option>
+                        ))}
+                      </Select>
+                      <div style={{ marginLeft: '10px' }}>
+                        <ButtonComponent
+                          type="primary"
+                          // text={docStatus[0].docStatusDesc}
+                          text="Update"
+                          disable={
+                            isSubmitting ||
+                            (docStatus?.length > 0 &&
+                            String(docStatus[0]?.previousSeq ?? '') === '2'
+                              ? apprvBtnEnabled
+                              : false)
+                          }
+                          onClick={() => addRemarksSubmit(docStatus[0].currSequence)}
+                        />
+                      </div>
+                    </div>
+                  )}
+                <Popuptable
+                  onClose={() => {
+                    if (isSubmitting) return
+                    setApproveRemarksCard(false)
+                  }}
+                  cardLabel=""
+                  component={AddRemarksComponent(
+                    docStatus && docStatus.length > 0 ? docStatus[0].currSequence : '',
+                  )}
+                  visible={approveRemarksCard}
+                />
+                <span style={{ margin: '0 8px' }} />
+                <ButtonComponent
+                  type="primary"
+                  icon={<CommentOutlined />}
+                  disable={isSubmitting}
+                  onClick={() => {
+                    OpenDetailCard()
+                  }}
+                />
+                <Popuptable
+                  onClose={() => {
+                    if (isSubmitting) return
+                    setdetailCard(false)
+                  }}
+                  cardLabel=""
+                  component={
+                    <div className="custom_antd_Table" style={{ width: '500px' }}>
+                      <Table dataSource={rmkDetaillist} columns={remarksColumns} scrollY={300} />
+                    </div>
+                  }
+                  visible={detailCard}
+                />
+                <span style={{ margin: '0 8px' }} />
+                <ButtonComponent
+                  text="Save"
+                  type="primary"
+                  disable={
+                    isSubmitting ||
+                    componentDisabled ||
+                    ((docStatus?.[0]?.previousSeq ?? '') === '2' ? apprvBtnEnabled : false)
+                  }
+                  loading={isSubmitting}
+                  onClick={() => safeSave()}
+                />
+                {mainEntity.isApproved === '0' ? null : (
+                  <>
+                    <span style={{ margin: '0 8px' }} />
+                    <ButtonComponent
+                      text="Debit Note"
+                      type="primary"
+                      disable={isSubmitting || componentDisabled}
+                      loading={isSubmitting}
+                      onClick={() => safeDebitNoteSubmit()}
+                    />
+                  </>
+                )}
+                <span style={{ margin: '0 8px' }} />
+                {/* when currSequence is 3 po was cancelled */}
+                {docStatus &&
+                  docStatus.length > 0 &&
+                  docStatus[0].cancelSeq !== '' &&
+                  docStatus[0].currSequence !== '3' && (
+                    <ButtonComponent
+                      type="danger"
+                      text="PO Cancel"
+                      disable={isSubmitting}
+                      onClick={() => addprevRemarksSubmit(docStatus[0].cancelSeq)}
+                    />
+                  )}
+                <Popuptable
+                  onClose={() => {
+                    if (isSubmitting) return
+                    setPrevRemarksCard(false)
+                  }}
+                  cardLabel=""
+                  component={AddRemarksprevComponent(
+                    docStatus && docStatus.length > 0 ? docStatus[0].cancelSeq : '',
+                  )}
+                  visible={prevRemarksCard}
+                />
+                <span style={{ margin: '0 8px' }} />
+                {rowData.isApproved === '1' ? (
                   <ButtonComponent
-                    text="Debit Note"
                     type="primary"
-                    disable={componentDisabled}
-                    onClick={() => debitNoteSubmit()}
+                    text="PO Export"
+                    disable={isSubmitting}
+                    loading={isSubmitting}
+                    onClick={() => safeDownloadReport()}
                   />
-                </>
-              )}
-              <span style={{ margin: '0 8px' }} />
-              {/* when currSequence is 3 po was cancelled */}
-              {docStatus &&
-                docStatus.length > 0 &&
-                docStatus[0].cancelSeq !== '' &&
-                docStatus[0].currSequence !== '3' && (
-                  <ButtonComponent
-                    type="danger"
-                    text="PO Cancel"
-                    onClick={() => addprevRemarksSubmit(docStatus[0].cancelSeq)}
-                  />
-                )}
-              <Popuptable
-                onClose={() => setPrevRemarksCard(false)}
-                cardLabel=""
-                component={AddRemarksprevComponent(
-                  docStatus && docStatus.length > 0 ? docStatus[0].cancelSeq : '',
-                )}
-                visible={prevRemarksCard}
-              />
-              <span style={{ margin: '0 8px' }} />
-              {rowData.isApproved === '1' ? (
-                <ButtonComponent type="primary" text="PO Export" onClick={() => downloadreport()} />
-              ) : null}
-            </div>
-          )}
-        </Card>
+                ) : null}
+              </div>
+            )}
+          </Card>
+        </Spin>
       </Skeleton>
       {paymentLoading && (
         <PaymentTermsPopUp

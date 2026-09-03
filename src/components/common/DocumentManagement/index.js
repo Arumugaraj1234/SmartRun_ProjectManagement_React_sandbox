@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { Skeleton } from 'antd'
 import { UserOutlined } from '@ant-design/icons'
 // import approvalListRetrievalService from 'services/common/DocumentManagement/RetrivalService'
 import AccessDtlSerivce from 'services/common/DocumentManagement/AccessDetailService'
@@ -23,6 +24,7 @@ const DocumentManagement = ({ backcomponent }) => {
   const [docuId, setDocuId] = useState('')
   const [filtersinfo, setfilterinfo] = useState([])
   const [isDownloading, setIsDownloading] = useState(false) // New state variable for download button
+  const [loading, setLoading] = useState(true)
 
   const origionalData = []
 
@@ -42,17 +44,22 @@ const DocumentManagement = ({ backcomponent }) => {
   // }
 
   const fetchapprovalServicedata = async () => {
-    const response = await indentFileUpload({
-      requestPath: 'getDocumentManagementDetails',
-      requestData: {
-        enquiryId: enquiryid,
-        tenantId,
-        empId: employeID,
-        projectId: projId,
-      },
-    })
-    if (response) {
-      setRetrievaldata(response)
+    setLoading(true)
+    try {
+      const response = await indentFileUpload({
+        requestPath: 'getDocumentManagementDetails',
+        requestData: {
+          enquiryId: enquiryid,
+          tenantId,
+          empId: employeID,
+          projectId: projId,
+        },
+      })
+      if (response) {
+        setRetrievaldata(response)
+      }
+    } finally {
+      setLoading(false)
     }
   }
   retrievaldata.map(h => {
@@ -311,7 +318,9 @@ const DocumentManagement = ({ backcomponent }) => {
           />
         </div>
 
-        <Table columns={columns} data={origionalData} onChange={handleChange} />
+        <Skeleton loading={loading} active paragraph={{ rows: 8 }}>
+          <Table columns={columns} data={origionalData} onChange={handleChange} />
+        </Skeleton>
         <div>
           <BackButtonComponent componentToRender={backcomponent} />
         </div>

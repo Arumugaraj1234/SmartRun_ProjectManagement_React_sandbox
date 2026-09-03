@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Table, message } from 'antd'
+import { Table, message, Skeleton } from 'antd'
 import store from 'store'
 import RemoveIcon from 'components/shared/RemoveIconComponent'
 import IndentGroupgetDetails from 'services/common/IndentGroupService'
@@ -34,6 +34,7 @@ const AssignTeam = ({ component }) => {
   const [deptName, setDeptName] = useState('')
   const [showUploadList, setShowUploadList] = useState('')
   const [filtersinfo, setfilterinfo] = useState([])
+  const [loading, setLoading] = useState(true)
 
   const NewEmployeeName = value => {
     setEmp(value)
@@ -48,6 +49,7 @@ const AssignTeam = ({ component }) => {
     setfilterinfo(filters)
   }
   const onLoadFunc = async () => {
+    setLoading(true)
     try {
       const response = await fetchAssignTeamServicedata()
 
@@ -57,6 +59,8 @@ const AssignTeam = ({ component }) => {
       }
     } catch (error) {
       console.error('Error fetching data:', error)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -356,13 +360,15 @@ const AssignTeam = ({ component }) => {
 
   return (
     <div>
-      <div>
-        <h5>Team Member Allocated</h5>
-        <Table dataSource={data} columns={columns} onChange={handleChange} pagination={false} />
-      </div>
-      {showUploadList && showUploadList === '1' ? (
-        <AssignTeamInsert column={insertColumn} data={insertData} />
-      ) : null}
+      <Skeleton loading={loading} active paragraph={{ rows: 8 }}>
+        <div>
+          <h5>Team Member Allocated</h5>
+          <Table dataSource={data} columns={columns} onChange={handleChange} pagination={false} />
+        </div>
+        {showUploadList && showUploadList === '1' ? (
+          <AssignTeamInsert column={insertColumn} data={insertData} />
+        ) : null}
+      </Skeleton>
       <div>
         {component !== 'scmind' ? <BackButtonComponent componentToRender={component} /> : null}
       </div>

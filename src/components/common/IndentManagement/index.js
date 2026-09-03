@@ -24,6 +24,7 @@ import {
   AutoComplete,
   Tooltip,
   Select,
+  Spin,
 } from 'antd'
 import { useHistory } from 'react-router-dom'
 import JSZip from 'jszip'
@@ -475,115 +476,117 @@ const IndentManagement = ({ componentdata }) => {
   }
 
   const submitApprove = async () => {
-    setApproveremarksCard(false)
     setIsSubmitting(true)
-    setApprovebtn(false)
-    const availablevalue = parseFloat(
-      dueDateForm.getFieldValue('availableValue')?.replace(/,/g, ''),
-    )
-    const budgetvalue = parseFloat(dueDateForm.getFieldValue('budgetvalue')?.replace(/,/g, ''))
-    if (
-      (componentdata.module === 'project' ||
-        (componentdata.module === 'common' &&
-          docLifeList?.[0].docStatusDesc === 'Finance Accepted')) &&
-      docLifeList?.length > 0
-    ) {
-      if (costFlowType === 'NEW') {
-        if (!dueDateForm.getFieldValue('dueDate')) {
-          messageReturn(405)
-          return
-        }
-        SaveDueDate(2)
-      } else {
-        if (
-          (availablevalue > 0 && budgetvalue == 0) ||
-          budgetvalue === NaN ||
-          budgetvalue === undefined
-        ) {
-          messageReturn(612) // Error code for target should not be zero if allocated exists
-          dueDateForm.setFieldsValue({ budgetvalue: '' })
-          return
-        }
+    try {
+      setApprovebtn(false)
+      const availablevalue = parseFloat(
+        dueDateForm.getFieldValue('availableValue')?.replace(/,/g, ''),
+      )
+      const budgetvalue = parseFloat(dueDateForm.getFieldValue('budgetvalue')?.replace(/,/g, ''))
+      if (
+        (componentdata.module === 'project' ||
+          (componentdata.module === 'common' &&
+            docLifeList?.[0].docStatusDesc === 'Finance Accepted')) &&
+        docLifeList?.length > 0
+      ) {
+        if (costFlowType === 'NEW') {
+          if (!dueDateForm.getFieldValue('dueDate')) {
+            messageReturn(405)
+            return
+          }
+          SaveDueDate(2)
+        } else {
+          if (
+            (availablevalue > 0 && budgetvalue == 0) ||
+            budgetvalue === NaN ||
+            budgetvalue === undefined
+          ) {
+            messageReturn(612) // Error code for target should not be zero if allocated exists
+            dueDateForm.setFieldsValue({ budgetvalue: '' })
+            return
+          }
 
-        if (
-          !dueDateForm.getFieldValue('allocatedValue') ||
-          !dueDateForm.getFieldValue('targetValue') ||
-          // dueDateForm.getFieldValue('targetValue') === '0' ||
-          !dueDateForm.getFieldValue('dueDate')
-        ) {
-          messageReturn(405)
-          return
+          if (
+            !dueDateForm.getFieldValue('allocatedValue') ||
+            !dueDateForm.getFieldValue('targetValue') ||
+            // dueDateForm.getFieldValue('targetValue') === '0' ||
+            !dueDateForm.getFieldValue('dueDate')
+          ) {
+            messageReturn(405)
+            return
+          }
+          SaveDueDate(1)
         }
-        SaveDueDate(1)
       }
-    }
-    const formValues = form.getFieldsValue()
-    const keyareaobj = {
-      tenantId: tenantid,
-      indentId: detailTable[0]?.indentId,
-      empId: employeeId,
-      remarks: formValues.remarks,
-      currentseq: docLifeList?.[0]?.currSequence,
-      pmId: Tab?.processCode || componentdata.processCode,
-      docType: componentdata?.module === 'common' ? componentdata?.docType : 'DC018',
-    }
-    const response = await indentFileUpload({
-      requestPath: 'updateIndentHdrStatus',
-      requestData: keyareaobj,
-    })
-    if (response) {
-      setDetailTable([])
-      setDetailId(null)
-      addIndentbtn()
-      setDetailmodalVisible(false)
-      if (response.responseCode === '200') {
-        message.success(response.responseMessage)
-        setIsSubmitting(false)
+      const formValues = form.getFieldsValue()
+      const keyareaobj = {
+        tenantId: tenantid,
+        indentId: detailTable[0]?.indentId,
+        empId: employeeId,
+        remarks: formValues.remarks,
+        currentseq: docLifeList?.[0]?.currSequence,
+        pmId: Tab?.processCode || componentdata.processCode,
+        docType: componentdata?.module === 'common' ? componentdata?.docType : 'DC018',
       }
-      if (response.responseCode !== '200') {
-        message.error(response.responseMessage)
-        setIsSubmitting(false)
+      const response = await indentFileUpload({
+        requestPath: 'updateIndentHdrStatus',
+        requestData: keyareaobj,
+      })
+      if (response) {
+        setDetailTable([])
+        setDetailId(null)
+        addIndentbtn()
+        setDetailmodalVisible(false)
+        if (response.responseCode === '200') {
+          message.success(response.responseMessage)
+        }
+        if (response.responseCode !== '200') {
+          message.error(response.responseMessage)
+        }
       }
+      setApproveremarksCard(false)
+      form.resetFields()
+      getIndentlist()
+    } finally {
+      setIsSubmitting(false)
     }
-    form.resetFields()
-    getIndentlist()
   }
   const submitCancel = async () => {
-    // setShowUploadBtn(true)
     setIsSubmitting(true)
-    setRejectRemarksCard(false)
-    setApprovebtn(false)
-    const formValues = form.getFieldsValue()
-    const keyareaobj = {
-      tenantId: tenantid,
-      indentId: detailTable[0]?.indentId,
-      empId: employeeId,
-      remarks: formValues.remarks,
-      currentseq: docLifeList[0]?.cancelSeq,
-      pmId: Tab?.processCode || componentdata.processCode,
-      docType: componentdata?.module === 'common' ? componentdata?.docType : 'DC018',
-    }
-    const response = await indentFileUpload({
-      requestPath: 'updateIndentHdrStatus',
-      requestData: keyareaobj,
-    })
-    if (response) {
-      setDetailTable([])
-      setDetailId(null)
-      setDetailmodalVisible(false)
-      if (response.responseCode === '200') {
-        message.success(response.responseMessage)
-        getDetails(indentID)
-        setIsSubmitting(false)
+    try {
+      setApprovebtn(false)
+      const formValues = form.getFieldsValue()
+      const keyareaobj = {
+        tenantId: tenantid,
+        indentId: detailTable[0]?.indentId,
+        empId: employeeId,
+        remarks: formValues.remarks,
+        currentseq: docLifeList[0]?.cancelSeq,
+        pmId: Tab?.processCode || componentdata.processCode,
+        docType: componentdata?.module === 'common' ? componentdata?.docType : 'DC018',
       }
-      if (response.responseCode !== '200') {
-        message.error(response.responseMessage)
-        setIsSubmitting(false)
+      const response = await indentFileUpload({
+        requestPath: 'updateIndentHdrStatus',
+        requestData: keyareaobj,
+      })
+      if (response) {
+        setDetailTable([])
+        setDetailId(null)
+        setDetailmodalVisible(false)
+        if (response.responseCode === '200') {
+          message.success(response.responseMessage)
+          getDetails(indentID)
+        }
+        if (response.responseCode !== '200') {
+          message.error(response.responseMessage)
+        }
       }
+      setRejectRemarksCard(false)
+      form.resetFields()
+      getIndentlist()
+    } finally {
+      setIsSubmitting(false)
     }
-
-    form.resetFields()
-    getIndentlist()
   }
   const addIndentbtn = async () => {
     const keyareaobj = {
@@ -2485,36 +2488,43 @@ const IndentManagement = ({ componentdata }) => {
   const AddRemarksComponent = () => {
     return (
       <div>
-        <Card bordered={false} className="custom-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <div>
-              <h5>Add Remarks</h5>
-              <Form form={form}>
-                <Form.Item name="remarks">
-                  <TextArea rows={4} />
-                </Form.Item>
-              </Form>
-              <center>
-                {approveRemarksCard ? (
-                  <Button
-                    type="primary"
-                    text="Save"
-                    onClick={submitApprove}
-                    disabled={isSubmitting}
-                  />
-                ) : null}
-                {rejectRemarksCard ? (
-                  <Button
-                    type="primary"
-                    text="Save"
-                    onClick={submitCancel}
-                    disabled={isSubmitting}
-                  />
-                ) : null}
-              </center>
+        {/* This popup renders through antd's Popover (a document.body portal), so it sits outside
+        the main detail Modal — this Spin has to cover it directly for the loading state to be
+        visible here while Approve/Previous Stage is submitting. */}
+        <Spin spinning={isSubmitting} size="large" tip="Please wait...">
+          <Card bordered={false} className="custom-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div>
+                <h5>Add Remarks</h5>
+                <Form form={form}>
+                  <Form.Item name="remarks">
+                    <TextArea rows={4} />
+                  </Form.Item>
+                </Form>
+                <center>
+                  {approveRemarksCard ? (
+                    <Button
+                      type="primary"
+                      text="Save"
+                      onClick={submitApprove}
+                      disable={isSubmitting}
+                      loading={isSubmitting}
+                    />
+                  ) : null}
+                  {rejectRemarksCard ? (
+                    <Button
+                      type="primary"
+                      text="Save"
+                      onClick={submitCancel}
+                      disable={isSubmitting}
+                      loading={isSubmitting}
+                    />
+                  ) : null}
+                </center>
+              </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        </Spin>
       </div>
     )
   }
@@ -3186,155 +3196,158 @@ const IndentManagement = ({ componentdata }) => {
 
   const FieldsComponent = () => {
     return (
-      <div>
-        <Form form={dueDateForm}>
-          <div>
-            <div className="mt-1 custom_antd_Table">
-              <div className="row">
-                {/* <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3 tob_details">
+      // Covers the whole indent detail view — Approve/Previous Stage submitted from the
+      // remarks popup below still mutate this screen, so block it too until they finish.
+      <Spin spinning={isSubmitting} size="large" tip="Please wait...">
+        <div>
+          <Form form={dueDateForm}>
+            <div>
+              <div className="mt-1 custom_antd_Table">
+                <div className="row">
+                  {/* <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3 tob_details">
                   <p className='tob_label'>Indent Type :</p>
                   <p>{singleIndent?.sbcDesc}</p>
                 </div> */}
-                <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3 tob_details">
-                  {docLifeList &&
-                  docLifeList[0]?.isEditable === '1' &&
-                  seqnum === '1' &&
-                  isFlag === 1 ? (
-                    <Form.Item
-                      name="KeyArea"
-                      label={
-                        <span className="tob_label">
-                          Station No.
-                          <span style={{ color: 'red' }}>*</span>{' '}
-                        </span>
-                      }
-                    >
-                      <Select placeholder={singleIndent?.keyAreaDesc} onChange={getKeusubareas}>
-                        {dataKeyArea?.map(item => (
-                          <Option value={item.pkaId}>
-                            <Tooltip key={item.pkaId} title={`${item.keyName} (${item.code})`}>
-                              {item.keyName} ({item.code})
-                            </Tooltip>
-                          </Option>
-                        ))}
-                      </Select>
-                    </Form.Item>
-                  ) : (
-                    <Form.Item
-                      name="keysubarea"
-                      label={<span className="tob_label">Station No. </span>}
-                    >
-                      <p style={{ marginBottom: '-2px' }}>{singleIndent?.keyAreaDesc}</p>
-                    </Form.Item>
-                  )}
-                </div>
-                <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3 tob_details">
-                  {docLifeList &&
-                  docLifeList[0]?.isEditable === '1' &&
-                  seqnum === '1' &&
-                  isFlag === 1 ? (
-                    <Form.Item
-                      name="keysubarea"
-                      label={
-                        <span className="tob_label">
-                          Sub Assy.<span style={{ color: 'red' }}>*</span>{' '}
-                        </span>
-                      }
-                    >
-                      <Select placeholder={singleIndent?.subKeyAreaDesc}>
-                        {dataKeySubArea?.map(item => (
-                          <Option key={item.pkaId} value={item.pkaId}>
-                            <Tooltip key={item.pkaId} title={`${item.keyName} (${item.code})`}>
-                              {item.keyName} ({item.code})
-                            </Tooltip>
-                          </Option>
-                        ))}
-                      </Select>
-                    </Form.Item>
-                  ) : (
-                    <Form.Item
-                      name="keysubarea"
-                      label={<span className="tob_label">Sub Assy. </span>}
-                    >
-                      <p style={{ marginBottom: '-2px' }}>{singleIndent?.subKeyAreaDesc}</p>
-                    </Form.Item>
-                  )}
-                </div>
-                <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3 tob_details">
-                  <p className="tob_label">Created On :</p>
-                  <p>
-                    {singleIndent.createdOn
-                      ? moment(singleIndent.createdOn).format('DD-MMM-YYYY')
-                      : ''}
-                  </p>
-                </div>
-                {componentdata.module === 'project' ||
-                (componentdata.module === 'common' &&
-                  depCode === 'D10' &&
-                  docLifeList &&
-                  docLifeList.length > 0) ? (
                   <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3 tob_details">
-                    <p className="tob_label">
-                      Due Date<span style={{ color: 'red' }}>*</span> :
-                    </p>
-                    <Form.Item name="dueDate" style={{ color: 'black' }}>
-                      <DatePicker
-                        disabledDate={d => {
-                          if (dueDateval && planStartDate) {
-                            return (
-                              !d ||
-                              d.isBefore(moment(planStartDate)) ||
-                              d.isAfter(moment(dueDateval))
-                            )
-                          }
-                          return false
-                        }}
-                      />
-                    </Form.Item>
-                  </div>
-                ) : null}
-                {componentdata.module === 'project' ||
-                (componentdata.module === 'common' && depCode === 'D10') ? (
-                  <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3 tob_details">
-                    <p className="tob_label">Available Budget {Menulistdata[0].currency} :</p>
-                    <Form.Item name="availableValue" style={{ color: 'black' }}>
-                      <Input type="text" disabled />
-                    </Form.Item>
-                  </div>
-                ) : null}
-                {costFlowType !== 'NEW' &&
-                (componentdata.module === 'project' ||
-                  (componentdata.module === 'common' && depCode === 'D10')) ? (
-                  <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3 tob_details">
-                    <p className="tob_label">
-                      Allocated Budget {Menulistdata[0].currency}
-                      <span style={{ color: 'red' }}>*</span> :
-                    </p>
-                    <Form.Item name="allocatedValue" style={{ color: 'black' }}>
-                      <Input type="text" disabled />
-                    </Form.Item>
-                  </div>
-                ) : null}
-                {costFlowType !== 'NEW' &&
-                (componentdata.module === 'project' ||
-                  (componentdata.module === 'common' && depCode === 'D10')) ? (
-                  <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3 tob_details">
-                    <p className="tob_label">
-                      Budget Cost {Menulistdata[0].currency}
-                      <span style={{ color: 'red' }}>*</span> :
-                    </p>
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                    {docLifeList &&
+                    docLifeList[0]?.isEditable === '1' &&
+                    seqnum === '1' &&
+                    isFlag === 1 ? (
                       <Form.Item
-                        name="budgetvalue"
-                        style={{
-                          color: 'black',
-                          width: '150px',
-                          marginRight: '10px',
-                        }}
+                        name="KeyArea"
+                        label={
+                          <span className="tob_label">
+                            Station No.
+                            <span style={{ color: 'red' }}>*</span>{' '}
+                          </span>
+                        }
                       >
-                        <Input type="text" onChange={handleAllocatedValueChange} disabled />
+                        <Select placeholder={singleIndent?.keyAreaDesc} onChange={getKeusubareas}>
+                          {dataKeyArea?.map(item => (
+                            <Option value={item.pkaId}>
+                              <Tooltip key={item.pkaId} title={`${item.keyName} (${item.code})`}>
+                                {item.keyName} ({item.code})
+                              </Tooltip>
+                            </Option>
+                          ))}
+                        </Select>
                       </Form.Item>
-                      {/* <Popover
+                    ) : (
+                      <Form.Item
+                        name="keysubarea"
+                        label={<span className="tob_label">Station No. </span>}
+                      >
+                        <p style={{ marginBottom: '-2px' }}>{singleIndent?.keyAreaDesc}</p>
+                      </Form.Item>
+                    )}
+                  </div>
+                  <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3 tob_details">
+                    {docLifeList &&
+                    docLifeList[0]?.isEditable === '1' &&
+                    seqnum === '1' &&
+                    isFlag === 1 ? (
+                      <Form.Item
+                        name="keysubarea"
+                        label={
+                          <span className="tob_label">
+                            Sub Assy.<span style={{ color: 'red' }}>*</span>{' '}
+                          </span>
+                        }
+                      >
+                        <Select placeholder={singleIndent?.subKeyAreaDesc}>
+                          {dataKeySubArea?.map(item => (
+                            <Option key={item.pkaId} value={item.pkaId}>
+                              <Tooltip key={item.pkaId} title={`${item.keyName} (${item.code})`}>
+                                {item.keyName} ({item.code})
+                              </Tooltip>
+                            </Option>
+                          ))}
+                        </Select>
+                      </Form.Item>
+                    ) : (
+                      <Form.Item
+                        name="keysubarea"
+                        label={<span className="tob_label">Sub Assy. </span>}
+                      >
+                        <p style={{ marginBottom: '-2px' }}>{singleIndent?.subKeyAreaDesc}</p>
+                      </Form.Item>
+                    )}
+                  </div>
+                  <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3 tob_details">
+                    <p className="tob_label">Created On :</p>
+                    <p>
+                      {singleIndent.createdOn
+                        ? moment(singleIndent.createdOn).format('DD-MMM-YYYY')
+                        : ''}
+                    </p>
+                  </div>
+                  {componentdata.module === 'project' ||
+                  (componentdata.module === 'common' &&
+                    depCode === 'D10' &&
+                    docLifeList &&
+                    docLifeList.length > 0) ? (
+                    <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3 tob_details">
+                      <p className="tob_label">
+                        Due Date<span style={{ color: 'red' }}>*</span> :
+                      </p>
+                      <Form.Item name="dueDate" style={{ color: 'black' }}>
+                        <DatePicker
+                          disabledDate={d => {
+                            if (dueDateval && planStartDate) {
+                              return (
+                                !d ||
+                                d.isBefore(moment(planStartDate)) ||
+                                d.isAfter(moment(dueDateval))
+                              )
+                            }
+                            return false
+                          }}
+                        />
+                      </Form.Item>
+                    </div>
+                  ) : null}
+                  {componentdata.module === 'project' ||
+                  (componentdata.module === 'common' && depCode === 'D10') ? (
+                    <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3 tob_details">
+                      <p className="tob_label">Available Budget {Menulistdata[0].currency} :</p>
+                      <Form.Item name="availableValue" style={{ color: 'black' }}>
+                        <Input type="text" disabled />
+                      </Form.Item>
+                    </div>
+                  ) : null}
+                  {costFlowType !== 'NEW' &&
+                  (componentdata.module === 'project' ||
+                    (componentdata.module === 'common' && depCode === 'D10')) ? (
+                    <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3 tob_details">
+                      <p className="tob_label">
+                        Allocated Budget {Menulistdata[0].currency}
+                        <span style={{ color: 'red' }}>*</span> :
+                      </p>
+                      <Form.Item name="allocatedValue" style={{ color: 'black' }}>
+                        <Input type="text" disabled />
+                      </Form.Item>
+                    </div>
+                  ) : null}
+                  {costFlowType !== 'NEW' &&
+                  (componentdata.module === 'project' ||
+                    (componentdata.module === 'common' && depCode === 'D10')) ? (
+                    <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3 tob_details">
+                      <p className="tob_label">
+                        Budget Cost {Menulistdata[0].currency}
+                        <span style={{ color: 'red' }}>*</span> :
+                      </p>
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <Form.Item
+                          name="budgetvalue"
+                          style={{
+                            color: 'black',
+                            width: '150px',
+                            marginRight: '10px',
+                          }}
+                        >
+                          <Input type="text" onChange={handleAllocatedValueChange} disabled />
+                        </Form.Item>
+                        {/* <Popover
                         title="Allocate Budget"
                         content={Content}
                         trigger="click"
@@ -3342,118 +3355,123 @@ const IndentManagement = ({ componentdata }) => {
                         visible={isOpen}
                         overlayStyle={{ width: '80vw' }}
                       > */}
-                      <Button type="primary" onClick={handlePopup} icon={<InfoCircleOutlined />} />
-                      {/* </Popover> */}
-                    </div>
-                  </div>
-                ) : null}
-                {costFlowType !== 'NEW' &&
-                (componentdata.module === 'project' ||
-                  (componentdata.module === 'common' && depCode === 'D10')) ? (
-                  <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3 tob_details">
-                    <p className="tob_label">
-                      Target Cost {Menulistdata[0].currency}
-                      <span style={{ color: 'red' }}>*</span> :
-                    </p>
-                    <Form.Item name="targetValue" style={{ color: 'black' }}>
-                      <Input
-                        type="text"
-                        onChange={handleAllocatedValueChange}
-                        disabled={isInternal == 1 && componentdata.module === 'project'}
-                      />
-                    </Form.Item>
-                  </div>
-                ) : null}
-              </div>
-              {detailTable && detailTable.length > 0 ? (
-                <div style={{ marginBottom: '-32px', marginLeft: '155px' }}>
-                  <Button
-                    text={isDownloading ? 'Downloading...' : 'Download All'}
-                    type="primary"
-                    onClick={handleDownload}
-                  />
-                </div>
-              ) : null}
-              <Form form={indentDetailForm} style={{ width: '100%' }}>
-                <div>
-                  <Skeleton loading={loading} active style={{ width: '100%' }}>
-                    {componentdata.module === 'project' ||
-                    (componentdata.module === 'common' && depCode === 'D10') ? (
-                      <Table
-                        columns={columns3}
-                        dataSource={detailTable}
-                        scroll={{ y: 500 }}
-                        style={{ width: '100%' }}
-                        bordered
-                        exportableProps={{
-                          fileName: `Indent_Details_${detailId}-${currentDateTime}`,
-                          btnProps: {
-                            type: 'primary',
-                            icon: <FileExcelOutlined />,
-                            children: <span>Export to CSV</span>,
-                            onClick: handleExport,
-                          },
-                        }}
-                        pagination={
-                          !(docLifeList && docLifeList[0]?.isEditable === '1' && seqnum === '1')
-                        }
-                      />
-                    ) : (
-                      <Table
-                        columns={columns2}
-                        dataSource={detailTable}
-                        scroll={{ y: 500 }}
-                        style={{ width: '100%' }}
-                        bordered
-                        exportableProps={{
-                          fileName: `Indent_Details_${detailId}-${currentDateTime}`,
-                          btnProps: {
-                            type: 'primary',
-                            icon: <FileExcelOutlined />,
-                            children: <span>Export to CSV</span>,
-                            onClick: handleExport,
-                          },
-                        }}
-                        pagination={
-                          !(docLifeList && docLifeList[0]?.isEditable === '1' && seqnum === '1')
-                        }
-                      />
-                    )}
-
-                    {docLifeList &&
-                    docLifeList[0]?.isEditable === '1' &&
-                    seqnum === '1' &&
-                    isFlag === 1 ? (
-                      <Form
-                        form={addnewform}
-                        onFinish={onFinish}
-                        initialValues={{ dtlList: detailTable }}
-                      >
-                        <Table
-                          columns={insertColumns}
-                          dataSource={insertdata}
-                          pagination={false}
-                          showHeader={!(detailTable.length > 0)}
-                          style={{ marginTop: '-1px' }}
-                          bordered
+                        <Button
+                          type="primary"
+                          onClick={handlePopup}
+                          icon={<InfoCircleOutlined />}
                         />
-                      </Form>
-                    ) : null}
-                  </Skeleton>
+                        {/* </Popover> */}
+                      </div>
+                    </div>
+                  ) : null}
+                  {costFlowType !== 'NEW' &&
+                  (componentdata.module === 'project' ||
+                    (componentdata.module === 'common' && depCode === 'D10')) ? (
+                    <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3 tob_details">
+                      <p className="tob_label">
+                        Target Cost {Menulistdata[0].currency}
+                        <span style={{ color: 'red' }}>*</span> :
+                      </p>
+                      <Form.Item name="targetValue" style={{ color: 'black' }}>
+                        <Input
+                          type="text"
+                          onChange={handleAllocatedValueChange}
+                          disabled={isInternal == 1 && componentdata.module === 'project'}
+                        />
+                      </Form.Item>
+                    </div>
+                  ) : null}
                 </div>
-              </Form>
+                {detailTable && detailTable.length > 0 ? (
+                  <div style={{ marginBottom: '-32px', marginLeft: '155px' }}>
+                    <Button
+                      text={isDownloading ? 'Downloading...' : 'Download All'}
+                      type="primary"
+                      onClick={handleDownload}
+                    />
+                  </div>
+                ) : null}
+                <Form form={indentDetailForm} style={{ width: '100%' }}>
+                  <div>
+                    <Skeleton loading={loading} active style={{ width: '100%' }}>
+                      {componentdata.module === 'project' ||
+                      (componentdata.module === 'common' && depCode === 'D10') ? (
+                        <Table
+                          columns={columns3}
+                          dataSource={detailTable}
+                          scroll={{ y: 500 }}
+                          style={{ width: '100%' }}
+                          bordered
+                          exportableProps={{
+                            fileName: `Indent_Details_${detailId}-${currentDateTime}`,
+                            btnProps: {
+                              type: 'primary',
+                              icon: <FileExcelOutlined />,
+                              children: <span>Export to CSV</span>,
+                              onClick: handleExport,
+                            },
+                          }}
+                          pagination={
+                            !(docLifeList && docLifeList[0]?.isEditable === '1' && seqnum === '1')
+                          }
+                        />
+                      ) : (
+                        <Table
+                          columns={columns2}
+                          dataSource={detailTable}
+                          scroll={{ y: 500 }}
+                          style={{ width: '100%' }}
+                          bordered
+                          exportableProps={{
+                            fileName: `Indent_Details_${detailId}-${currentDateTime}`,
+                            btnProps: {
+                              type: 'primary',
+                              icon: <FileExcelOutlined />,
+                              children: <span>Export to CSV</span>,
+                              onClick: handleExport,
+                            },
+                          }}
+                          pagination={
+                            !(docLifeList && docLifeList[0]?.isEditable === '1' && seqnum === '1')
+                          }
+                        />
+                      )}
+
+                      {docLifeList &&
+                      docLifeList[0]?.isEditable === '1' &&
+                      seqnum === '1' &&
+                      isFlag === 1 ? (
+                        <Form
+                          form={addnewform}
+                          onFinish={onFinish}
+                          initialValues={{ dtlList: detailTable }}
+                        >
+                          <Table
+                            columns={insertColumns}
+                            dataSource={insertdata}
+                            pagination={false}
+                            showHeader={!(detailTable.length > 0)}
+                            style={{ marginTop: '-1px' }}
+                            bordered
+                          />
+                        </Form>
+                      ) : null}
+                    </Skeleton>
+                  </div>
+                </Form>
+              </div>
             </div>
-          </div>
-        </Form>
-        <ModalPopup
-          FieldsComponent={Content}
-          isModalVisible={isOpen}
-          text="Allocate Budget"
-          // handleCancel={handleCancelBudget}
-          onCancel={handleCancelBudget}
-          width={1350}
-        />
-      </div>
+          </Form>
+          <ModalPopup
+            FieldsComponent={Content}
+            isModalVisible={isOpen}
+            text="Allocate Budget"
+            // handleCancel={handleCancelBudget}
+            onCancel={handleCancelBudget}
+            width={1350}
+          />
+        </div>
+      </Spin>
     )
   }
   const ButtonsComponent = () => {
@@ -3474,12 +3492,15 @@ const IndentManagement = ({ componentdata }) => {
                   text={docLifeList[0].docStatusDesc}
                   type="primary"
                   onClick={approveIndent}
+                  disable={isSubmitting}
                 />
               )}
               <Popuptable
                 onClose={() => {
+                  // A click landing outside the popover while Save is running would otherwise
+                  // dismiss it mid-request — ignore that until the action actually finishes.
+                  if (isSubmitting) return
                   setApproveremarksCard(false)
-                  isSubmitting(true)
                 }}
                 cardLabel=""
                 component={AddRemarksComponent}
@@ -3488,8 +3509,8 @@ const IndentManagement = ({ componentdata }) => {
               <span style={{ margin: '0 3px' }} />
               <Popuptable
                 onClose={() => {
+                  if (isSubmitting) return
                   setRejectRemarksCard(false)
-                  isSubmitting(true)
                 }}
                 cardLabel=""
                 component={AddRemarksComponent}
@@ -3501,13 +3522,19 @@ const IndentManagement = ({ componentdata }) => {
                   // text={docLifeList[0].cancelStatusDesc}
                   text={docLifeList[0]?.previousSeq === '1' ? 'Hold' : 'Previous Stage'}
                   onClick={cancelIndent}
+                  disable={isSubmitting}
                 />
               )}
               <span style={{ margin: '0 3px' }} />
             </div>
           ) : null}
           <div style={{ display: 'flex', gap: '5px' }}>
-            <Button type="primary" text="Cancel" onClick={() => handleDetailCancel(indentID)} />
+            <Button
+              type="primary"
+              text="Cancel"
+              onClick={() => handleDetailCancel(indentID)}
+              disable={isSubmitting}
+            />
             <Popuptable
               onClose={() => setMsgDetailCard(false)}
               cardLabel=""
@@ -3526,10 +3553,16 @@ const IndentManagement = ({ componentdata }) => {
               onClick={() => {
                 OpenmsgDetailCard()
               }}
+              disable={isSubmitting}
             />
           </div>
           {docLifeList && docLifeList[0]?.isEditable === '1' && seqnum === '1' ? (
-            <Button type="primary" text="Save" disable={saveButton} onClick={UpdateindentDetails} />
+            <Button
+              type="primary"
+              text="Save"
+              disable={saveButton || isSubmitting}
+              onClick={UpdateindentDetails}
+            />
           ) : null}
         </div>
       </div>
@@ -3749,8 +3782,12 @@ const IndentManagement = ({ componentdata }) => {
             text={`${singleIndent?.indentTypeDesc} - Indent Details -${detailId}  -${singleIndent?.sbcDesc}`}
             width={1400}
             onCancel={() => {
+              // Mask click / X / Esc all route through here — ignore them while Approve /
+              // Previous Stage is submitting so the detail view can't be dismissed mid-request.
+              if (isSubmitting) return
               handleDetailCancel(singleIndent.indentId)
             }}
+            maskClosable={!isSubmitting}
           />
         ) : null}
         <BackButtonComponent componentToRender="design" />

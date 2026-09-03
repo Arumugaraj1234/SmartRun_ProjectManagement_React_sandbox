@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Form, Select, Card, Button, Input, message, Table } from 'antd'
+import { Form, Select, Card, Button, Input, message, Table, Spin } from 'antd'
 import { CommentOutlined, PlusCircleOutlined, DownloadOutlined } from '@ant-design/icons'
 // import { Table } from 'ant-table-extensions'
 import { useHistory } from 'react-router-dom'
@@ -35,7 +35,15 @@ const PRASearchCardComp = () => {
   const [popupRespPre, setPopupRespPre] = useState([])
   const [popupGrnDtl, setPopupGrnDtl] = useState([])
   const [isDetailLoading, setIsDetailLoading] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
+  // actionInProgress: Save button's own self-contained guard (pre-existing).
+  // isProcessing: the other three mutating actions (Purchase approved / Previous Stage / PRA
+  // Cancel) — kept as a separate flag because updateDetails() calls saveData() internally, so
+  // reusing actionInProgress there would make saveData's own guard block that legitimate call.
+  // Both together drive the full-screen overlay and disable every action button on this view, so
+  // a rapid double-click on any of them can't fire the request twice and create duplicate
+  // pra_status/PRA rows.
+  const [actionInProgress, setActionInProgress] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false)
   const latestPraIdRef = useRef(null)
   // const [isApproval, setIsApproval] = useState(true)
   const [docuLifeMst, setDocuLifeMst] = useState([])
@@ -154,7 +162,7 @@ const PRASearchCardComp = () => {
 
   const saveData = async () => {
     console.log(fieldForm.getFieldsValue())
-    if (isSaving) {
+    if (actionInProgress) {
       return
     }
     if (
@@ -164,7 +172,7 @@ const PRASearchCardComp = () => {
       )
     ) {
       const formData = fieldForm.getFieldsValue()
-      setIsSaving(true)
+      setActionInProgress(true)
       try {
         const response = await indentFileUpload({
           requestPath: 'InsertPRA',
@@ -194,7 +202,7 @@ const PRASearchCardComp = () => {
           message.error(response.responseMessage)
         }
       } finally {
-        setIsSaving(false)
+        setActionInProgress(false)
       }
     } else {
       messageReturn(405)
@@ -202,39 +210,51 @@ const PRASearchCardComp = () => {
   }
 
   const updateDetails = async () => {
+    if (isProcessing) {
+      return
+    }
     const formvalue = inputForm.getFieldValue()
     console.log(formvalue.remarks, 'remarks')
-    if (
-      [
-        // 'invoiceDate',
-        // 'invoiceNumber',
-        'tds',
-        // 'approvalDropdown',
-        'remarks',
-        'amountPayable',
-      ].every(field => fieldForm.getFieldValue(field))
-    ) {
-      await indentFileUpload({
-        requestPath: 'udpatePraHdrSeq',
-        requestData: {
-          seq: currSeq,
-          seqDesc: sequenceDesc,
-          islast: isLast,
-          tenantId,
-          praId,
-          pmHdrId: projectIds,
-          processCode: tab.processCode,
-          enqId,
-          praCode: records.praCode,
-          poNo: records.poId,
-          empId: employeeId,
-          remarks: formvalue.remarks,
-        },
-      })
+    // A plain truthiness check here rejected a legitimately-entered 0 (e.g. TDS = 0), since
+    // Boolean(0) is false — "mandatory field" validation must only fail on genuinely missing
+    // values, not on a valid 0. Numeric fields are checked for not-undefined/not-null (mirrors
+    // saveData's validation below); remarks additionally requires non-empty text since it has no
+    // legitimate "zero" equivalent.
+    const numericFieldsFilled = ['tds', 'amountPayable'].every(
+      field =>
+        fieldForm.getFieldValue(field) !== undefined && fieldForm.getFieldValue(field) !== null,
+    )
+    const remarksFilled =
+      fieldForm.getFieldValue('remarks') !== undefined &&
+      fieldForm.getFieldValue('remarks') !== null &&
+      fieldForm.getFieldValue('remarks') !== ''
+    if (numericFieldsFilled && remarksFilled) {
+      setIsProcessing(true)
+      try {
+        await indentFileUpload({
+          requestPath: 'udpatePraHdrSeq',
+          requestData: {
+            seq: currSeq,
+            seqDesc: sequenceDesc,
+            islast: isLast,
+            tenantId,
+            praId,
+            pmHdrId: projectIds,
+            processCode: tab.processCode,
+            enqId,
+            praCode: records.praCode,
+            poNo: records.poId,
+            empId: employeeId,
+            remarks: formvalue.remarks,
+          },
+        })
 
-      saveData()
-      setApprvlRemarksCard(false)
-      getDetailData()
+        saveData()
+        setApprvlRemarksCard(false)
+        getDetailData()
+      } finally {
+        setIsProcessing(false)
+      }
     } else {
       messageReturn(405)
     }
@@ -946,121 +966,142 @@ const PRASearchCardComp = () => {
   ]
 
   const DetailsTableComponent = () => {
+    // Block the whole detail view behind a full-screen loader until getPraDtl actually resolves —
+    // the modal was opening (showDtlTablLoading) before the fetch completed, so popupresp was still
+    // [] and every field below briefly rendered blank/stale instead of showing nothing until ready.
+    if (isDetailLoading) {
+      return (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            minHeight: '70vh',
+          }}
+        >
+          <Spin size="large" tip="Loading PRA details..." />
+        </div>
+      )
+    }
     return (
-      <Form form={fieldForm} onFinish={onFinish} layout="vertical">
-        <div className="container-fluid">
-          {/* First Row */}
+      // Covers Save / Purchase approved / Previous Stage / PRA Cancel — any of the four mutating
+      // actions on this view — with a full-screen block until the in-flight one finishes, on top
+      // of each button's own disabled state (see actionInProgress/isProcessing above).
+      <Spin spinning={actionInProgress || isProcessing} size="large" tip="Please wait...">
+        <Form form={fieldForm} onFinish={onFinish} layout="vertical">
+          <div className="container-fluid">
+            {/* First Row */}
 
-          <div className="row">
-            <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-              <p>Project No</p>
-              <p style={{ fontWeight: 'bold' }}>
-                {popupresp.length > 0 ? popupresp[0].projectCode : ''}
-              </p>
+            <div className="row">
+              <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                <p>Project No</p>
+                <p style={{ fontWeight: 'bold' }}>
+                  {popupresp.length > 0 ? popupresp[0].projectCode : ''}
+                </p>
+              </div>
+              <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                <p>Project Name</p>
+                <p style={{ fontWeight: 'bold' }}>
+                  {popupresp.length > 0 ? popupresp[0].projectName : ''}
+                </p>
+              </div>
+              <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                <p>PRA No</p>
+                <p style={{ fontWeight: 'bold' }}>
+                  {popupresp.length > 0 ? popupresp[0].praCode : ''}
+                </p>
+              </div>
+              <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                <p>PRA Date</p>
+                <p style={{ fontWeight: 'bold' }}>
+                  {popupresp.length > 0 ? moment(popupresp[0].praDate).format('DD-MMM-YYYY') : ''}
+                </p>
+              </div>
+              <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                <p>Vendor Name</p>
+                <p style={{ fontWeight: 'bold' }}>
+                  {popupresp.length > 0 ? popupresp[0].vendorName : ''}
+                </p>
+              </div>
+              <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                <p>Status</p>
+                <p style={{ fontWeight: 'bold' }}>
+                  {popupresp.length > 0
+                    ? popupresp[0].isLatest === '0'
+                      ? 'PRA Cancelled'
+                      : popupresp[0].statusDesc
+                    : ''}
+                </p>
+              </div>
             </div>
-            <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-              <p>Project Name</p>
-              <p style={{ fontWeight: 'bold' }}>
-                {popupresp.length > 0 ? popupresp[0].projectName : ''}
-              </p>
-            </div>
-            <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-              <p>PRA No</p>
-              <p style={{ fontWeight: 'bold' }}>
-                {popupresp.length > 0 ? popupresp[0].praCode : ''}
-              </p>
-            </div>
-            <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-              <p>PRA Date</p>
-              <p style={{ fontWeight: 'bold' }}>
-                {popupresp.length > 0 ? moment(popupresp[0].praDate).format('DD-MMM-YYYY') : ''}
-              </p>
-            </div>
-            <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-              <p>Vendor Name</p>
-              <p style={{ fontWeight: 'bold' }}>
-                {popupresp.length > 0 ? popupresp[0].vendorName : ''}
-              </p>
-            </div>
-            <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-              <p>Status</p>
-              <p style={{ fontWeight: 'bold' }}>
-                {popupresp.length > 0
-                  ? popupresp[0].isLatest === '0'
-                    ? 'PRA Cancelled'
-                    : popupresp[0].statusDesc
-                  : ''}
-              </p>
-            </div>
-          </div>
 
-          {/* Second Row */}
-          <div className="row">
-            <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-              <p>PO NO</p>
-              <p style={{ fontWeight: 'bold' }}>
-                {popupresp.length > 0 ? popupresp[0].poCode : ''}
-              </p>
-            </div>
-            <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-              <p>PO Date</p>
-              <p style={{ fontWeight: 'bold' }}>
-                {popupresp.length > 0 ? moment(popupresp[0].poDate).format('DD-MMM-YYYY') : ''}
-              </p>
-            </div>
-            <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-              <p>Due Date</p>
-              <p style={{ fontWeight: 'bold' }}>
-                {popupresp.length > 0 ? moment(popupresp[0].dueDate).format('DD-MMM-YYYY') : ''}
-              </p>
-            </div>
-            <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-              <p>PO Revision</p>
-              <p style={{ fontWeight: 'bold' }}>
-                {popupresp.length > 0 ? popupresp[0].revision : ''}
-              </p>
-            </div>
-            <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-              <p>Revision Date</p>
-              <p style={{ fontWeight: 'bold' }}>
-                {popupresp.length > 0
-                  ? moment(popupresp[0].revisionDate).format('DD-MMM-YYYY')
-                  : ''}
-              </p>
-            </div>
-            <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-              <p>PO Qty</p>
-              <p style={{ fontWeight: 'bold' }}>
-                {popupresp.length > 0
-                  ? new Intl.NumberFormat('en-IN', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    }).format(Number(popupresp[0].poQty))
-                  : ''}
-              </p>
-            </div>
-            <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-              <p>PO Value</p>
-              <p style={{ fontWeight: 'bold' }}>
-                {popupresp.length > 0
-                  ? Number(popupresp[0].poValue).toLocaleString('en-IN', {
-                      style: 'currency',
-                      currency: 'INR',
-                    })
-                  : ''}
-              </p>
-            </div>
-            <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
-              <p>PO Description</p>
-              <p style={{ fontWeight: 'bold' }}>
-                {popupresp?.[0]?.poType === '1'
-                  ? 'Domestic'
-                  : popupresp?.[0]?.poType === '2'
-                  ? 'Import'
-                  : popupresp?.[0]?.poType === '3'
-                  ? 'Service'
-                  : ''}
-                {/* {(() => {
+            {/* Second Row */}
+            <div className="row">
+              <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                <p>PO NO</p>
+                <p style={{ fontWeight: 'bold' }}>
+                  {popupresp.length > 0 ? popupresp[0].poCode : ''}
+                </p>
+              </div>
+              <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                <p>PO Date</p>
+                <p style={{ fontWeight: 'bold' }}>
+                  {popupresp.length > 0 ? moment(popupresp[0].poDate).format('DD-MMM-YYYY') : ''}
+                </p>
+              </div>
+              <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                <p>Due Date</p>
+                <p style={{ fontWeight: 'bold' }}>
+                  {popupresp.length > 0 ? moment(popupresp[0].dueDate).format('DD-MMM-YYYY') : ''}
+                </p>
+              </div>
+              <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                <p>PO Revision</p>
+                <p style={{ fontWeight: 'bold' }}>
+                  {popupresp.length > 0 ? popupresp[0].revision : ''}
+                </p>
+              </div>
+              <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                <p>Revision Date</p>
+                <p style={{ fontWeight: 'bold' }}>
+                  {popupresp.length > 0
+                    ? moment(popupresp[0].revisionDate).format('DD-MMM-YYYY')
+                    : ''}
+                </p>
+              </div>
+              <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                <p>PO Qty</p>
+                <p style={{ fontWeight: 'bold' }}>
+                  {popupresp.length > 0
+                    ? new Intl.NumberFormat('en-IN', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      }).format(Number(popupresp[0].poQty))
+                    : ''}
+                </p>
+              </div>
+              <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                <p>PO Value</p>
+                <p style={{ fontWeight: 'bold' }}>
+                  {popupresp.length > 0
+                    ? Number(popupresp[0].poValue).toLocaleString('en-IN', {
+                        style: 'currency',
+                        currency: 'INR',
+                      })
+                    : ''}
+                </p>
+              </div>
+              <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+                <p>PO Description</p>
+                <p style={{ fontWeight: 'bold' }}>
+                  {popupresp?.[0]?.poType === '1'
+                    ? 'Domestic'
+                    : popupresp?.[0]?.poType === '2'
+                    ? 'Import'
+                    : popupresp?.[0]?.poType === '3'
+                    ? 'Service'
+                    : ''}
+                  {/* {(() => {
                   switch (popupresp[0].poType) {
                     case '1':
                       return 'Local';
@@ -1072,9 +1113,9 @@ const PRASearchCardComp = () => {
                       return '';
                   }
                 })()} */}
-              </p>
-            </div>
-            {/* <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+                </p>
+              </div>
+              {/* <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
               <Form.Item
                 name="invoiceNumber"
                 label={
@@ -1086,75 +1127,75 @@ const PRASearchCardComp = () => {
                 <Input type="number" disabled={disabled} />
               </Form.Item>
             </div> */}
-            <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
-              <p>Invoice Number</p>
-              <p style={{ fontWeight: 'bold' }}>
-                {popupresp.length > 0 && popupresp[0].invoiceNumber !== ''
-                  ? popupresp[0].invoiceNumber
-                  : '-'}
-              </p>
-            </div>
-            <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
-              <p>Type Of Payment</p>
-              <p style={{ fontWeight: 'bold' }}>
-                {popupresp.length > 0 ? popupresp[0].typeOfPayment : ''}
-              </p>
-            </div>
-            <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
-              <p>Payment Terms</p>
-              <p style={{ fontWeight: 'bold' }}>
-                {popupresp.length > 0 ? popupresp[0].paymentTerms : ''}
-              </p>
-            </div>
-            <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
-              <p>PO Cost Type</p>
-              <p style={{ fontWeight: 'bold' }}>
-                {popupresp.length > 0 && popupresp[0].poCostType !== ''
-                  ? popupresp[0].poCostType
-                  : '-'}
-              </p>
-            </div>
-            {/* <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
+              <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+                <p>Invoice Number</p>
+                <p style={{ fontWeight: 'bold' }}>
+                  {popupresp.length > 0 && popupresp[0].invoiceNumber !== ''
+                    ? popupresp[0].invoiceNumber
+                    : '-'}
+                </p>
+              </div>
+              <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+                <p>Type Of Payment</p>
+                <p style={{ fontWeight: 'bold' }}>
+                  {popupresp.length > 0 ? popupresp[0].typeOfPayment : ''}
+                </p>
+              </div>
+              <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+                <p>Payment Terms</p>
+                <p style={{ fontWeight: 'bold' }}>
+                  {popupresp.length > 0 ? popupresp[0].paymentTerms : ''}
+                </p>
+              </div>
+              <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+                <p>PO Cost Type</p>
+                <p style={{ fontWeight: 'bold' }}>
+                  {popupresp.length > 0 && popupresp[0].poCostType !== ''
+                    ? popupresp[0].poCostType
+                    : '-'}
+                </p>
+              </div>
+              {/* <div className="col-xs-2 col-sm-2 col-md-2 col-lg-2">
               <p>Vendor Name</p>
               <p style={{ fontWeight: 'bold' }}>
                 {popupresp.length > 0 ? popupresp[0].vendorName : ''}
               </p>
             </div> */}
-          </div>
+            </div>
 
-          {/* third Row */}
-          <div className="row">
-            <div className="col-xs-12 col-sm-12 col-md-6 col-lg-6">
-              <div>
-                <br />
-                <Table
-                  columns={GRNDtl}
-                  className="tableheight"
-                  dataSource={popupGrnDtl}
-                  pagination={false}
-                  scroll={{ y: 150 }}
-                />
+            {/* third Row */}
+            <div className="row">
+              <div className="col-xs-12 col-sm-12 col-md-6 col-lg-6">
+                <div>
+                  <br />
+                  <Table
+                    columns={GRNDtl}
+                    className="tableheight"
+                    dataSource={popupGrnDtl}
+                    pagination={false}
+                    scroll={{ y: 150 }}
+                  />
+                </div>
+              </div>
+              <div className="col-xs-12 col-sm-12 col-md-6 col-lg-6">
+                <div>
+                  <h6>Previous PRA Details - items</h6>
+                </div>
+                <div>
+                  <Table
+                    columns={PreviousPRA}
+                    className="tableheight"
+                    dataSource={popupRespPre}
+                    pagination={false}
+                    scroll={{ y: 150 }}
+                  />
+                </div>
               </div>
             </div>
-            <div className="col-xs-12 col-sm-12 col-md-6 col-lg-6">
-              <div>
-                <h6>Previous PRA Details - items</h6>
-              </div>
-              <div>
-                <Table
-                  columns={PreviousPRA}
-                  className="tableheight"
-                  dataSource={popupRespPre}
-                  pagination={false}
-                  scroll={{ y: 150 }}
-                />
-              </div>
-            </div>
-          </div>
 
-          {/* fourth Row */}
-          <div className="row">
-            {/* <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+            {/* fourth Row */}
+            <div className="row">
+              {/* <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
               <p>PRA Value</p>
               <p style={{ fontWeight: 'bold' }}>
                 {popupresp.length > 0
@@ -1165,7 +1206,7 @@ const PRASearchCardComp = () => {
                   : ''}
               </p>
             </div> */}
-            {/* <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+              {/* <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
               <Form.Item
                 name="invoiceDate"
                 label={
@@ -1182,77 +1223,77 @@ const PRASearchCardComp = () => {
                 />
               </Form.Item>
             </div> */}
-            <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
-              <p>Invoice Date</p>
-              <p style={{ fontWeight: 'bold' }}>
-                {popupresp.length > 0 && popupresp[0].invoiceDate
-                  ? moment(popupresp[0].invoiceDate).isValid()
-                    ? moment(popupresp[0].invoiceDate).format('DD-MMM-YYYY')
-                    : '-'
-                  : '-'}
-              </p>
+              <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+                <p>Invoice Date</p>
+                <p style={{ fontWeight: 'bold' }}>
+                  {popupresp.length > 0 && popupresp[0].invoiceDate
+                    ? moment(popupresp[0].invoiceDate).isValid()
+                      ? moment(popupresp[0].invoiceDate).format('DD-MMM-YYYY')
+                      : '-'
+                    : '-'}
+                </p>
+              </div>
+              <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+                <p>Invoice Value</p>
+                <p style={{ fontWeight: 'bold' }}>
+                  {popupresp.length > 0
+                    ? Number(popupresp[0].invoiceValue).toLocaleString('en-IN', {
+                        style: 'currency',
+                        currency: 'INR',
+                      })
+                    : ''}
+                </p>
+              </div>
+              <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+                <p>GST Value</p>
+                <p style={{ fontWeight: 'bold' }}>
+                  {popupresp.length > 0
+                    ? Number(popupresp[0].praGst).toLocaleString('en-IN', {
+                        style: 'currency',
+                        currency: 'INR',
+                      })
+                    : ''}
+                </p>
+              </div>
+              <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+                <p>Sub Total</p>
+                <p style={{ fontWeight: 'bold' }}>
+                  {popupresp.length > 0
+                    ? Number(popupresp[0].basicTotal).toLocaleString('en-IN', {
+                        style: 'currency',
+                        currency: 'INR',
+                      })
+                    : ''}
+                </p>
+              </div>
+              <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+                <p>Tax Value</p>
+                <p style={{ fontWeight: 'bold' }}>
+                  {popupresp.length > 0
+                    ? Number(popupresp[0].gst).toLocaleString('en-IN', {
+                        style: 'currency',
+                        currency: 'INR',
+                      })
+                    : ''}
+                </p>
+              </div>
+              <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+                <p>Total</p>
+                <p style={{ fontWeight: 'bold' }}>
+                  {popupresp.length > 0
+                    ? Number(popupresp[0].orderValue).toLocaleString('en-IN', {
+                        style: 'currency',
+                        currency: 'INR',
+                      })
+                    : ''}
+                </p>
+              </div>
             </div>
-            <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
-              <p>Invoice Value</p>
-              <p style={{ fontWeight: 'bold' }}>
-                {popupresp.length > 0
-                  ? Number(popupresp[0].invoiceValue).toLocaleString('en-IN', {
-                      style: 'currency',
-                      currency: 'INR',
-                    })
-                  : ''}
-              </p>
-            </div>
-            <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
-              <p>GST Value</p>
-              <p style={{ fontWeight: 'bold' }}>
-                {popupresp.length > 0
-                  ? Number(popupresp[0].praGst).toLocaleString('en-IN', {
-                      style: 'currency',
-                      currency: 'INR',
-                    })
-                  : ''}
-              </p>
-            </div>
-            <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
-              <p>Sub Total</p>
-              <p style={{ fontWeight: 'bold' }}>
-                {popupresp.length > 0
-                  ? Number(popupresp[0].basicTotal).toLocaleString('en-IN', {
-                      style: 'currency',
-                      currency: 'INR',
-                    })
-                  : ''}
-              </p>
-            </div>
-            <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
-              <p>Tax Value</p>
-              <p style={{ fontWeight: 'bold' }}>
-                {popupresp.length > 0
-                  ? Number(popupresp[0].gst).toLocaleString('en-IN', {
-                      style: 'currency',
-                      currency: 'INR',
-                    })
-                  : ''}
-              </p>
-            </div>
-            <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
-              <p>Total</p>
-              <p style={{ fontWeight: 'bold' }}>
-                {popupresp.length > 0
-                  ? Number(popupresp[0].orderValue).toLocaleString('en-IN', {
-                      style: 'currency',
-                      currency: 'INR',
-                    })
-                  : ''}
-              </p>
-            </div>
-          </div>
 
-          {/* fifth Row */}
+            {/* fifth Row */}
 
-          <div className="row">
-            {/* <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+            <div className="row">
+              {/* <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
               <p>PO Cost Type</p>
               <p style={{ fontWeight: 'bold' }}>
                 {popupresp.length > 0 && popupresp[0].poCostType !== ''
@@ -1260,7 +1301,7 @@ const PRASearchCardComp = () => {
                   : '-'}
               </p>
             </div> */}
-            {/* <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+              {/* <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
               <Form.Item name="transportValue" label={<span>Transport Charge</span>}>
                 <Input
                   type="number"
@@ -1273,20 +1314,20 @@ const PRASearchCardComp = () => {
                 />
               </Form.Item>
             </div> */}
-            <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
-              <p>Transport Charge</p>
-              <p style={{ fontWeight: 'bold' }}>
-                {popupresp.length > 0
-                  ? Number(
-                      popupresp[0].transportValue !== '' ? popupresp[0].transportValue : '-',
-                    ).toLocaleString('en-IN', {
-                      style: 'currency',
-                      currency: 'INR',
-                    })
-                  : ''}
-              </p>
-            </div>
-            {/* <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+              <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+                <p>Transport Charge</p>
+                <p style={{ fontWeight: 'bold' }}>
+                  {popupresp.length > 0
+                    ? Number(
+                        popupresp[0].transportValue !== '' ? popupresp[0].transportValue : '-',
+                      ).toLocaleString('en-IN', {
+                        style: 'currency',
+                        currency: 'INR',
+                      })
+                    : ''}
+                </p>
+              </div>
+              {/* <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
               <Form.Item name="pfValue" label={<span>P&F</span>}>
                 <Input
                   type="number"
@@ -1299,21 +1340,20 @@ const PRASearchCardComp = () => {
                 />
               </Form.Item>
             </div> */}
-            <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
-              <p>P&F</p>
-              <p style={{ fontWeight: 'bold' }}>
-                {popupresp.length > 0
-                  ? Number(popupresp[0].pfValue !== '' ? popupresp[0].pfValue : '-').toLocaleString(
-                      'en-IN',
-                      {
+              <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+                <p>P&F</p>
+                <p style={{ fontWeight: 'bold' }}>
+                  {popupresp.length > 0
+                    ? Number(
+                        popupresp[0].pfValue !== '' ? popupresp[0].pfValue : '-',
+                      ).toLocaleString('en-IN', {
                         style: 'currency',
                         currency: 'INR',
-                      },
-                    )
-                  : ''}
-              </p>
-            </div>
-            {/* <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+                      })
+                    : ''}
+                </p>
+              </div>
+              {/* <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
               <Form.Item name="insuranceValue" label={<span>Insurance Charge</span>}>
                 <Input
                   type="number"
@@ -1326,21 +1366,21 @@ const PRASearchCardComp = () => {
                 />
               </Form.Item>
             </div> */}
-            <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
-              <p>Insurance Charge</p>
+              <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+                <p>Insurance Charge</p>
 
-              <p style={{ fontWeight: 'bold' }}>
-                {popupresp.length > 0
-                  ? Number(
-                      popupresp[0].insuranceValue !== '' ? popupresp[0].insuranceValue : '-',
-                    ).toLocaleString('en-IN', {
-                      style: 'currency',
-                      currency: 'INR',
-                    })
-                  : ''}
-              </p>
-            </div>
-            {/* <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+                <p style={{ fontWeight: 'bold' }}>
+                  {popupresp.length > 0
+                    ? Number(
+                        popupresp[0].insuranceValue !== '' ? popupresp[0].insuranceValue : '-',
+                      ).toLocaleString('en-IN', {
+                        style: 'currency',
+                        currency: 'INR',
+                      })
+                    : ''}
+                </p>
+              </div>
+              {/* <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
               <Form.Item name="otherValue" label={<span>Other Charge</span>}>
                 <Input
                   type="number"
@@ -1353,79 +1393,79 @@ const PRASearchCardComp = () => {
                 />
               </Form.Item>
             </div> */}
-            <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
-              <p>Others</p>
+              <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+                <p>Others</p>
 
-              <p style={{ fontWeight: 'bold' }}>
-                {popupresp.length > 0
-                  ? Number(
-                      popupresp[0].otherValue !== '' ? popupresp[0].otherValue : '-',
-                    ).toLocaleString('en-IN', {
-                      style: 'currency',
-                      currency: 'INR',
-                    })
-                  : ''}
-              </p>
-            </div>
-            <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
-              <Form.Item
-                name="tds"
-                label={
-                  <span>
-                    TDS<span style={{ color: 'red' }}>*</span>{' '}
-                  </span>
-                }
-              >
-                <Input onChange={handleOrderValue} disabled={disabled} maxLength={3} />
-              </Form.Item>
-            </div>
-            <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
-              <Form.Item
-                name="amountPayable"
-                label={
-                  <span>
-                    Amount Payable<span style={{ color: 'red' }}>*</span>{' '}
-                  </span>
-                }
-              >
-                <Input type="text" disabled />
-              </Form.Item>
-            </div>
-            <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
-              <Form.Item name="retention" label={<span>Retention</span>}>
-                <Input
-                  disabled={disabled}
-                  onChange={handleOrderValue}
-                  onKeyPress={event => {
-                    if (event.key === '.' || event.key === 'e' || event.key === '-') {
-                      event.preventDefault()
-                    }
-                  }}
-                />
-              </Form.Item>
-            </div>
+                <p style={{ fontWeight: 'bold' }}>
+                  {popupresp.length > 0
+                    ? Number(
+                        popupresp[0].otherValue !== '' ? popupresp[0].otherValue : '-',
+                      ).toLocaleString('en-IN', {
+                        style: 'currency',
+                        currency: 'INR',
+                      })
+                    : ''}
+                </p>
+              </div>
+              <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+                <Form.Item
+                  name="tds"
+                  label={
+                    <span>
+                      TDS<span style={{ color: 'red' }}>*</span>{' '}
+                    </span>
+                  }
+                >
+                  <Input onChange={handleOrderValue} disabled={disabled} maxLength={3} />
+                </Form.Item>
+              </div>
+              <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+                <Form.Item
+                  name="amountPayable"
+                  label={
+                    <span>
+                      Amount Payable<span style={{ color: 'red' }}>*</span>{' '}
+                    </span>
+                  }
+                >
+                  <Input type="text" disabled />
+                </Form.Item>
+              </div>
+              <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+                <Form.Item name="retention" label={<span>Retention</span>}>
+                  <Input
+                    disabled={disabled}
+                    onChange={handleOrderValue}
+                    onKeyPress={event => {
+                      if (event.key === '.' || event.key === 'e' || event.key === '-') {
+                        event.preventDefault()
+                      }
+                    }}
+                  />
+                </Form.Item>
+              </div>
 
-            <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
-              <Form.Item
-                name="ld"
-                label={
-                  <span>
-                    LD<span style={{ color: 'red' }}>*</span>{' '}
-                  </span>
-                }
-              >
-                <Input
-                  disabled={disabled}
-                  onChange={handleOrderValue}
-                  onKeyPress={event => {
-                    if (event.key === '.' || event.key === 'e' || event.key === '-') {
-                      event.preventDefault()
-                    }
-                  }}
-                />
-              </Form.Item>
-            </div>
-            {/* <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+              <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+                <Form.Item
+                  name="ld"
+                  label={
+                    <span>
+                      LD<span style={{ color: 'red' }}>*</span>{' '}
+                    </span>
+                  }
+                >
+                  <Input
+                    disabled={disabled}
+                    onChange={handleOrderValue}
+                    onKeyPress={event => {
+                      if (event.key === '.' || event.key === 'e' || event.key === '-') {
+                        event.preventDefault()
+                      }
+                    }}
+                  />
+                </Form.Item>
+              </div>
+              {/* <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
               <Form.Item
                 name="others"
                 label={
@@ -1445,19 +1485,19 @@ const PRASearchCardComp = () => {
                 />
               </Form.Item>
             </div> */}
-            <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
-              <Form.Item
-                name="remarks"
-                label={
-                  <span>
-                    Remarks<span style={{ color: 'red' }}>*</span>{' '}
-                  </span>
-                }
-              >
-                <Input.TextArea rows={4} disabled={disabled} />
-              </Form.Item>
-            </div>
-            {/* <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+              <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
+                <Form.Item
+                  name="remarks"
+                  label={
+                    <span>
+                      Remarks<span style={{ color: 'red' }}>*</span>{' '}
+                    </span>
+                  }
+                >
+                  <Input.TextArea rows={4} disabled={disabled} />
+                </Form.Item>
+              </div>
+              {/* <div className="col-xs-12 col-sm-12 col-md-2 col-lg-2">
               <Form.Item
                 name="invoiceNumber"
                 label={
@@ -1470,222 +1510,255 @@ const PRASearchCardComp = () => {
               </Form.Item>
             </div>
              */}
-          </div>
+            </div>
 
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <h6 style={{ marginBottom: '0px', marginTop: '10px' }}>
-              <span style={{ fontWeight: 'bold' }}> Current Status : </span>{' '}
-              {popupresp[0]?.isLatest === '0' ? 'PRA Cancelled' : currentStatus}
-            </h6>
-          </div>
-          {/* Button Row */}
-          <div
-            style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginTop: '20px' }}
-          >
-            {docuLifeMst.length > 0 && (
-              <Form.Item name="approvalDropdown">
-                <Select
-                  // style={{ width: '150px', display: btnDisplay ? 'block' : 'none' }}
-                  style={{ width: '150px', display: 'none' }}
-                  dropdownStyle={{ textAlign: 'left' }}
-                  onChange={handleDropdownChange}
-                  value={selectedOption}
-                  placeholder="Select"
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <h6 style={{ marginBottom: '0px', marginTop: '10px' }}>
+                <span style={{ fontWeight: 'bold' }}> Current Status : </span>{' '}
+                {popupresp[0]?.isLatest === '0' ? 'PRA Cancelled' : currentStatus}
+              </h6>
+            </div>
+            {/* Button Row */}
+            <div
+              style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginTop: '20px' }}
+            >
+              {docuLifeMst.length > 0 && (
+                <Form.Item name="approvalDropdown">
+                  <Select
+                    // style={{ width: '150px', display: btnDisplay ? 'block' : 'none' }}
+                    style={{ width: '150px', display: 'none' }}
+                    dropdownStyle={{ textAlign: 'left' }}
+                    onChange={handleDropdownChange}
+                    value={selectedOption}
+                    placeholder="Select"
+                  >
+                    {docuLifeMst.map(option => (
+                      <Option key={option.currSequence} value={option.currSequence}>
+                        {option.nextSeqStatusDesc !== null ? option.nextSeqStatusDesc : ''}
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              )}
+
+              {docuLifeMst.length > 0 && (
+                <Button
+                  type="primary"
+                  disabled={actionInProgress || isProcessing}
+                  style={{ display: btnDisplay ? 'block' : 'none' }}
+                  onClick={() => addApprvlRemarksSubmit()}
+                  // htmlType="submit"
                 >
-                  {docuLifeMst.map(option => (
-                    <Option key={option.currSequence} value={option.currSequence}>
-                      {option.nextSeqStatusDesc !== null ? option.nextSeqStatusDesc : ''}
-                    </Option>
-                  ))}
-                </Select>
-              </Form.Item>
-            )}
-
-            {docuLifeMst.length > 0 && (
+                  {docuLifeMst[0].nextSeqStatusDesc}
+                </Button>
+              )}
+              <Popuptable
+                onClose={() => {
+                  // A click landing outside the popover while Save is running would otherwise
+                  // dismiss it mid-request — ignore that until the action actually finishes.
+                  if (isProcessing) return
+                  setApprvlRemarksCard(false)
+                }}
+                cardLabel=""
+                component={AddRemarksApprvlComponent(
+                  docuLifeMst && docuLifeMst.length > 0 ? docuLifeMst[0].cancelSeq : '',
+                )}
+                visible={apprvlRemarksCard}
+              />
+              <ButtonComponent
+                type="primary"
+                icon={<CommentOutlined />}
+                onClick={() => {
+                  OpenDetailCard()
+                }}
+              />
+              <Popuptable
+                onClose={() => setdetailCard(false)}
+                cardLabel=""
+                component={
+                  <div
+                    className="custom_antd_Table"
+                    style={{ width: isMobile ? '280px' : '500px' }}
+                  >
+                    {' '}
+                    <TableComponent data={rmkDetaillist} columns={remarksColumns} scrollY={300} />
+                  </div>
+                }
+                visible={detailCard}
+              />
               <Button
                 type="primary"
-                style={{ display: btnDisplay ? 'block' : 'none' }}
-                onClick={() => addApprvlRemarksSubmit()}
-                // htmlType="submit"
+                disabled={disabled || actionInProgress || isProcessing}
+                style={{
+                  display:
+                    isDetailLoading || popupresp.length === 0
+                      ? 'none'
+                      : popupresp[0].isCompleted === '1' ||
+                        popupresp[0].isEditable === '0' ||
+                        popupresp[0].isLatest === '0'
+                      ? 'none'
+                      : 'block',
+                }}
+                onClick={saveData}
               >
-                {docuLifeMst[0].nextSeqStatusDesc}
+                {actionInProgress ? 'Saving...' : 'Save'}
               </Button>
-            )}
-            <Popuptable
-              onClose={() => setApprvlRemarksCard(false)}
-              cardLabel=""
-              component={AddRemarksApprvlComponent(
-                docuLifeMst && docuLifeMst.length > 0 ? docuLifeMst[0].cancelSeq : '',
-              )}
-              visible={apprvlRemarksCard}
-            />
-            <ButtonComponent
-              type="primary"
-              icon={<CommentOutlined />}
-              onClick={() => {
-                OpenDetailCard()
-              }}
-            />
-            <Popuptable
-              onClose={() => setdetailCard(false)}
-              cardLabel=""
-              component={
-                <div className="custom_antd_Table" style={{ width: isMobile ? '280px' : '500px' }}>
-                  {' '}
-                  <TableComponent data={rmkDetaillist} columns={remarksColumns} scrollY={300} />
-                </div>
-              }
-              visible={detailCard}
-            />
-            <Button
-              type="primary"
-              disabled={disabled || isSaving}
-              style={{
-                display:
-                  isDetailLoading || popupresp.length === 0
-                    ? 'none'
-                    : popupresp[0].isCompleted === '1' ||
-                      popupresp[0].isEditable === '0' ||
-                      popupresp[0].isLatest === '0'
-                    ? 'none'
-                    : 'block',
-              }}
-              onClick={saveData}
-            >
-              {isSaving ? 'Saving...' : 'Save'}
-            </Button>
-            <Button type="primary" disabled={false} onClick={handleCancelButton}>
-              Cancel
-            </Button>
+              <Button type="primary" disabled={false} onClick={handleCancelButton}>
+                Cancel
+              </Button>
 
-            <Button
-              type="danger"
-              style={{
-                display:
-                  praCancelBtn && !isDetailLoading && popupresp[0]?.isLatest !== '0'
-                    ? 'block'
-                    : 'none',
-              }}
-              htmlType="submit"
-              onClick={() => praCancelSubmit()}
-            >
-              PRA Cancel
-            </Button>
-            <Popuptable
-              onClose={() => setPraCancelCard(false)}
-              cardLabel=""
-              component={AddRemarksPraCancelComponent(
-                docuLifeMst && docuLifeMst.length > 0 ? docuLifeMst[0].cancelSeq : '',
-              )}
-              visible={praCancelCard}
-            />
-            {docuLifeMst.length > 0 && docuLifeMst?.[0]?.cancelSeq && (
               <Button
                 type="danger"
-                style={{ display: btnDisplay ? 'none' : 'none' }}
+                disabled={actionInProgress || isProcessing}
+                style={{
+                  display:
+                    praCancelBtn && !isDetailLoading && popupresp[0]?.isLatest !== '0'
+                      ? 'block'
+                      : 'none',
+                }}
                 htmlType="submit"
-                onClick={() => addprevRemarksSubmit()}
+                onClick={() => praCancelSubmit()}
               >
-                Previous Stage
+                PRA Cancel
               </Button>
-            )}
-            <Popuptable
-              onClose={() => setPrevRemarksCard(false)}
-              cardLabel=""
-              component={AddRemarksprevComponent(
-                docuLifeMst && docuLifeMst.length > 0 ? docuLifeMst[0].cancelSeq : '',
+              <Popuptable
+                onClose={() => {
+                  if (isProcessing) return
+                  setPraCancelCard(false)
+                }}
+                cardLabel=""
+                component={AddRemarksPraCancelComponent(
+                  docuLifeMst && docuLifeMst.length > 0 ? docuLifeMst[0].cancelSeq : '',
+                )}
+                visible={praCancelCard}
+              />
+              {docuLifeMst.length > 0 && docuLifeMst?.[0]?.cancelSeq && (
+                <Button
+                  type="danger"
+                  disabled={actionInProgress || isProcessing}
+                  style={{ display: btnDisplay ? 'none' : 'none' }}
+                  htmlType="submit"
+                  onClick={() => addprevRemarksSubmit()}
+                >
+                  Previous Stage
+                </Button>
               )}
-              visible={prevRemarksCard}
-            />
+              <Popuptable
+                onClose={() => {
+                  if (isProcessing) return
+                  setPrevRemarksCard(false)
+                }}
+                cardLabel=""
+                component={AddRemarksprevComponent(
+                  docuLifeMst && docuLifeMst.length > 0 ? docuLifeMst[0].cancelSeq : '',
+                )}
+                visible={prevRemarksCard}
+              />
+            </div>
           </div>
-        </div>
-      </Form>
+        </Form>
+      </Spin>
     )
   }
 
   const AddRemarksApprvlComponent = () => {
     return (
       <div>
-        <Card bordered={false} className="custom-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <div>
-              <h5>Add Remarks</h5>
-              <Form form={inputForm}>
-                <Form.Item name="remarks">
-                  <TextArea rows={4} />
-                </Form.Item>
-              </Form>
-              <div style={{ display: 'flex', justifyContent: 'center' }}>
-                <ButtonComponent
-                  text="Save"
-                  type="primary"
-                  // disable={isdisablebtn}
-                  onClick={() => updateDetails()}
-                  // onClick={() => console.log(seq)}
-                />
+        {/* This popup renders through antd's Popover (a document.body portal), so it sits outside
+        the main modal's own <Spin> wrapper — this Spin has to cover it directly, or the loading
+        state while Save is running would be invisible here. */}
+        <Spin spinning={isProcessing} tip="Please wait...">
+          <Card bordered={false} className="custom-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div>
+                <h5>Add Remarks</h5>
+                <Form form={inputForm}>
+                  <Form.Item name="remarks">
+                    <TextArea rows={4} />
+                  </Form.Item>
+                </Form>
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <ButtonComponent
+                    text="Save"
+                    type="primary"
+                    disable={isProcessing}
+                    loading={isProcessing}
+                    onClick={() => updateDetails()}
+                    // onClick={() => console.log(seq)}
+                  />
+                </div>
               </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        </Spin>
       </div>
     )
   }
   const AddRemarksprevComponent = () => {
     return (
       <div>
-        <Card bordered={false} className="custom-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <div>
-              <h5>Add Remarks</h5>
-              <Form form={inputForm}>
-                <Form.Item name="remarks">
-                  <TextArea rows={4} />
-                </Form.Item>
-              </Form>
-              <div style={{ display: 'flex', justifyContent: 'center' }}>
-                <ButtonComponent
-                  text="Save"
-                  type="primary"
-                  // disable={isdisablebtn}
-                  onClick={() => handlePraRev(cancelSeq)}
-                  // onClick={() => console.log(seq)}
-                />
+        <Spin spinning={isProcessing} tip="Please wait...">
+          <Card bordered={false} className="custom-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div>
+                <h5>Add Remarks</h5>
+                <Form form={inputForm}>
+                  <Form.Item name="remarks">
+                    <TextArea rows={4} />
+                  </Form.Item>
+                </Form>
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <ButtonComponent
+                    text="Save"
+                    type="primary"
+                    disable={isProcessing}
+                    loading={isProcessing}
+                    onClick={() => handlePraRev(cancelSeq)}
+                    // onClick={() => console.log(seq)}
+                  />
+                </div>
               </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        </Spin>
       </div>
     )
   }
   const AddRemarksPraCancelComponent = () => {
     return (
       <div>
-        <Card bordered={false} className="custom-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <div>
-              <h5>Add Remarks</h5>
-              <Form form={inputForm}>
-                <Form.Item name="remarks">
-                  <TextArea rows={4} />
-                </Form.Item>
-              </Form>
-              <div style={{ display: 'flex', justifyContent: 'center' }}>
-                <ButtonComponent
-                  text="Save"
-                  type="primary"
-                  // disable={isdisablebtn}
-                  onClick={() => handlePraCancel(cancelSeq)}
-                  // onClick={() => console.log(seq)}
-                />
+        <Spin spinning={isProcessing} tip="Please wait...">
+          <Card bordered={false} className="custom-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div>
+                <h5>Add Remarks</h5>
+                <Form form={inputForm}>
+                  <Form.Item name="remarks">
+                    <TextArea rows={4} />
+                  </Form.Item>
+                </Form>
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <ButtonComponent
+                    text="Save"
+                    type="primary"
+                    disable={isProcessing}
+                    loading={isProcessing}
+                    onClick={() => handlePraCancel(cancelSeq)}
+                    // onClick={() => console.log(seq)}
+                  />
+                </div>
               </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        </Spin>
       </div>
     )
   }
 
   const handlePraRev = async cancelSequence => {
+    if (isProcessing) {
+      return
+    }
     // const insertCheck = await handleinsert()
 
     const formvalue = inputForm.getFieldValue()
@@ -1704,45 +1777,58 @@ const PRASearchCardComp = () => {
       empId: employeeId,
       remarks: formvalue.remarks,
     }
-    // if (insertCheck) {
-    const httpapprovals = await indentFileUpload({
-      requestPath: 'udpatePraHdrSeq',
-      requestData: props,
-    })
+    setIsProcessing(true)
+    try {
+      // if (insertCheck) {
+      const httpapprovals = await indentFileUpload({
+        requestPath: 'udpatePraHdrSeq',
+        requestData: props,
+      })
 
-    if (httpapprovals.responseCode === '200') {
-      // onmodalCancel()
-      // setApproveRemarksCard(false)
-      setPrevRemarksCard(false)
-      handleCancelDtlsBtnInward()
-      getDetailData()
-    } else {
-      message.error(httpapprovals.responseMessage)
+      if (httpapprovals.responseCode === '200') {
+        // onmodalCancel()
+        // setApproveRemarksCard(false)
+        setPrevRemarksCard(false)
+        handleCancelDtlsBtnInward()
+        getDetailData()
+      } else {
+        message.error(httpapprovals.responseMessage)
+      }
+      // }
+    } finally {
+      setIsProcessing(false)
     }
-    // }
   }
 
   const handlePraCancel = async () => {
+    if (isProcessing) {
+      return
+    }
     const props = {
       tenantId,
       praId,
       poId: popupresp[0]?.poId,
       empId: employeeId,
     }
-    // if (insertCheck) {
-    const httpapprovals = await indentFileUpload({
-      requestPath: 'praCancel',
-      requestData: props,
-    })
+    setIsProcessing(true)
+    try {
+      // if (insertCheck) {
+      const httpapprovals = await indentFileUpload({
+        requestPath: 'praCancel',
+        requestData: props,
+      })
 
-    if (httpapprovals.responseCode === '200') {
-      // onmodalCancel()
-      // setApproveRemarksCard(false)
-      setPraCancelCard(false)
-      handleCancelDtlsBtnInward()
-      getDetailData()
-    } else {
-      message.error(httpapprovals.responseMessage)
+      if (httpapprovals.responseCode === '200') {
+        // onmodalCancel()
+        // setApproveRemarksCard(false)
+        setPraCancelCard(false)
+        handleCancelDtlsBtnInward()
+        getDetailData()
+      } else {
+        message.error(httpapprovals.responseMessage)
+      }
+    } finally {
+      setIsProcessing(false)
     }
   }
   const handleDropdownChange = param => {
@@ -1859,7 +1945,15 @@ const PRASearchCardComp = () => {
       <ModalPopup
         text="PRA Detail View"
         isModalVisible={showDtlTablLoading}
-        onCancel={handleCancelDtlsBtnInward}
+        onCancel={() => {
+          // Mask click / X / Esc all route through here — ignore them while any action is in
+          // flight so the whole detail view can't be dismissed mid-request. handleCancelDtlsBtnInward
+          // itself stays untouched, since saveData/updateDetails/etc. call it directly on success
+          // (before their own finally clears these flags) to close the view deliberately.
+          if (actionInProgress || isProcessing) return
+          handleCancelDtlsBtnInward()
+        }}
+        maskClosable={!(actionInProgress || isProcessing)}
         FieldsComponent={DetailsTableComponent}
         width={1450}
       />

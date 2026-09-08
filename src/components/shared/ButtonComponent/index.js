@@ -13,14 +13,16 @@ const ButtonComponent = ({
   marginright,
   icon,
   bgcolors,
-  disable,width
+  disable,
+  width,
+  loading,
 }) => {
   const buttonStyle = {
     backgroundColor: bgcolor,
     background: bgcolors,
     color: textcolor,
     marginRight: marginright,
-    width
+    width,
   }
   return (
     <Button
@@ -32,6 +34,7 @@ const ButtonComponent = ({
       target={target}
       icon={icon}
       disabled={disable}
+      loading={loading}
     >
       {text}
     </Button>

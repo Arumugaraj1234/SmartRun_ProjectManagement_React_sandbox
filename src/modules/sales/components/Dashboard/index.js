@@ -51,11 +51,21 @@ const Dashboard = () => {
   // const [selectedEmployee, setSelectedEmployee] = useState(store.get('employeeId'));
 
   useEffect(() => {
-    getDashboardData()
-    getStagelist()
-    getCustomerOrderList()
-    getEnquiryOrderList()
-    getSalesDeptName()
+    const loadDashboard = async () => {
+      setLoading(true)
+      try {
+        await Promise.allSettled([
+          getDashboardData(),
+          getStagelist(),
+          getCustomerOrderList(),
+          getEnquiryOrderList(),
+          getSalesDeptName(),
+        ])
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadDashboard()
   }, [])
   useEffect(() => {
     const handleResize = () => {
@@ -131,7 +141,6 @@ const Dashboard = () => {
     })
     if (response) {
       setCustomerOrderList(response.responseData)
-      setLoading(false)
     }
   }
 

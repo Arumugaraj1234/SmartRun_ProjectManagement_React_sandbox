@@ -38,6 +38,7 @@ import currentDateTime from 'currentDateTime'
 import DashboardTableView from 'components/common/DashboardTblView'
 import NoOfPOModal from './NoOfPOModal'
 import IndentToPOModal from './IndentToPOModal'
+import IndentLineItemsModal from './IndentLineItemsModal'
 import PendingIndentModal from './PendingIndentModal'
 import ItemsDelayedModal from './ItemsDelayedModal'
 import CostNegotiateModal from './CostNegotiateModal'
@@ -67,6 +68,7 @@ const ScmDashboard = () => {
   const [noOfPoMaodal, setNoOfPoMaodal] = useState(false)
   const [inventoryStockModal, setInventoryStockModal] = useState(false)
   const [indToPOModal, setIndToPOModal] = useState(false)
+  const [indentLineItemsModal, setIndentLineItemsModal] = useState(false)
   const [costNegoVal, setCostNegoVal] = useState('')
   const [avgInvVal, setAvgInvVal] = useState('')
   const [invValue, setInvValue] = useState('')
@@ -102,7 +104,6 @@ const ScmDashboard = () => {
 
   useEffect(() => {
     getOnloadservice()
-    setLoading(false)
   }, [])
 
   useEffect(() => {
@@ -125,21 +126,27 @@ const ScmDashboard = () => {
     setProject(opt.key)
   }
 
-  const getOnloadservice = () => {
+  const getOnloadservice = async () => {
     setLoading(true)
     setFilterCards(false)
-    getWidgetDetails()
-    getCostNegotiateValue()
-    getAvgInvAgingVal()
-    getInvValue()
-    getTableDataDtls()
-    getIndentToPO()
-    getProjectData()
-    getPieChartRespDtls()
-    getApprVendorDtls()
-    getVendorDetailHdrView()
-    getVendorPaymentDetails()
-    getVendorDetailDrillDown()
+    try {
+      await Promise.allSettled([
+        getWidgetDetails(),
+        getCostNegotiateValue(),
+        getAvgInvAgingVal(),
+        getInvValue(),
+        getTableDataDtls(),
+        getIndentToPO(),
+        getProjectData(),
+        getPieChartRespDtls(),
+        getApprVendorDtls(),
+        getVendorDetailHdrView(),
+        getVendorPaymentDetails(),
+        getVendorDetailDrillDown(),
+      ])
+    } finally {
+      setLoading(false)
+    }
   }
 
   const openFilterCard = () => {
@@ -160,7 +167,6 @@ const ScmDashboard = () => {
     if (response) {
       if (response.responseCode === '200') {
         setWidgetData(response?.responseData)
-        setLoading(false)
       }
     }
   }
@@ -173,7 +179,6 @@ const ScmDashboard = () => {
     if (response) {
       if (response.responseCode === '200') {
         setVendorData(response?.responseData)
-        setLoading(false)
       }
     }
   }
@@ -196,7 +201,6 @@ const ScmDashboard = () => {
     if (response) {
       if (response.responseCode === '200') {
         setVendorPaymentData(response?.responseData)
-        setLoading(false)
       } else {
         setVendorPaymentData([])
       }
@@ -221,7 +225,6 @@ const ScmDashboard = () => {
     if (response) {
       if (response.responseCode === '200') {
         setVendorTableData(response?.responseData)
-        setLoading(false)
       } else {
         setVendorTableData([])
       }
@@ -245,7 +248,6 @@ const ScmDashboard = () => {
     if (response) {
       if (response.responseCode === '200') {
         setVendorDetailsData(response?.responseData)
-        setLoading(false)
       } else {
         setVendorDetailsData([])
       }
@@ -843,6 +845,23 @@ const ScmDashboard = () => {
     )
   }
 
+  const getIndentLineItemsModalViewDtls = () => {
+    setIndentLineItemsModal(true)
+  }
+
+  const renderIndentLineItemsComponent = () => {
+    return (
+      <IndentLineItemsModal
+        onmodalCancel={() => {
+          setIndentLineItemsModal(false)
+        }}
+        selectedMonth={selectedMonth}
+        check={check}
+        project={project}
+      />
+    )
+  }
+
   const renderNoOfPOComponent = () => {
     return (
       <NoOfPOModal
@@ -1083,7 +1102,7 @@ const ScmDashboard = () => {
                       </div>
                     }
                     // completed={indentToPo?.[0]?.indentCount || 0}
-                    onClick={getIndentToPoModalViewDtls}
+                    onClick={getIndentLineItemsModalViewDtls}
                     displayicon
                     bgicondiv="#b4f2c4"
                     bgicon="#2ed358"
@@ -1562,6 +1581,18 @@ const ScmDashboard = () => {
           text="Indent to PO Details"
           onCancel={() => {
             setIndToPOModal(false)
+          }}
+          width="500"
+        />
+      ) : null}
+
+      {indentLineItemsModal ? (
+        <ModalPopup
+          isModalVisible={indentLineItemsModal}
+          FieldsComponent={renderIndentLineItemsComponent}
+          text="Indent Line Items"
+          onCancel={() => {
+            setIndentLineItemsModal(false)
           }}
           width="500"
         />

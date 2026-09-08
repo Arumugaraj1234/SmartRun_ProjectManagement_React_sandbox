@@ -1,5 +1,5 @@
 /* eslint-disable eqeqeq */
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Table } from 'ant-table-extensions'
 import store from 'store'
 import { Input, Skeleton } from 'antd'
@@ -25,6 +25,10 @@ const CommonPJSComponent = () => {
     }
   }
   const [isModalOpen, setIsModalOpen] = useState(false)
+  // Set by ScsComponent (via its submittingRef prop) whenever Save/Approve/Previous
+  // Stage/Delete PJS is in flight, so the X/Esc close on the Modal below can ignore
+  // dismissal mid-request without needing that submitting state lifted into this component.
+  const submittingRef = useRef(false)
   const [pJSCompTablData, setPJSCompTablData] = useState([])
   const [poModalvisible, setPOmodalvisible] = useState(false)
   const [scsHdrid, setScsHdrid] = useState('')
@@ -516,6 +520,9 @@ const CommonPJSComponent = () => {
                 text="PO Justification Sheet"
                 maskClosable={false}
                 onCancel={() => {
+                  // X button / Esc route through here — ignore them while Save/Approve/
+                  // Previous Stage/Delete PJS is in flight, per submittingRef above.
+                  if (submittingRef.current) return
                   setScsmodalvisible(false)
                 }}
                 width="900"
@@ -616,6 +623,7 @@ const CommonPJSComponent = () => {
           setScsmodalvisible(false)
           getPJSResponse()
         }}
+        submittingRef={submittingRef}
         width="900"
       />
     )

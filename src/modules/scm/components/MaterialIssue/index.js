@@ -283,6 +283,8 @@ const MaterialIssue = () => {
         }
       } catch (err) {
         console.error(err)
+      } finally {
+        setLoading(false)
       }
     } else {
       messageReturn(405)

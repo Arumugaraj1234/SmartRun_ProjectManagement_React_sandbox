@@ -196,12 +196,22 @@ const QualityDashboard = () => {
   })
 
   useEffect(() => {
-    getWidgetDetails()
-    getQualityProjCnt()
-    getTeamMemberLoad()
-    getKeyCategory()
-    getPMWorkLoad()
-    getIndentProjectDtlsByDate()
+    const loadDashboard = async () => {
+      setLoading(true)
+      try {
+        await Promise.allSettled([
+          getWidgetDetails(),
+          getQualityProjCnt(),
+          getTeamMemberLoad(),
+          getKeyCategory(),
+          getPMWorkLoad(),
+          getIndentProjectDtlsByDate(),
+        ])
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadDashboard()
   }, [])
 
   useEffect(() => {
@@ -334,7 +344,6 @@ const QualityDashboard = () => {
     if (response) {
       if (response.responseCode === '200') {
         setTeamMemberData(response?.responseData)
-        setLoading(false)
       }
     }
   }

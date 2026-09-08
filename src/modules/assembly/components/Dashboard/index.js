@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import moment from 'moment'
 import store from 'store'
-import { DatePicker, Row, Col, Card, Table, Form, Select, Checkbox } from 'antd'
+import { DatePicker, Row, Col, Card, Table, Form, Select, Checkbox, Spin } from 'antd'
 import FilterEnquiry from 'components/shared/FilterEnquiry'
 import ButtonComponent from 'components/shared/ButtonComponent'
 import { useMediaQuery } from 'react-responsive'
@@ -22,7 +22,7 @@ import './index.css'
 import './style.css'
 
 const AssemblyDashboard = () => {
-  //   const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [requirementFrom] = Form.useForm()
   const [filtercards, setFilterCards] = useState(false)
   const [selectedMonth, setSelectedMonth] = useState(moment())
@@ -45,8 +45,22 @@ const AssemblyDashboard = () => {
   const tenantId = store.get('tenantId')
 
   useEffect(() => {
-    getProjectData()
-    getWidgetResponseCheck()
+    const loadDashboard = async () => {
+      setLoading(true)
+      try {
+        await Promise.allSettled([
+          getProjectData(),
+          getWidgetDtls(),
+          getProjectActivityDtls(),
+          getProjectComplDtls(),
+          getPendingTaskDtls(),
+        ])
+      } finally {
+        setLoading(false)
+      }
+    }
+    setFilterCards(false)
+    loadDashboard()
   }, [])
 
   useEffect(() => {
@@ -409,6 +423,23 @@ const AssemblyDashboard = () => {
       className="app"
       style={isMobile ? { width: tableWidth, height: '300px' } : { height: '300px' }}
     >
+      {loading ? (
+        <div
+          style={{
+            position: 'absolute',
+            top: 100,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000,
+          }}
+        >
+          <Spin size="large" tip="Loading..." />
+        </div>
+      ) : null}
       <div>
         <div
           style={{

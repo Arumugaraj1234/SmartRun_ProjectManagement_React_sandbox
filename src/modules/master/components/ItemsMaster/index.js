@@ -266,6 +266,8 @@ const ItemsMaster = () => {
         }
       } catch (err) {
         console.log(err)
+      } finally {
+        setLoading(false)
       }
     } else {
       messageReturn(405)

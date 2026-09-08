@@ -308,8 +308,16 @@ const MaterialInwardAssign = ({ rowData, onClose, projectCode }) => {
         setSelectedRowKeys([])
         getAssignDetails()
         // calldetailapi()
+      } else {
+        setQCBtn(false)
+        if (response?.responseMessage) {
+          message.error(response?.responseMessage)
+        } else {
+          messageReturn(405)
+        }
       }
     } else {
+      setQCBtn(false)
       messageReturn(405)
     }
   }

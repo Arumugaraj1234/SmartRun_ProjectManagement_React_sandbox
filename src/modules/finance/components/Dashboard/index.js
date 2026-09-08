@@ -102,7 +102,6 @@ const FinanceDashboard = () => {
 
   useEffect(() => {
     getOnloadservice()
-    setLoading(false)
   }, [])
 
   useEffect(() => {
@@ -117,12 +116,17 @@ const FinanceDashboard = () => {
     }
   }, [])
 
-  const getOnloadservice = () => {
+  const getOnloadservice = async () => {
     setLoading(true)
     setFilterCards(false)
-    fetchAllData()
-    setLoading(false)
     setFilteredTableData({})
+    try {
+      await fetchAllData()
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const openFilterCard = () => {
@@ -233,32 +237,32 @@ const FinanceDashboard = () => {
       setProjectDetailsData([])
     }
     if (vendorDetailRes?.responseCode === '200') {
-       const updatedData = vendorDetailRes.responseData.map((item, index) => ({
-              ...item,
-              sno: index + 1
-        }));
+      const updatedData = vendorDetailRes.responseData.map((item, index) => ({
+        ...item,
+        sno: index + 1,
+      }))
       setVendorDetailsData(updatedData)
     } else {
       setVendorDetailsData([])
     }
     if (vendorHdrRes?.responseCode === '200') {
       const updatedData = vendorHdrRes.responseData.map((item, index) => ({
-              ...item,
-              sno: index + 1
-        }));
+        ...item,
+        sno: index + 1,
+      }))
       setVendorTableData(updatedData || [])
     } else {
       setVendorTableData([])
     }
-    if (vendorPaymentRes?.responseCode === '200'){
-        const updatedData = vendorPaymentRes.responseData.map((item, index) => ({
-              ...item,
-              sno: index + 1
-        }));
-        setVendorPaymentData(updatedData);
+    if (vendorPaymentRes?.responseCode === '200') {
+      const updatedData = vendorPaymentRes.responseData.map((item, index) => ({
+        ...item,
+        sno: index + 1,
+      }))
+      setVendorPaymentData(updatedData)
     }
-      // setVendorPaymentData(vendorPaymentRes.responseData)
-   }
+    // setVendorPaymentData(vendorPaymentRes.responseData)
+  }
 
   // console.log(projectSpentData,'spentRes data')
   const [filteredTableData, setFilteredTableData] = useState({})
@@ -1292,7 +1296,7 @@ const FinanceDashboard = () => {
                           borderRadius: '10px',
                           width: '100%',
                           marginTop: '20px',
-                          overflow:'hidden',
+                          overflow: 'hidden',
                         }}
                       >
                         <POBudgetChart

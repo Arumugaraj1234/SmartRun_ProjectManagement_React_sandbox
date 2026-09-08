@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import store from 'store'
 import moment from 'moment'
-// import { Select } from 'antd'
+import { Skeleton } from 'antd'
 import { Table } from 'ant-table-extensions'
 import ApproveOrReject from 'components/common/ApproveRejectBtnComponent'
 import { PlusOutlined, FileTwoTone, FileExcelOutlined } from '@ant-design/icons'
@@ -51,6 +51,7 @@ const Taskmanagement = ({ backcomponent, pmId, uploadFile, docFile }) => {
   const [taskView, setTaskView] = useState(false)
   const [taskData, setTaskData] = useState([])
   const [createTask, setCreateTask] = useState(true)
+  const [loading, setLoading] = useState(true)
   const enquiryarr = store.get('Enquiry')
 
   useEffect(() => {
@@ -139,12 +140,12 @@ const Taskmanagement = ({ backcomponent, pmId, uploadFile, docFile }) => {
     if (response) {
       const typecoderesp = response?.responseData
       const options = [
-        { key: 'getAll', value: 'Get All' }, 
+        { key: 'getAll', value: 'Get All' },
         ...typecoderesp?.map(item => ({
           key: item.taskCategoryCode,
           value: item.taskDesc,
         })),
-      ];
+      ]
       setTaskCategorydata(options)
     }
   }
@@ -390,8 +391,8 @@ const Taskmanagement = ({ backcomponent, pmId, uploadFile, docFile }) => {
           diff > 0
             ? { backgroundColor: '#ed5d5d', color: 'white' }
             : record.isCompleted === '1'
-              ? { backgroundColor: 'green', color: 'white' }
-              : {}
+            ? { backgroundColor: 'green', color: 'white' }
+            : {}
         return { style }
       },
     },
@@ -428,7 +429,7 @@ const Taskmanagement = ({ backcomponent, pmId, uploadFile, docFile }) => {
               )
             }
             icon={<FileTwoTone />}
-          // size="small"
+            // size="small"
           />
 
           <span style={{ margin: '0 8px' }} />
@@ -451,6 +452,14 @@ const Taskmanagement = ({ backcomponent, pmId, uploadFile, docFile }) => {
   }
 
   const handlegetDtlSubmit = async () => {
+    setLoading(true)
+    try {
+      await handlegetDtlSubmitInner()
+    } finally {
+      setLoading(false)
+    }
+  }
+  const handlegetDtlSubmitInner = async () => {
     if (taskTypeCode !== undefined && taskCategoryCode !== undefined) {
       const retriveprop = {
         tenantId,
@@ -708,17 +717,17 @@ const Taskmanagement = ({ backcomponent, pmId, uploadFile, docFile }) => {
               data={[
                 { label: 'Get All', value: 'Get All', key: 'getAll' },
                 ...taskTypeData?.map(item => ({
-                  label: item.value,  
+                  label: item.value,
                   value: item.value,
                   key: item.key,
-                }))
+                })),
               ]}
               value={taskType}
               onChange={value => setTaskType(value)}
               onSelect={(value, option) => {
-                setTaskType(value);
-                setTaskTypeCode(option.key);
-                handleTaskTypeOnChange('tasktype', value, option.key);
+                setTaskType(value)
+                setTaskTypeCode(option.key)
+                handleTaskTypeOnChange('tasktype', value, option.key)
               }}
               width="100%"
             />
@@ -728,16 +737,16 @@ const Taskmanagement = ({ backcomponent, pmId, uploadFile, docFile }) => {
               Task Category <span style={{ color: 'red' }}>*</span>
             </p>
             <AutoCompleteComponent
-              data={taskCategorydata} 
-              value={taskCategory} 
-              onChange={text => setTaskCategory(text)} 
+              data={taskCategorydata}
+              value={taskCategory}
+              onChange={text => setTaskCategory(text)}
               onSelect={(value, option) => {
-                setTaskCategory(value); 
-                setTaskCategoryCode(option.key); 
-                handleTaskTypeOnChange('taskCategory', value, option.key); 
+                setTaskCategory(value)
+                setTaskCategoryCode(option.key)
+                handleTaskTypeOnChange('taskCategory', value, option.key)
               }}
               width="100%"
-              disableInput={false} 
+              disableInput={false}
             />
           </div>
         </div>
@@ -757,26 +766,28 @@ const Taskmanagement = ({ backcomponent, pmId, uploadFile, docFile }) => {
         style={{ marginTop: '10px', width: '100%', overflowX: 'auto' }}
       >
         {/* <TableComponent columns={columns} data={originalData} /> */}
-        <Table
-          columns={columns}
-          dataSource={originalData}
-          exportableProps={{
-            fileName: `Design_Task${currentDateTime}`,
-            btnProps: {
-              type: 'primary',
-              icon: <FileExcelOutlined />,
-              children: <span>Export to CSV</span>,
-            },
-          }}
-          pagination={{
-            pageSizeOptions: ['10', '20', '30', '50', [originalData?.length]],
-            showSizeChanger: true,
-            defaultPageSize: 10,
-          }}
-          scroll={{ y: 500 }}
-          onChange={handleChange}
-          bordered
-        />
+        <Skeleton loading={loading} active paragraph={{ rows: 8 }}>
+          <Table
+            columns={columns}
+            dataSource={originalData}
+            exportableProps={{
+              fileName: `Design_Task${currentDateTime}`,
+              btnProps: {
+                type: 'primary',
+                icon: <FileExcelOutlined />,
+                children: <span>Export to CSV</span>,
+              },
+            }}
+            pagination={{
+              pageSizeOptions: ['10', '20', '30', '50', [originalData?.length]],
+              showSizeChanger: true,
+              defaultPageSize: 10,
+            }}
+            scroll={{ y: 500 }}
+            onChange={handleChange}
+            bordered
+          />
+        </Skeleton>
       </div>
 
       <ApproveOrReject

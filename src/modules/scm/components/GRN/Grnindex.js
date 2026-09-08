@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import store from 'store'
 import moment from 'moment'
-import { Button, Card, Row, Divider, message, Input } from 'antd'
+import { Button, Card, Row, Divider, message, Input, Skeleton } from 'antd'
 import { Table } from 'ant-table-extensions'
 import ButtonComponent from 'components/shared/ButtonComponent'
 import { FileExcelOutlined, PlusOutlined } from '@ant-design/icons'
@@ -16,6 +16,7 @@ import { indentFileUpload } from '../../../../services/common/AppeovedDocumentSe
 const ScmGrn = () => {
   const tenantId = store.get('tenantId')
   const [grnList, setGrnList] = useState([])
+  const [loading, setLoading] = useState(false)
   const [detailmodalvisible, setDetailmodalvisible] = useState(false)
   const [detailGrn, setDetailGrn] = useState(null)
   const [grnModal, setGrnModal] = useState(false)
@@ -42,8 +43,8 @@ const ScmGrn = () => {
 
   // const distinct = (value, index, self) => self.indexOf(value) === index
   const distinct = (value, index, self) => {
-    return value !== null && value !== undefined && value !== "" && self.indexOf(value) === index;
-};
+    return value !== null && value !== undefined && value !== '' && self.indexOf(value) === index
+  }
 
   const GRNcode = grnList ? grnList.map(h => h.grnCode) : []
   const GRNdate = grnList ? grnList.map(h => h.grnDate) : []
@@ -71,15 +72,19 @@ const ScmGrn = () => {
   const invLocation2 = invLocation1.filter(distinct)
   const createdEmpName2 = createdEmpName1.filter(distinct)
 
-  const FilterGRNCode = filterGRNCode.sort((a, b) => a.localeCompare(b)) .map(element => ({
-    text: element,
-    value: element,
-  }));
-  const FilterGRNdate = filterGRNdate.sort((a, b) => a.localeCompare(b)).map(element => ({
-    text: element ? moment(element).format('DD-MMM-YYYY') : '',
-    value: element,
-  }))
-  
+  const FilterGRNCode = filterGRNCode
+    .sort((a, b) => a.localeCompare(b))
+    .map(element => ({
+      text: element,
+      value: element,
+    }))
+  const FilterGRNdate = filterGRNdate
+    .sort((a, b) => a.localeCompare(b))
+    .map(element => ({
+      text: element ? moment(element).format('DD-MMM-YYYY') : '',
+      value: element,
+    }))
+
   const projectId3 = projectId2.map(element => ({
     text: element,
     value: element,
@@ -88,26 +93,36 @@ const ScmGrn = () => {
     text: element,
     value: element,
   }))
-  const productCode3 = productCode2.sort((a, b) => a.localeCompare(b)).map(element => ({
-    text: element,
-    value: element,
-  }))
-  const productDesc3 = productDesc2.sort((a, b) => a.localeCompare(b)).map(element => ({
-    text: element,
-    value: element,
-  }))
-  const poCode3 = poCode2.sort((a, b) => a.localeCompare(b)).map(element => ({
-    text: element,
-    value: element,
-  }))
-  const FilterMiCode = miCode.sort((a, b) => a.localeCompare(b)) .map(element => ({
-    text: element,
-    value: element,
-  }));
-  const miDate3 = miDate2.sort((a, b) => a.localeCompare(b)).map(element => ({
-    text: element ? moment(element).format('DD-MMM-YYYY') : '',
-    value: element,
-  }))
+  const productCode3 = productCode2
+    .sort((a, b) => a.localeCompare(b))
+    .map(element => ({
+      text: element,
+      value: element,
+    }))
+  const productDesc3 = productDesc2
+    .sort((a, b) => a.localeCompare(b))
+    .map(element => ({
+      text: element,
+      value: element,
+    }))
+  const poCode3 = poCode2
+    .sort((a, b) => a.localeCompare(b))
+    .map(element => ({
+      text: element,
+      value: element,
+    }))
+  const FilterMiCode = miCode
+    .sort((a, b) => a.localeCompare(b))
+    .map(element => ({
+      text: element,
+      value: element,
+    }))
+  const miDate3 = miDate2
+    .sort((a, b) => a.localeCompare(b))
+    .map(element => ({
+      text: element ? moment(element).format('DD-MMM-YYYY') : '',
+      value: element,
+    }))
   const vendorName3 = vendorName2.map(element => ({
     text: element,
     value: element,
@@ -186,8 +201,7 @@ const ScmGrn = () => {
       filteredValue: filtersInfo.poCode,
       onFilter: (value, record) => record?.poCode === value,
       render: text => (text !== '' && text !== null && text !== undefined ? text : '-'),
-     
-     },
+    },
     {
       title: 'GRN Qty.',
       dataIndex: 'grnQty',
@@ -266,52 +280,56 @@ const ScmGrn = () => {
         ? formData.Projectcode !== undefined && formData.PONo !== undefined
         : formData.Projectcode !== undefined
     if (isMandatory) {
-      const response = await indentFileUpload({
-        requestPath: 'getGrnHdrDetails',
-        requestData: {
-          fromDate: moment(formData.FromDate).format('YYYY-MM-DD'),
-          toDate: moment(formData.ToDate).format('YYYY-MM-DD'),
-          tenantId,
-          projectId: formData.Projectcode,
-        },
-      })
-      if (response?.responseCode === '200') {
-        setGrnList(response?.responseData)
-        const data = response?.responseData
+      setLoading(true)
+      try {
+        const response = await indentFileUpload({
+          requestPath: 'getGrnHdrDetails',
+          requestData: {
+            fromDate: moment(formData.FromDate).format('YYYY-MM-DD'),
+            toDate: moment(formData.ToDate).format('YYYY-MM-DD'),
+            tenantId,
+            projectId: formData.Projectcode,
+          },
+        })
+        if (response?.responseCode === '200') {
+          setGrnList(response?.responseData)
+          const data = response?.responseData
 
-        // data.sort((a, b) => {
-        //   const getProjectNumber = (code) => {
-        //     const parts = code.split('/')
-        //     return parts.length >= 3 ? parts[2] : ''
-        //   }
-          
-  
-        //   const getLastNumber = (code) => {
-        //     const parts = code.split('/')
-        //     return parseInt(parts[parts.length - 1], 10) || 0
-        //   }
-  
-          
-        //   const projectCompare = getProjectNumber(a.poCode).localeCompare(getProjectNumber(b.poCode))
-        //   if (projectCompare !== 0) {
-        //     return projectCompare
-        //   }
-  
-        //   return getLastNumber(a.poCode) - getLastNumber(b.poCode)
-        // })
-    
-        setGrnList(data)  
-        setfilteredmaterial(() =>
-          data.map(e => ({
-            ...e,
-            grnDate: e.grnDate !== null ? dateformatter(e.grnDate) : " ",
-            miDate: e.miDate !== null ? dateformatter(e.miDate) : " "
-          })))
-      } else {
-        message.error(response?.responseMessage)
-        setGrnList([])
+          // data.sort((a, b) => {
+          //   const getProjectNumber = (code) => {
+          //     const parts = code.split('/')
+          //     return parts.length >= 3 ? parts[2] : ''
+          //   }
+
+          //   const getLastNumber = (code) => {
+          //     const parts = code.split('/')
+          //     return parseInt(parts[parts.length - 1], 10) || 0
+          //   }
+
+          //   const projectCompare = getProjectNumber(a.poCode).localeCompare(getProjectNumber(b.poCode))
+          //   if (projectCompare !== 0) {
+          //     return projectCompare
+          //   }
+
+          //   return getLastNumber(a.poCode) - getLastNumber(b.poCode)
+          // })
+
+          setGrnList(data)
+          setfilteredmaterial(() =>
+            data.map(e => ({
+              ...e,
+              grnDate: e.grnDate !== null ? dateformatter(e.grnDate) : ' ',
+              miDate: e.miDate !== null ? dateformatter(e.miDate) : ' ',
+            })),
+          )
+        } else {
+          message.error(response?.responseMessage)
+          setGrnList([])
+        }
+        console.log(response)
+      } finally {
+        setLoading(false)
       }
-      console.log(response)
     } else {
       messageReturn(405)
     }
@@ -385,41 +403,45 @@ const ScmGrn = () => {
           isVisible="0"
           getAllEnable
         />
-        {grnList.length > 0 && (
-          <div>
-            <Row>
-              <Divider orientation="left">GRN Details</Divider>
-            </Row>
+        {loading ? (
+          <Skeleton active paragraph={{ rows: 6 }} style={{ marginTop: '16px' }} />
+        ) : (
+          grnList.length > 0 && (
             <div>
-              <Input.Search
-                style={{ margin: '0 0 10px 0', width: isMobile ? '100%' : '30%', float: 'right' }}
-                placeholder="Search here..."
-                enterButton
-                // onSearch={handleSearch}
-                onChange={e => handleSearch(e)}
-              />
-              <Table
-                className="responsive-antd-tables"
-                columns={columns}
-                dataSource={grnList}
-                handleChange={FilterChange}
-                pagination={{
-                  pageSizeOptions: ['10', '20', '30', '50', [grnList?.length]],
-                  showSizeChanger: true,
-                  defaultPageSize: 10,
-                }}
-                scroll={{ y: 400 }}
-                exportableProps={{
-                  fileName: `GRN_${currentDateTime}`,
-                  btnProps: {
-                    type: 'primary',
-                    icon: <FileExcelOutlined />,
-                    children: <span>Export to CSV</span>,
-                  },
-                }}
-              />
+              <Row>
+                <Divider orientation="left">GRN Details</Divider>
+              </Row>
+              <div>
+                <Input.Search
+                  style={{ margin: '0 0 10px 0', width: isMobile ? '100%' : '30%', float: 'right' }}
+                  placeholder="Search here..."
+                  enterButton
+                  // onSearch={handleSearch}
+                  onChange={e => handleSearch(e)}
+                />
+                <Table
+                  className="responsive-antd-tables"
+                  columns={columns}
+                  dataSource={grnList}
+                  handleChange={FilterChange}
+                  pagination={{
+                    pageSizeOptions: ['10', '20', '30', '50', [grnList?.length]],
+                    showSizeChanger: true,
+                    defaultPageSize: 10,
+                  }}
+                  scroll={{ y: 400 }}
+                  exportableProps={{
+                    fileName: `GRN_${currentDateTime}`,
+                    btnProps: {
+                      type: 'primary',
+                      icon: <FileExcelOutlined />,
+                      children: <span>Export to CSV</span>,
+                    },
+                  }}
+                />
+              </div>
             </div>
-          </div>
+          )
         )}
         {detailmodalvisible && (
           <Grndetail

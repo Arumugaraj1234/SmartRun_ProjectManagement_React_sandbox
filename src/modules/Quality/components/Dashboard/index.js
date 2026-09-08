@@ -384,14 +384,23 @@ const QualityDashboard = () => {
   })
 
   useEffect(() => {
-    getRatingDetails()
-    getWidgetDetails()
-    getQualityProjCnt()
-    getEmployeeForDepartment()
-    getIndentProjectDtlsByDate()
-    getTeamMemberEnableCheck()
-    getPieChartRespDtls()
-    // setLoading(false)
+    const loadDashboard = async () => {
+      setLoading(true)
+      try {
+        await Promise.allSettled([
+          getRatingDetails(),
+          getWidgetDetails(),
+          getQualityProjCnt(),
+          getEmployeeForDepartment(),
+          getIndentProjectDtlsByDate(),
+          getTeamMemberEnableCheck(),
+          getPieChartRespDtls(),
+        ])
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadDashboard()
   }, [])
 
   useEffect(() => {
@@ -521,7 +530,6 @@ const QualityDashboard = () => {
     if (response) {
       if (response.responseCode === '200') {
         setRatingData(response?.responseData)
-        setLoading(false)
       } else {
         setRatingData([])
       }

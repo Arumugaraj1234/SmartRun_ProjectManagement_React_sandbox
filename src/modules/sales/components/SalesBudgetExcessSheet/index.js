@@ -97,7 +97,7 @@ const SalesBudgetExcessSheet = () => {
       sequenceNo: '1',
       empId: empid,
       enqId: store.get('EnquiryID'),
-      processCode: isInternal === 1 ||  isInternal === "1" ? '8' : '3',
+      processCode: isInternal === 1 || isInternal === '1' ? '8' : '3',
     }
 
     const response = await indentFileUpload({
@@ -177,10 +177,13 @@ const SalesBudgetExcessSheet = () => {
           : '',
       station: rec.assemblyValue !== 'null' && rec.assemblyValue !== '' ? rec.assemblyValue : '',
       subAssemblyValue:
-        rec.subAssemblyValue !== 'null' && rec.subAssemblyValue !== null && rec.subAssemblyValue !== ''
+        rec.subAssemblyValue !== 'null' &&
+        rec.subAssemblyValue !== null &&
+        rec.subAssemblyValue !== ''
           ? rec.subAssemblyValue
           : '',
-      pjsRefNo: rec.pjsRefNo !== 'null' && rec.pjsRefNo !== null && rec.pjsRefNo !== '' ? rec.pjsRefNo : '',
+      pjsRefNo:
+        rec.pjsRefNo !== 'null' && rec.pjsRefNo !== null && rec.pjsRefNo !== '' ? rec.pjsRefNo : '',
       allocatedValueDtl: rec.allocatedValue ? formatIndianNumber(rec.allocatedValue) : '',
       actualSpentSoFarDtl: rec.actualSpentSoFar ? formatIndianNumber(rec.actualSpentSoFar) : '',
       balanceAvailableDtl: formatIndianNumber(balanceAvailableVal),
@@ -290,7 +293,7 @@ const SalesBudgetExcessSheet = () => {
           pmHdrId: singledetail.pmHdrId,
           enquiryId: enqid,
           docGroup: singledetail.documentStatusMstList[0].docGroup,
-           processCode: isInternal === 1 ||  isInternal === "1" ? '8' : '3',
+          processCode: isInternal === 1 || isInternal === '1' ? '8' : '3',
         }
         const response = await indentFileUpload({
           requestPath: 'updateBudgetSheetExcessSeqAndStatus',
@@ -1154,7 +1157,8 @@ const SalesBudgetExcessSheet = () => {
     // ("Created", before anyone has acted on it yet) - whoever's turn that first step is
     // (PM for regular projects, Finance directly for CAPEX projects with no PM step) can
     // fill it in; once it moves past "Created", every later login is approve-only.
-    const canEditRca = singledetail?.statusDesc === 'Created' && !!singledetail?.documentStatusMstList?.[0]
+    const canEditRca =
+      singledetail?.statusDesc === 'Created' && !!singledetail?.documentStatusMstList?.[0]
     return (
       <div>
         <div>
@@ -1547,7 +1551,7 @@ const SalesBudgetExcessSheet = () => {
 
   return (
     <div>
-      <Skeleton loading={loading && tableData && tableData.length > 0} active>
+      <Skeleton loading={loading} active>
         <div style={{ marginBottom: '-32px', marginLeft: '1px', display: 'inline' }}>
           <ButtonComponent onClick={exportToPDF} text="Export to PDF" type="primary" />
         </div>

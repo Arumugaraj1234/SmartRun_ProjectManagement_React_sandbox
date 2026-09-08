@@ -910,6 +910,13 @@ const DesignIndentLifecycle = ({ componentdata }) => {
       messageReturn(405)
     }
   }
+  const safeHandleSubmit = async () => {
+    try {
+      await handleSubmit()
+    } finally {
+      setLoading(false)
+    }
+  }
   const handleSelectProject = (e, val) => {
     console.log(e)
     setProjectName(val.children[2])
@@ -1118,7 +1125,7 @@ const DesignIndentLifecycle = ({ componentdata }) => {
             type="primary"
             text="Submit"
             marginright="10px"
-            onClick={handleSubmit}
+            onClick={safeHandleSubmit}
             disable={disableInsrtBtn}
           />
           <ButtonComponent type="primary" text="Clear" onClick={handleClear} />

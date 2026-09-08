@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { PlusOutlined, FileExcelOutlined } from '@ant-design/icons'
 import Button from 'components/shared/ButtonComponent'
-import { message, Modal, Input } from 'antd'
+import { message, Modal, Input, Skeleton } from 'antd'
 import { Table } from 'ant-table-extensions'
 import moment from 'moment'
 import { useHistory } from 'react-router-dom'
@@ -17,6 +17,7 @@ const AssyMaterialRequest = ({ type }) => {
   const history = useHistory()
   const [isModalVisible, setIsModalVisible] = useState(false)
   const [hdrTabledata, setHdrTabledata] = useState(null)
+  const [loading, setLoading] = useState(false)
   // const [MRCodeVal, setMRCode] = useState('')
   const [dtlTabledata, setDtlTabledata] = useState(null)
   const [showDtlTablLoading, setShowDtlTablLoading] = useState(false)
@@ -71,67 +72,72 @@ const AssyMaterialRequest = ({ type }) => {
     setAddMtrlBtnShworHyd(response.responseDataMessage)
   }
   const getRerieveData = async formdata => {
-    // setLoading(true)
-    const keyareaobj = {
-      hdrId: type === '1' ? formdata.Projectcode : store.get('ProjectID'),
-      tenantId: tenantid,
-      requestType: '',
-    }
+    setLoading(true)
+    try {
+      // setLoading(true)
+      const keyareaobj = {
+        hdrId: type === '1' ? formdata.Projectcode : store.get('ProjectID'),
+        tenantId: tenantid,
+        requestType: '',
+      }
 
-    const response = await indentFileUpload({
-      requestPath: 'getMaterialReqHdr',
-      requestData: keyareaobj,
-    })
-    let data
-    if (
-      response.responseData !== null &&
-      response.responseData !== undefined &&
-      response.responseData.length > 0
-    ) {
-      if (response.responseData.length > 0) {
-        // setLoading(false)
-        data = response.responseData
+      const response = await indentFileUpload({
+        requestPath: 'getMaterialReqHdr',
+        requestData: keyareaobj,
+      })
+      let data
+      if (
+        response.responseData !== null &&
+        response.responseData !== undefined &&
+        response.responseData.length > 0
+      ) {
+        if (response.responseData.length > 0) {
+          // setLoading(false)
+          data = response.responseData
+        } else {
+          // setLoading(false)
+          data = []
+        }
       } else {
         // setLoading(false)
+        message.error(response.responseMessage)
         data = []
       }
-    } else {
-      // setLoading(false)
-      message.error(response.responseMessage)
-      data = []
+      setHdrTabledata(() =>
+        data?.map(item => ({
+          ...item,
+          requestedOn: moment(item.requestedOn).format('YYYY-MM-DD'),
+          requestType: item.requestType === '1' ? 'Internal' : 'DC', // Update requestType based on condition
+          completed: (() => {
+            if (item.cancelled === '1') {
+              return 'Cancelled' // If cancelled, set completed to 'Cancelled'
+            }
+            if (item.completed !== '0' && item.completed !== '0') {
+              return 'Completed' // If completed is not '0', set it to 'Completed'
+            }
+            return 'Requested' // Otherwise, set it to 'Requested'
+          })(),
+        })),
+      )
+      setfilteredmaterial(() =>
+        data?.map(item => ({
+          ...item,
+          requestedOn: moment(item.requestedOn).format('DD-MMM-YYYY'),
+          requestType: item.requestType === '1' ? 'Internal' : 'DC', // Update requestType based on condition
+          completed: (() => {
+            if (item.cancelled === '1') {
+              return 'Cancelled' // If cancelled, set completed to 'Cancelled'
+            }
+            if (item.completed !== '0' && item.completed !== '0') {
+              return 'Completed' // If completed is not '0', set it to 'Completed'
+            }
+            return 'Requested' // Otherwise, set it to 'Requested'
+          })(),
+        })),
+      )
+    } finally {
+      setLoading(false)
     }
-    setHdrTabledata(() =>
-      data?.map(item => ({
-        ...item,
-        requestedOn: moment(item.requestedOn).format('YYYY-MM-DD'),
-        requestType: item.requestType === '1' ? 'Internal' : 'DC', // Update requestType based on condition
-        completed: (() => {
-          if (item.cancelled === '1') {
-            return 'Cancelled' // If cancelled, set completed to 'Cancelled'
-          }
-          if (item.completed !== '0' && item.completed !== '0') {
-            return 'Completed' // If completed is not '0', set it to 'Completed'
-          }
-          return 'Requested' // Otherwise, set it to 'Requested'
-        })(),
-      })),
-    )
-    setfilteredmaterial(() =>
-      data?.map(item => ({
-        ...item,
-        requestedOn: moment(item.requestedOn).format('DD-MMM-YYYY'),
-        requestType: item.requestType === '1' ? 'Internal' : 'DC', // Update requestType based on condition
-        completed: (() => {
-          if (item.cancelled === '1') {
-            return 'Cancelled' // If cancelled, set completed to 'Cancelled'
-          }
-          if (item.completed !== '0' && item.completed !== '0') {
-            return 'Completed' // If completed is not '0', set it to 'Completed'
-          }
-          return 'Requested' // Otherwise, set it to 'Requested'
-        })(),
-      })),
-    )
   }
   const handleChange = (pagination, filters) => {
     setfilterinfo(filters)
@@ -141,7 +147,7 @@ const AssyMaterialRequest = ({ type }) => {
   const requestedBy1 = []
   const mrCode1 = []
   const status1 = []
- 
+
   if (hdrTabledata && hdrTabledata.length > 0) {
     hdrTabledata.map(h => {
       return mrCode1.push(h.mrCode)
@@ -167,10 +173,10 @@ const AssyMaterialRequest = ({ type }) => {
       return status1.push(h.completed)
     })
   }
-  
+
   const distinct = (value, index, self) => {
     // return self.indexOf(value) === index
-    return value !== null && value !== undefined && value !== "" && self.indexOf(value) === index;
+    return value !== null && value !== undefined && value !== '' && self.indexOf(value) === index
   }
   const mrCode2 = mrCode1.filter(distinct)
   const requestType2 = requestType1.filter(distinct)
@@ -298,7 +304,7 @@ const AssyMaterialRequest = ({ type }) => {
 
   const distinct1 = (value, index, self) => {
     // return self.indexOf(value) === index
-    return value !== null && value !== undefined && value !== "" && self.indexOf(value) === index;
+    return value !== null && value !== undefined && value !== '' && self.indexOf(value) === index
   }
 
   const partNumber2 = partNumber1.filter(distinct1)
@@ -314,7 +320,8 @@ const AssyMaterialRequest = ({ type }) => {
 
     return dtlTabledata
       .map(item => item[key])
-      .filter(distinct1).sort((a, b) => a.localeCompare(b))
+      .filter(distinct1)
+      .sort((a, b) => a.localeCompare(b))
       .map(value => ({
         text: value,
         value,
@@ -566,26 +573,30 @@ const AssyMaterialRequest = ({ type }) => {
         </div>
         {/* {hdrTabledata && hdrTabledata.length > 0 ? ( */}
         <div>
-          <Table
-            columns={columns}
-            dataSource={hdrTabledata}
-            exportableProps={{
-              fileName: `Material_Requet_${currentDateTime}`,
-              btnProps: {
-                type: 'primary',
-                icon: <FileExcelOutlined />,
-                children: <span>Export to CSV</span>,
-              },
-            }}
-            bordered
-            pagination={{
-              pageSizeOptions: ['10', '20', '30', '50', [hdrTabledata?.length]],
-              showSizeChanger: true,
-              defaultPageSize: 10,
-            }}
-            scroll={{ y: 400 }}
-            onChange={handleChange}
-          />
+          {loading ? (
+            <Skeleton active paragraph={{ rows: 6 }} />
+          ) : (
+            <Table
+              columns={columns}
+              dataSource={hdrTabledata}
+              exportableProps={{
+                fileName: `Material_Requet_${currentDateTime}`,
+                btnProps: {
+                  type: 'primary',
+                  icon: <FileExcelOutlined />,
+                  children: <span>Export to CSV</span>,
+                },
+              }}
+              bordered
+              pagination={{
+                pageSizeOptions: ['10', '20', '30', '50', [hdrTabledata?.length]],
+                showSizeChanger: true,
+                defaultPageSize: 10,
+              }}
+              scroll={{ y: 400 }}
+              onChange={handleChange}
+            />
+          )}
           <center className="mt-3">
             <Button text="Back" onClick={handleBackClick} />
           </center>

@@ -1,7 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react'
 // import validator from 'validator'
 import moment from 'moment'
-import { Card, message, Button, Form, Input, Select, AutoComplete, DatePicker, Upload } from 'antd'
+import {
+  Card,
+  message,
+  Button,
+  Form,
+  Input,
+  Select,
+  AutoComplete,
+  DatePicker,
+  Upload,
+  Skeleton,
+} from 'antd'
 import { Table } from 'ant-table-extensions'
 import { useHistory } from 'react-router-dom'
 import { PlusOutlined, FileExcelOutlined, UploadOutlined } from '@ant-design/icons'
@@ -34,6 +45,7 @@ const VendorMater = () => {
   const [vendorForm] = Form.useForm()
   const { Option } = Select
   const [vendorTab, setvendorTab] = useState([])
+  const [loading, setLoading] = useState(true)
   const [insertVendorvisible, setinsertVendorvisible] = useState(false)
   const [vendordtlvisible, setvendordtlvisible] = useState(false)
   const [btndisable, setBtndisable] = useState(false)
@@ -1256,27 +1268,32 @@ const VendorMater = () => {
 
   const getvendor = async () => {
     // const formData = form.getFieldsValue()
-    const response = await indentFileUpload({
-      requestPath: 'getApprVendorDtls',
-      requestData: {
-        tenantId,
-        approved: '1',
-      },
-    })
-    if (response?.responseCode === '200') {
-      const updatedData = response?.responseData.map((data, ind) => {
-        return {
-          ...data,
-          sno: ind + 1,
-        }
+    setLoading(true)
+    try {
+      const response = await indentFileUpload({
+        requestPath: 'getApprVendorDtls',
+        requestData: {
+          tenantId,
+          approved: '1',
+        },
       })
-      setvendorTab(updatedData)
-      setfilteredvendor(response?.responseData)
-      // message.success(response?.responseMessage)
-    } else {
-      message.error(response?.responseMessage)
-      setvendorTab([])
-      setfilteredvendor([])
+      if (response?.responseCode === '200') {
+        const updatedData = response?.responseData.map((data, ind) => {
+          return {
+            ...data,
+            sno: ind + 1,
+          }
+        })
+        setvendorTab(updatedData)
+        setfilteredvendor(response?.responseData)
+        // message.success(response?.responseMessage)
+      } else {
+        message.error(response?.responseMessage)
+        setvendorTab([])
+        setfilteredvendor([])
+      }
+    } finally {
+      setLoading(false)
     }
   }
   // const handleSearch = e => {
@@ -1351,17 +1368,21 @@ const VendorMater = () => {
         >
           Export to CSV
         </Button>
-        <Table
-          columns={column}
-          dataSource={vendorTab}
-          pagination={{
-            pageSizeOptions: ['10', '20', '30', '50', [vendorTab?.length]],
-            showSizeChanger: true,
-            defaultPageSize: 10,
-          }}
-          scroll={{ y: 400 }}
-          onChange={handleChange}
-        />
+        {loading ? (
+          <Skeleton active paragraph={{ rows: 8 }} />
+        ) : (
+          <Table
+            columns={column}
+            dataSource={vendorTab}
+            pagination={{
+              pageSizeOptions: ['10', '20', '30', '50', [vendorTab?.length]],
+              showSizeChanger: true,
+              defaultPageSize: 10,
+            }}
+            scroll={{ y: 400 }}
+            onChange={handleChange}
+          />
+        )}
         {insertVendorvisible ? (
           <ModalPopup
             text="New Vendor"

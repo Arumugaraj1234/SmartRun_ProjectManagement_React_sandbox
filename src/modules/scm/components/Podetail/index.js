@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Divider, Row, Button, Space, message, Select, Input } from 'antd'
+import { Card, Divider, Row, Button, Space, message, Select, Input, Skeleton } from 'antd'
 import { Table } from 'ant-table-extensions'
 import {
   FileExcelOutlined,
@@ -56,6 +56,7 @@ const Podetail = ({ isTailview }) => {
   const [singleRecord, setSingleRecord] = useState(null)
   const [pjsModalVisible, setPJSModalVisible] = useState(false)
   const isInternal = store.get('isInternal')
+  const [loading, setLoading] = useState(true)
 
   // eslint-disable-next-line no-unused-vars
 
@@ -85,53 +86,58 @@ const Podetail = ({ isTailview }) => {
   const getpotable = async formData => {
     // setLocalview(false)
     // setImportview(false)
-    if (formData) {
-      if (formData.IndentCode && formData.Projectcode) {
-        const IndentDetailsobj = {
-          tenantId,
-          hdrId: formData.IndentCode,
-          projectId: formData.Projectcode,
-        }
-        const response = await indentFileUpload({
-          requestPath: 'getPoHdrDtlsByIndentId',
-          requestData: IndentDetailsobj,
-        })
-        if (response) {
-          if (response.responseData.length > 0) {
-            const updatedData = response.responseData.map((item, index) => {
-              let poTypeText = ''
-              switch (item.poType) {
-                case '1':
-                  poTypeText = 'Domestic'
-                  break
-                case '2':
-                  poTypeText = 'Import'
-                  break
-                case '3':
-                  poTypeText = 'Service'
-                  break
-                default:
-                  poTypeText = ''
-              }
-
-              return {
-                ...item,
-                sno: index + 1,
-                poTypeText,
-                praStatus: item.praStatus,
-              }
-            })
-            setPoTable(updatedData)
-          } else {
-            message.error(response?.responseMessage)
-            setPoTable([])
+    setLoading(true)
+    try {
+      if (formData) {
+        if (formData.IndentCode && formData.Projectcode) {
+          const IndentDetailsobj = {
+            tenantId,
+            hdrId: formData.IndentCode,
+            projectId: formData.Projectcode,
           }
+          const response = await indentFileUpload({
+            requestPath: 'getPoHdrDtlsByIndentId',
+            requestData: IndentDetailsobj,
+          })
+          if (response) {
+            if (response.responseData.length > 0) {
+              const updatedData = response.responseData.map((item, index) => {
+                let poTypeText = ''
+                switch (item.poType) {
+                  case '1':
+                    poTypeText = 'Domestic'
+                    break
+                  case '2':
+                    poTypeText = 'Import'
+                    break
+                  case '3':
+                    poTypeText = 'Service'
+                    break
+                  default:
+                    poTypeText = ''
+                }
+
+                return {
+                  ...item,
+                  sno: index + 1,
+                  poTypeText,
+                  praStatus: item.praStatus,
+                }
+              })
+              setPoTable(updatedData)
+            } else {
+              message.error(response?.responseMessage)
+              setPoTable([])
+            }
+          }
+        } else {
+          await onloadRetrivedata()
         }
       } else {
-        onloadRetrivedata()
+        await onloadRetrivedata()
       }
-    } else {
-      onloadRetrivedata()
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -162,9 +168,9 @@ const Podetail = ({ isTailview }) => {
               sno: ind + 1,
             }
           })
-          const matchedRecord = updatedData.find(
-            item => String(item.igHdrId) === String(formData.igHdrId)
-          )
+        const matchedRecord = updatedData.find(
+          item => String(item.igHdrId) === String(formData.igHdrId),
+        )
         setPoTable1(matchedRecord)
       } else {
         messageReturn(619)
@@ -175,45 +181,50 @@ const Podetail = ({ isTailview }) => {
   const onloadRetrivedata = async () => {
     // setLocalview(false)
     // setImportview(false)
-    const IndentDetailsobj = {
-      tenantId,
-      hdrId: 'getAll',
-      projectId: ProjectID,
-    }
-    const response = await indentFileUpload({
-      requestPath: 'getPoHdrDtlsByIndentId',
-      requestData: IndentDetailsobj,
-    })
-    if (response) {
-      if (response.responseData.length > 0) {
-        const updatedData = response.responseData.map((item, index) => {
-          let poTypeText = ''
-          switch (item.poType) {
-            case '1':
-              poTypeText = 'Domestic'
-              break
-            case '2':
-              poTypeText = 'Import'
-              break
-            case '3':
-              poTypeText = 'Service'
-              break
-            default:
-              poTypeText = ''
-          }
-
-          return {
-            ...item,
-            sno: index + 1,
-            poTypeText,
-            praStatus: item.praStatus,
-          }
-        })
-        setPoTable(updatedData)
-      } else {
-        message.error(response?.responseMessage)
-        setPoTable([])
+    setLoading(true)
+    try {
+      const IndentDetailsobj = {
+        tenantId,
+        hdrId: 'getAll',
+        projectId: ProjectID,
       }
+      const response = await indentFileUpload({
+        requestPath: 'getPoHdrDtlsByIndentId',
+        requestData: IndentDetailsobj,
+      })
+      if (response) {
+        if (response.responseData.length > 0) {
+          const updatedData = response.responseData.map((item, index) => {
+            let poTypeText = ''
+            switch (item.poType) {
+              case '1':
+                poTypeText = 'Domestic'
+                break
+              case '2':
+                poTypeText = 'Import'
+                break
+              case '3':
+                poTypeText = 'Service'
+                break
+              default:
+                poTypeText = ''
+            }
+
+            return {
+              ...item,
+              sno: index + 1,
+              poTypeText,
+              praStatus: item.praStatus,
+            }
+          })
+          setPoTable(updatedData)
+        } else {
+          message.error(response?.responseMessage)
+          setPoTable([])
+        }
+      }
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -780,7 +791,9 @@ const Podetail = ({ isTailview }) => {
         )}
 
         <Row>
-          {potabel.length > 0 ? <Divider orientation="left">Purchase Order Detail</Divider> : null}
+          {!loading && potabel.length > 0 ? (
+            <Divider orientation="left">Purchase Order Detail</Divider>
+          ) : null}
         </Row>
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <Input.Search
@@ -791,7 +804,9 @@ const Podetail = ({ isTailview }) => {
             style={{ width: 450 }}
           />
         </div>
-        {potabel.length > 0 ? (
+        {loading ? (
+          <Skeleton active paragraph={{ rows: 8 }} />
+        ) : potabel.length > 0 ? (
           <div>
             <Table
               columns={columns}

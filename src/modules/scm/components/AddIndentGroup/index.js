@@ -1,6 +1,6 @@
 /* eslint-disable eqeqeq */
 import React, { useState, useEffect } from 'react'
-import { Form, DatePicker, message, Input, Select } from 'antd'
+import { Form, DatePicker, message, Input, Select, Spin } from 'antd'
 import store from 'store'
 import moment from 'moment'
 import ButtonComponent from 'components/shared/ButtonComponent'
@@ -124,62 +124,63 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
 
   const handleinsertSubmit = async () => {
     setDisableSubmitButton(true)
-    const formvalues = allqtyForm.getFieldValue()
+    try {
+      const formvalues = allqtyForm.getFieldValue()
 
-    const updatedTableData = indentTable.map((item, index) => {
-      return {
-        ...item,
-        allocateQty: formvalues[`allocateqty${index}`],
-      }
-    })
-    const filteredData = updatedTableData.filter(
-      item => item.allocateQty !== '' && item.allocateQty !== '0',
-    )
-    const formValues = form.getFieldsValue()
-    const grpname = formValues.groupname
-    const inventory = formValues.isInventory
-
-    // const fromdate = moment(formValues.FromDate).format('YYYY-MM-DD')
-    // const todate = moment(formValues.ToDate).format('YYYY-MM-DD')
-    // const projectCode = formValues.Projectcode
-
-    const newArray = filteredData.map(item => ({
-      indentDtlId: item.indentDtlId,
-      inventory: item.allocateQty,
-      qty: item.allocateQty,
-      tenantId,
-
-      // Add other properties if needed
-    }))
-    const props = {
-      createdBy: employeeId,
-      groupName: grpname,
-      insrtGrpDtl: newArray,
-      lastUpdatedBy: employeeId,
-      tenantId,
-      isInventory: inventory,
-    }
-    if (newArray.length > 0) {
-      const httpinsert = await IndentGroupgetDetails({
-        requestPath: 'insertTempGrup',
-        requestData: props,
+      const updatedTableData = indentTable.map((item, index) => {
+        return {
+          ...item,
+          allocateQty: formvalues[`allocateqty${index}`],
+        }
       })
-      if (httpinsert.responseCode === '200') {
-        message.success(httpinsert.responseMessage)
-        setDisableSubmitButton(false)
-        submit(
-          indentId || formValues.IndentCode,
-          formValues.FromDate,
-          formValues.ToDate,
-          formValues.Projectcode,
-          isTailview,
-        )
-      } else {
-        message.error(httpinsert.responseMessage)
-        setDisableSubmitButton(false)
+      const filteredData = updatedTableData.filter(
+        item => item.allocateQty !== '' && item.allocateQty !== '0',
+      )
+      const formValues = form.getFieldsValue()
+      const grpname = formValues.groupname
+      const inventory = formValues.isInventory
+
+      // const fromdate = moment(formValues.FromDate).format('YYYY-MM-DD')
+      // const todate = moment(formValues.ToDate).format('YYYY-MM-DD')
+      // const projectCode = formValues.Projectcode
+
+      const newArray = filteredData.map(item => ({
+        indentDtlId: item.indentDtlId,
+        inventory: item.allocateQty,
+        qty: item.allocateQty,
+        tenantId,
+
+        // Add other properties if needed
+      }))
+      const props = {
+        createdBy: employeeId,
+        groupName: grpname,
+        insrtGrpDtl: newArray,
+        lastUpdatedBy: employeeId,
+        tenantId,
+        isInventory: inventory,
       }
-    } else {
-      messageReturn(661)
+      if (newArray.length > 0) {
+        const httpinsert = await IndentGroupgetDetails({
+          requestPath: 'insertTempGrup',
+          requestData: props,
+        })
+        if (httpinsert.responseCode === '200') {
+          message.success(httpinsert.responseMessage)
+          submit(
+            indentId || formValues.IndentCode,
+            formValues.FromDate,
+            formValues.ToDate,
+            formValues.Projectcode,
+            isTailview,
+          )
+        } else {
+          message.error(httpinsert.responseMessage)
+        }
+      } else {
+        messageReturn(661)
+      }
+    } finally {
       setDisableSubmitButton(false)
     }
   }
@@ -462,188 +463,195 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
 
   const FieldsComponent = () => {
     return (
-      <div>
-        <Form form={form}>
-          <div className="row">
-            {/* { isTailview ? (
-              <Row gutter={24}> */}
-            <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
-              <Form.Item
-                name="FromDate"
-                label={
-                  <span>
-                    From Date<span style={{ color: 'red' }}>*</span>{' '}
-                  </span>
-                }
-                initialValue={moment(defaultFromDate)}
-              >
-                <DatePicker
-                  style={{ width: '100%' }}
-                  disabled
-                  onChange={fromdateChange}
-                  format="DD-MMM-YYYY"
-                />
-              </Form.Item>
-            </div>
-            <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
-              <Form.Item
-                name="ToDate"
-                label={
-                  <span>
-                    To Date<span style={{ color: 'red' }}>*</span>{' '}
-                  </span>
-                }
-                initialValue={moment(defaultToDate)}
-              >
-                <DatePicker
-                  style={{ width: '100%' }}
-                  disabled
-                  onChange={toDateChange}
-                  format="DD-MMM-YYYY"
-                />
-              </Form.Item>
-            </div>
-            <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
-              <Form.Item
-                name="Projectcode"
-                label={
-                  <span>
-                    Project<span style={{ color: 'red' }}>*</span>{' '}
-                  </span>
-                }
-              >
-                <Select
-                  style={{ width: '100%' }}
-                  placeholder="Select Project"
-                  onChange={ProjId => getIndentList(ProjId)}
-                  disabled={isTailview}
-                  showSearch
-                  filterOption={(input, option) =>
-                    option.children
-                      .toString()
-                      .toUpperCase()
-                      .indexOf(input.toUpperCase()) !== -1
+      // Covers the whole Create Indent Group form/table while Submit is in flight.
+      <Spin spinning={disableSubmitButton} size="large" tip="Please wait...">
+        <div>
+          <Form form={form}>
+            <div className="row">
+              {/* { isTailview ? (
+                <Row gutter={24}> */}
+              <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                <Form.Item
+                  name="FromDate"
+                  label={
+                    <span>
+                      From Date<span style={{ color: 'red' }}>*</span>{' '}
+                    </span>
+                  }
+                  initialValue={moment(defaultFromDate)}
+                >
+                  <DatePicker
+                    style={{ width: '100%' }}
+                    disabled
+                    onChange={fromdateChange}
+                    format="DD-MMM-YYYY"
+                  />
+                </Form.Item>
+              </div>
+              <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                <Form.Item
+                  name="ToDate"
+                  label={
+                    <span>
+                      To Date<span style={{ color: 'red' }}>*</span>{' '}
+                    </span>
+                  }
+                  initialValue={moment(defaultToDate)}
+                >
+                  <DatePicker
+                    style={{ width: '100%' }}
+                    disabled
+                    onChange={toDateChange}
+                    format="DD-MMM-YYYY"
+                  />
+                </Form.Item>
+              </div>
+              <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                <Form.Item
+                  name="Projectcode"
+                  label={
+                    <span>
+                      Project<span style={{ color: 'red' }}>*</span>{' '}
+                    </span>
                   }
                 >
-                  {projectList?.map(item => (
-                    <Option key={item.projectId} value={item.projectId}>
-                      {item.projectCode}-{item.customerName}
-                    </Option>
-                  ))}
-                </Select>
-              </Form.Item>
-            </div>
-            <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
-              <Form.Item
-                name="IndentCode"
-                label={
-                  <span>
-                    Indent<span style={{ color: 'red' }}>*</span>{' '}
-                  </span>
-                }
-              >
-                <Select
-                  style={{ width: '100%' }}
-                  placeholder="Select Indent"
-                  onChange={(value, option) => handleDueDate(value, option)}
-                >
-                  {indentList?.map(item => (
-                    <Option
-                      key={item.indentId}
-                      expectedDeliveryDate={item.expectedDeliveryDate}
-                      value={item.indentId}
-                    >
-                      {item.indentCode}
-                    </Option>
-                  ))}
-                </Select>
-              </Form.Item>
-            </div>
-
-            <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
-              <Form.Item
-                name="duedate"
-                label={
-                  <span>
-                    Due Date<span style={{ color: 'red' }}>*</span>{' '}
-                  </span>
-                }
-              >
-                <DatePicker style={{ width: '100%' }} disabled />
-              </Form.Item>
-            </div>
-            <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
-              <Form.Item
-                name="isInventory"
-                label={
-                  <span>
-                    Stock Availability<span style={{ color: 'red' }}>*</span>{' '}
-                  </span>
-                }
-              >
-                <Select style={{ width: '100%' }} placeholder="Select Inventory">
-                  <Option key="1" value="1">
-                    Yes
-                  </Option>
-                  <Option key="2" value="0">
-                    No
-                  </Option>
-                </Select>
-              </Form.Item>
-            </div>
-            <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
-              <Form.Item
-                name="groupname"
-                label={
-                  <span>
-                    Group Name<span style={{ color: 'red' }}>*</span>{' '}
-                  </span>
-                }
-              >
-                <InputComponent placeholder="Type Group Name" />
-              </Form.Item>
-            </div>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <ButtonComponent text="Get Details" type="primary" onClick={() => handleInsertData()} />
-          </div>
-        </Form>
-        <div className="custom_antd_Table">
-          {indentTable.length > 0 ? (
-            <>
-              <div style={{ marginBottom: '10px' }}>
-                <ButtonComponent
-                  text="Allocate All"
-                  type="primary"
-                  onClick={() => handleAllocateRow()}
-                />
-                <span style={{ margin: '0 8px' }} />
-                <ButtonComponent
-                  text="Unallocate All"
-                  type="primary"
-                  onClick={() => handleUnAllocateRow()}
-                />
+                  <Select
+                    style={{ width: '100%' }}
+                    placeholder="Select Project"
+                    onChange={ProjId => getIndentList(ProjId)}
+                    disabled={isTailview}
+                    showSearch
+                    filterOption={(input, option) =>
+                      option.children
+                        .toString()
+                        .toUpperCase()
+                        .indexOf(input.toUpperCase()) !== -1
+                    }
+                  >
+                    {projectList?.map(item => (
+                      <Option key={item.projectId} value={item.projectId}>
+                        {item.projectCode}-{item.customerName}
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
               </div>
-              {/* <TableComponent
-                scrollY={700}
-                columns={insertcolumns}
-                data={indentTable}
-                page={false}
-              /> */}
-              <Form form={allqtyForm}>
-                <Table
+              <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                <Form.Item
+                  name="IndentCode"
+                  label={
+                    <span>
+                      Indent<span style={{ color: 'red' }}>*</span>{' '}
+                    </span>
+                  }
+                >
+                  <Select
+                    style={{ width: '100%' }}
+                    placeholder="Select Indent"
+                    onChange={(value, option) => handleDueDate(value, option)}
+                  >
+                    {indentList?.map(item => (
+                      <Option
+                        key={item.indentId}
+                        expectedDeliveryDate={item.expectedDeliveryDate}
+                        value={item.indentId}
+                      >
+                        {item.indentCode}
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              </div>
+
+              <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                <Form.Item
+                  name="duedate"
+                  label={
+                    <span>
+                      Due Date<span style={{ color: 'red' }}>*</span>{' '}
+                    </span>
+                  }
+                >
+                  <DatePicker style={{ width: '100%' }} disabled />
+                </Form.Item>
+              </div>
+              <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                <Form.Item
+                  name="isInventory"
+                  label={
+                    <span>
+                      Stock Availability<span style={{ color: 'red' }}>*</span>{' '}
+                    </span>
+                  }
+                >
+                  <Select style={{ width: '100%' }} placeholder="Select Inventory">
+                    <Option key="1" value="1">
+                      Yes
+                    </Option>
+                    <Option key="2" value="0">
+                      No
+                    </Option>
+                  </Select>
+                </Form.Item>
+              </div>
+              <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                <Form.Item
+                  name="groupname"
+                  label={
+                    <span>
+                      Group Name<span style={{ color: 'red' }}>*</span>{' '}
+                    </span>
+                  }
+                >
+                  <InputComponent placeholder="Type Group Name" />
+                </Form.Item>
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <ButtonComponent
+                text="Get Details"
+                type="primary"
+                onClick={() => handleInsertData()}
+              />
+            </div>
+          </Form>
+          <div className="custom_antd_Table">
+            {indentTable.length > 0 ? (
+              <>
+                <div style={{ marginBottom: '10px' }}>
+                  <ButtonComponent
+                    text="Allocate All"
+                    type="primary"
+                    onClick={() => handleAllocateRow()}
+                  />
+                  <span style={{ margin: '0 8px' }} />
+                  <ButtonComponent
+                    text="Unallocate All"
+                    type="primary"
+                    onClick={() => handleUnAllocateRow()}
+                  />
+                </div>
+                {/* <TableComponent
+                  scrollY={700}
                   columns={insertcolumns}
-                  dataSource={indentTable}
-                  scroll={{ y: 700 }}
-                  onChange={handleChange}
-                  pagination={false}
-                  rowKey="sno"
-                />
-              </Form>
-            </>
-          ) : null}
+                  data={indentTable}
+                  page={false}
+                /> */}
+                <Form form={allqtyForm}>
+                  <Table
+                    columns={insertcolumns}
+                    dataSource={indentTable}
+                    scroll={{ y: 700 }}
+                    onChange={handleChange}
+                    pagination={false}
+                    rowKey="sno"
+                  />
+                </Form>
+              </>
+            ) : null}
+          </div>
         </div>
-      </div>
+      </Spin>
     )
   }
 
@@ -664,6 +672,7 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
               marginright="10px"
               onClick={handleinsertSubmit}
               disable={disableSubmitButton}
+              loading={disableSubmitButton}
             />
             <ButtonComponent
               text="Cancel"
@@ -671,6 +680,7 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
               onClick={() => {
                 handleCancel()
               }}
+              disable={disableSubmitButton}
             />
           </>
         ) : null}
@@ -685,8 +695,12 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
       FieldsComponent={FieldsComponent}
       text="Create Indent Group"
       onCancel={() => {
+        // Mask click / X / Esc all route through here — ignore them while Submit is
+        // in flight so the form can't be dismissed mid-request.
+        if (disableSubmitButton) return
         handleCancel()
       }}
+      maskClosable={!disableSubmitButton}
       width="900"
     />
   )

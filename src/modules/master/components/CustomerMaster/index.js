@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 // import validator from 'validator'
-import { Card, message, Row, Col, Form, Input, Select, Button } from 'antd'
+import { Card, message, Row, Col, Form, Input, Select, Button, Skeleton } from 'antd'
 import { Table } from 'ant-table-extensions'
 import { useMediaQuery } from 'react-responsive'
 import store from 'store'
@@ -13,6 +13,7 @@ const VendorMater = () => {
   const { Option } = Select
   const tenantID = store.get('tenantId')
   const [vendorTab, setVendorTab] = useState([])
+  const [loading, setLoading] = useState(true)
   const [editingKey, setEditingKey] = useState(null)
   const [editedData, setEditedData] = useState({})
   const [insertVendorvisible, setinsertVendorvisible] = useState(false)
@@ -385,20 +386,25 @@ const VendorMater = () => {
 
   const getvendor = async () => {
     // const formData = form.getFieldsValue()
-    const response = await indentFileUpload({
-      requestPath: 'getAllCustomerDtl',
-      requestData: {
-        tenantID,
-      },
-    })
-    if (response?.responseCode === '200') {
-      setVendorTab(response?.responseData)
-      setfilteredvendor(response?.responseData)
-      // message.success(response?.responseMessage)
-    } else {
-      message.error(response?.responseMessage)
-      setVendorTab([])
-      setfilteredvendor([])
+    setLoading(true)
+    try {
+      const response = await indentFileUpload({
+        requestPath: 'getAllCustomerDtl',
+        requestData: {
+          tenantID,
+        },
+      })
+      if (response?.responseCode === '200') {
+        setVendorTab(response?.responseData)
+        setfilteredvendor(response?.responseData)
+        // message.success(response?.responseMessage)
+      } else {
+        message.error(response?.responseMessage)
+        setVendorTab([])
+        setfilteredvendor([])
+      }
+    } finally {
+      setLoading(false)
     }
   }
   const isEditing = record => record.key === editingKey
@@ -456,16 +462,20 @@ const VendorMater = () => {
           // onSearch={handleSearch}
           onChange={e => handleSearch(e)}
         />
-        <Table
-          columns={columns}
-          dataSource={vendorTab.map((item, index) => ({ ...item, key: index }))}
-          pagination={{
-            pageSizeOptions: ['10', '20', '30', '50', [vendorTab?.length]],
-            showSizeChanger: true,
-            defaultPageSize: 10,
-          }}
-          scroll={{ y: 400 }}
-        />
+        {loading ? (
+          <Skeleton active paragraph={{ rows: 8 }} />
+        ) : (
+          <Table
+            columns={columns}
+            dataSource={vendorTab.map((item, index) => ({ ...item, key: index }))}
+            pagination={{
+              pageSizeOptions: ['10', '20', '30', '50', [vendorTab?.length]],
+              showSizeChanger: true,
+              defaultPageSize: 10,
+            }}
+            scroll={{ y: 400 }}
+          />
+        )}
         {insertVendorvisible ? (
           <ModalPopup
             text="New Vendor"

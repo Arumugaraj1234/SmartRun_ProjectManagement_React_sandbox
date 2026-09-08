@@ -139,33 +139,36 @@ const MaterialReturn = () => {
   }
 
   const getMaterialRetrnDetls = async projectCode => {
-    const response = await indentFileUpload({
-      requestPath: 'mrHdrRetrieve',
-      requestData: {
-        tenantId,
-        // hdrId: '42',
-        empId: employeeId,
-        hdrId: projectCode,
-      },
-    })
-    const data = response.responseData
-    setMatrlRetrnDtls(() =>
-      data.map(e => ({
-        ...e,
-        createdOn: e.createdOn !== null ? dateformatter(e.createdOn) : ' ',
-        lastUpdatedBy: e.lastUpdatedBy !== null ? dateformatter(e.lastUpdatedBy) : ' ',
-      })),
-    )
-    setfilteredmaterial(() =>
-      data.map(e => ({
-        ...e,
-        createdOn: e.createdOn !== null ? dateformatter(e.createdOn) : ' ',
-        lastUpdatedBy: e.lastUpdatedBy !== null ? dateformatter(e.lastUpdatedBy) : ' ',
-      })),
-    )
-    setMaterialRetrnTableLoader(false)
-    setCancelBtnStatus(false)
-    setApproveBtnStatus(false)
+    try {
+      const response = await indentFileUpload({
+        requestPath: 'mrHdrRetrieve',
+        requestData: {
+          tenantId,
+          // hdrId: '42',
+          empId: employeeId,
+          hdrId: projectCode,
+        },
+      })
+      const data = response?.responseData || []
+      setMatrlRetrnDtls(() =>
+        data.map(e => ({
+          ...e,
+          createdOn: e.createdOn !== null ? dateformatter(e.createdOn) : ' ',
+          lastUpdatedBy: e.lastUpdatedBy !== null ? dateformatter(e.lastUpdatedBy) : ' ',
+        })),
+      )
+      setfilteredmaterial(() =>
+        data.map(e => ({
+          ...e,
+          createdOn: e.createdOn !== null ? dateformatter(e.createdOn) : ' ',
+          lastUpdatedBy: e.lastUpdatedBy !== null ? dateformatter(e.lastUpdatedBy) : ' ',
+        })),
+      )
+      setCancelBtnStatus(false)
+      setApproveBtnStatus(false)
+    } finally {
+      setMaterialRetrnTableLoader(false)
+    }
   }
 
   const getReqstMngmntDtls = () => {
@@ -706,8 +709,7 @@ const MaterialReturn = () => {
             No. of Products : <span style={{ fontWeight: 'bold' }}>{noofProdcts}</span>{' '}
           </div>
           <div className="col-md-4 col-lg-2 col-xl-3 col-sm-4">
-            Last Upated By :{' '}
-            <span style={{ fontWeight: 'bold' }}>{dateformatter(lastUpdtBy)}</span>{' '}
+            Last Upated By : <span style={{ fontWeight: 'bold' }}>{dateformatter(lastUpdtBy)}</span>{' '}
           </div>
           <div className="col-md-4 col-lg-2 col-xl-2 col-sm-4">
             Status : <span style={{ fontWeight: 'bold' }}>{StatusVal}</span>{' '}

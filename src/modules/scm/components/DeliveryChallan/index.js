@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import store from 'store'
 import moment from 'moment'
-import { Card, Table, message } from 'antd'
+import { Card, Table, message, Skeleton } from 'antd'
 import { PlusOutlined, DownloadOutlined } from '@ant-design/icons'
 import ButtonComponent from 'components/shared/ButtonComponent'
 import { useMediaQuery } from 'react-responsive'
@@ -17,6 +17,7 @@ const DeliveryChallan = () => {
 
   const [createModal, setCreateModal] = useState(false)
   const [tableData, setTabledata] = useState([])
+  const [loading, setLoading] = useState(false)
   const [detailpopup, setDetailpopup] = useState(false)
   const [singleDetails, setSingleDetails] = useState(null)
   const [formdatas, setFormdatas] = useState(null)
@@ -330,18 +331,23 @@ const DeliveryChallan = () => {
 
   const getDetails = async data => {
     if (data.Projectcode) {
-      const response = await indentFileUpload({
-        requestPath: 'getAllDcHdrByPmId',
-        requestData: {
-          tenantId,
-          pmHdrId: data.Projectcode,
-        },
-      })
-      if (response?.responseCode === '200') {
-        setTabledata(response?.responseData || [])
-      } else {
-        setTabledata([])
-        message.error(response?.responseMessage)
+      setLoading(true)
+      try {
+        const response = await indentFileUpload({
+          requestPath: 'getAllDcHdrByPmId',
+          requestData: {
+            tenantId,
+            pmHdrId: data.Projectcode,
+          },
+        })
+        if (response?.responseCode === '200') {
+          setTabledata(response?.responseData || [])
+        } else {
+          setTabledata([])
+          message.error(response?.responseMessage)
+        }
+      } finally {
+        setLoading(false)
       }
     } else {
       messageReturn(405)
@@ -368,7 +374,9 @@ const DeliveryChallan = () => {
       >
         <DcFields onGetDetails={getDtls} onClear={handleClear} getAllEnable />
         <div style={{ marginTop: '20px' }}>
-          {tableData.length > 0 ? (
+          {loading ? (
+            <Skeleton active paragraph={{ rows: 6 }} />
+          ) : tableData.length > 0 ? (
             <div>
               <Table
                 columns={Columns}

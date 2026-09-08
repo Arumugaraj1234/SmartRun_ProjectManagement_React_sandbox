@@ -76,12 +76,22 @@ const DesignDashboard = () => {
     }
   }, [])
   useEffect(() => {
-    getProjectData()
-    getWidgetResponseCheck()
-    getPlannedProjectDtls()
-    getProjectActivityDtls()
-    getMonthwiseDataList()
-    getWeekwiseDataList()
+    const loadDashboard = async () => {
+      setLoading(true)
+      try {
+        await Promise.allSettled([
+          getProjectData(),
+          getWidgetResponseCheck(),
+          getPlannedProjectDtls(),
+          getProjectActivityDtls(),
+          getMonthwiseDataList(),
+          getWeekwiseDataList(),
+        ])
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadDashboard()
   }, [])
   const handlePageChange = (page, filters) => {
     setfilterinfo(filters)
@@ -268,10 +278,8 @@ const DesignDashboard = () => {
     })
     if (httpget.responseCode === '200') {
       setWeekWiseData(httpget.responseData)
-      setLoading(false)
     } else {
       setWeekWiseData([])
-      setLoading(false)
     }
   }
 

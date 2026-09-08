@@ -104,7 +104,6 @@ const ScmDashboard = () => {
 
   useEffect(() => {
     getOnloadservice()
-    setLoading(false)
   }, [])
 
   useEffect(() => {
@@ -127,21 +126,27 @@ const ScmDashboard = () => {
     setProject(opt.key)
   }
 
-  const getOnloadservice = () => {
+  const getOnloadservice = async () => {
     setLoading(true)
     setFilterCards(false)
-    getWidgetDetails()
-    getCostNegotiateValue()
-    getAvgInvAgingVal()
-    getInvValue()
-    getTableDataDtls()
-    getIndentToPO()
-    getProjectData()
-    getPieChartRespDtls()
-    getApprVendorDtls()
-    getVendorDetailHdrView()
-    getVendorPaymentDetails()
-    getVendorDetailDrillDown()
+    try {
+      await Promise.allSettled([
+        getWidgetDetails(),
+        getCostNegotiateValue(),
+        getAvgInvAgingVal(),
+        getInvValue(),
+        getTableDataDtls(),
+        getIndentToPO(),
+        getProjectData(),
+        getPieChartRespDtls(),
+        getApprVendorDtls(),
+        getVendorDetailHdrView(),
+        getVendorPaymentDetails(),
+        getVendorDetailDrillDown(),
+      ])
+    } finally {
+      setLoading(false)
+    }
   }
 
   const openFilterCard = () => {
@@ -162,7 +167,6 @@ const ScmDashboard = () => {
     if (response) {
       if (response.responseCode === '200') {
         setWidgetData(response?.responseData)
-        setLoading(false)
       }
     }
   }
@@ -175,7 +179,6 @@ const ScmDashboard = () => {
     if (response) {
       if (response.responseCode === '200') {
         setVendorData(response?.responseData)
-        setLoading(false)
       }
     }
   }
@@ -198,7 +201,6 @@ const ScmDashboard = () => {
     if (response) {
       if (response.responseCode === '200') {
         setVendorPaymentData(response?.responseData)
-        setLoading(false)
       } else {
         setVendorPaymentData([])
       }
@@ -223,7 +225,6 @@ const ScmDashboard = () => {
     if (response) {
       if (response.responseCode === '200') {
         setVendorTableData(response?.responseData)
-        setLoading(false)
       } else {
         setVendorTableData([])
       }
@@ -247,7 +248,6 @@ const ScmDashboard = () => {
     if (response) {
       if (response.responseCode === '200') {
         setVendorDetailsData(response?.responseData)
-        setLoading(false)
       } else {
         setVendorDetailsData([])
       }

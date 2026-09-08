@@ -11,6 +11,7 @@ import {
   message,
   Select,
   Checkbox,
+  Skeleton,
 } from 'antd'
 import { FileExcelOutlined, PlusOutlined } from '@ant-design/icons'
 import { Table } from 'ant-table-extensions'
@@ -50,6 +51,7 @@ const InventoryMaterialTransfer = () => {
   const [filtersinfo, setfilterinfo] = useState([])
   const [transferItems, setTransferItems] = useState([])
   const [loadingItems, setLoadingItems] = useState(false)
+  const [listLoading, setListLoading] = useState(false)
   const [selectedRowKeys, setSelectedRowKeys] = useState([])
   const [itemsTablePagination, setItemsTablePagination] = useState({ current: 1, pageSize: 20 })
   const [qtyCheckedKeys, setQtyCheckedKeys] = useState([])
@@ -109,20 +111,25 @@ const InventoryMaterialTransfer = () => {
 
   const getMaterialdtl = async () => {
     const formData = form.getFieldsValue()
-    const response = await indentFileUpload({
-      requestPath: 'retrieveinventoryMaterial',
-      requestData: {
-        tenantId,
-        fromDate: moment(formData.FromDate).format('YYYY-MM-DD'),
-        toDate: moment(formData.ToDate).format('YYYY-MM-DD'),
-      },
-    })
-    if (!isMountedRef.current) return
-    if (response?.responseCode === '200') {
-      setmaterialTable(response?.responseData)
-    } else {
-      message.error(response?.responseMessage)
-      setmaterialTable([])
+    setListLoading(true)
+    try {
+      const response = await indentFileUpload({
+        requestPath: 'retrieveinventoryMaterial',
+        requestData: {
+          tenantId,
+          fromDate: moment(formData.FromDate).format('YYYY-MM-DD'),
+          toDate: moment(formData.ToDate).format('YYYY-MM-DD'),
+        },
+      })
+      if (!isMountedRef.current) return
+      if (response?.responseCode === '200') {
+        setmaterialTable(response?.responseData)
+      } else {
+        message.error(response?.responseMessage)
+        setmaterialTable([])
+      }
+    } finally {
+      if (isMountedRef.current) setListLoading(false)
     }
   }
   const getprojectdropdown = async () => {
@@ -1277,7 +1284,9 @@ const InventoryMaterialTransfer = () => {
             </Button>
           </div>
         </Form>
-        {materialTable && materialTable.length > 0 ? (
+        {listLoading ? (
+          <Skeleton active paragraph={{ rows: 6 }} style={{ marginTop: '16px' }} />
+        ) : materialTable && materialTable.length > 0 ? (
           <div>
             <Row>
               <Divider orientation="left">Material Transfer Details</Divider>

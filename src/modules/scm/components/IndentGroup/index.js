@@ -578,6 +578,7 @@ const IndentGroupComponent = ({ isTailview }) => {
   }
 
   const indentCode1 = []
+  const pjsRefNo1 = []
   const expectedDeliveryDate1 = []
   const scsStatus1 = []
   const pjsCreatedPerson1 = []
@@ -595,6 +596,9 @@ const IndentGroupComponent = ({ isTailview }) => {
   })
   hdretrievedata.map(h => {
     return indentCode1.push(h.indentCode)
+  })
+  hdretrievedata.map(h => {
+    return pjsRefNo1.push(h.pjsRefNo)
   })
   hdretrievedata.map(h => {
     return expectedDeliveryDate1.push(h.expectedDeliveryDate)
@@ -635,6 +639,7 @@ const IndentGroupComponent = ({ isTailview }) => {
     return self.indexOf(value) === index
   }
   const indentCode2 = indentCode1.filter(distinct)
+  const pjsRefNo2 = pjsRefNo1.filter(distinct)
   const expectedDeliveryDate2 = expectedDeliveryDate1.filter(distinct)
   const scsStatus2 = scsStatus1.filter(distinct)
   const pjsCreatedPerson2 = pjsCreatedPerson1.filter(distinct)
@@ -648,6 +653,7 @@ const IndentGroupComponent = ({ isTailview }) => {
   const type2 = type1.filter(distinct)
 
   const indentCode3 = []
+  const pjsRefNo3 = []
   const expectedDeliveryDate3 = []
   const scsStatus3 = []
   const pjsCreatedPerson3 = []
@@ -693,6 +699,31 @@ const IndentGroupComponent = ({ isTailview }) => {
         value: element,
       })
     })
+
+  pjsRefNo2
+    .filter(el => el != null && el !== '')
+    .sort((a, b) => {
+      const numA = parseInt(
+        String(a)
+          .split('/')
+          .pop(),
+        10,
+      )
+      const numB = parseInt(
+        String(b)
+          .split('/')
+          .pop(),
+        10,
+      )
+      if (!Number.isNaN(numA) && !Number.isNaN(numB) && numA !== numB) return numA - numB
+      return String(a).localeCompare(String(b))
+    })
+    .forEach(element =>
+      pjsRefNo3.push({
+        text: element,
+        value: element,
+      }),
+    )
   poStatus2
     .slice()
     .sort((a, b) => a?.localeCompare(b))
@@ -833,6 +864,10 @@ const IndentGroupComponent = ({ isTailview }) => {
       dataIndex: 'pjsRefNo',
       key: 'pjsRefNo',
       render: text => (text != null && text !== '' ? text : '-'),
+      filters: pjsRefNo3,
+      filteredValue: filtersinfo.pjsRefNo,
+      filterSearch: true,
+      onFilter: (value, record) => record?.pjsRefNo === value,
     },
     {
       title: 'Indent Type',

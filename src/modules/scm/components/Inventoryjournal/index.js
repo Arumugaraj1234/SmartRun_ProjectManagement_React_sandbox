@@ -1,6 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import store from 'store'
-import { Card, DatePicker, Button, Form, Row, message, Divider, Select, Input } from 'antd'
+import {
+  Card,
+  DatePicker,
+  Button,
+  Form,
+  Row,
+  message,
+  Divider,
+  Select,
+  Input,
+  Skeleton,
+} from 'antd'
 import moment from 'moment'
 import { Table } from 'ant-table-extensions'
 import { FileExcelOutlined } from '@ant-design/icons'
@@ -25,6 +36,7 @@ const Inventoryjournal = () => {
   const [tableWidth, setTableWidth] = useState('300px')
 
   const [isDisplay, setIsDisplay] = useState(false)
+  const [loading, setLoading] = useState(false)
   const currentYear = moment().year()
   const currentMonth = moment().month()
 
@@ -99,19 +111,24 @@ const Inventoryjournal = () => {
       tenantId,
     }
 
-    const response = await IndentGroupgetDetails({
-      requestPath: 'retrieveinventoryJournal',
-      requestData: reqdata,
-    })
+    setLoading(true)
+    try {
+      const response = await IndentGroupgetDetails({
+        requestPath: 'retrieveinventoryJournal',
+        requestData: reqdata,
+      })
 
-    if (response?.responseCode === '200') {
-      setInventoryTable(response?.responseData)
-      setFilterInventoryData(response?.responseData)
-      // message.success(response?.responseMessage)
-    } else {
-      message.error(response?.responseMessage)
-      setInventoryTable([])
-      setFilterInventoryData([])
+      if (response?.responseCode === '200') {
+        setInventoryTable(response?.responseData)
+        setFilterInventoryData(response?.responseData)
+        // message.success(response?.responseMessage)
+      } else {
+        message.error(response?.responseMessage)
+        setInventoryTable([])
+        setFilterInventoryData([])
+      }
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -612,34 +629,42 @@ const Inventoryjournal = () => {
                 <Divider orientation="left">Journal Details</Divider>
               </Row>
 
-              <div>
-                <Input.Search
-                  style={{ margin: '0 0 10px 0', width: isMobile ? '100%' : '30%', float: 'right' }}
-                  placeholder="Search here..."
-                  enterButton
-                  // onSearch={handleSearch}
-                  onChange={e => handleSearch(e)}
-                />
-                <Table
-                  columns={columns}
-                  dataSource={inventoryTable}
-                  exportableProps={{
-                    fileName: `Invertory_Journal_${currentDateTime}`,
-                    btnProps: {
-                      type: 'primary',
-                      icon: <FileExcelOutlined />,
-                      children: <span>Export to CSV</span>,
-                    },
-                  }}
-                  pagination={{
-                    pageSizeOptions: ['10', '20', '30', '50', [inventoryTable?.length]],
-                    showSizeChanger: true,
-                    defaultPageSize: 10,
-                  }}
-                  scroll={{ y: 400 }}
-                  onChange={handleChange}
-                />
-              </div>
+              {loading ? (
+                <Skeleton active paragraph={{ rows: 6 }} />
+              ) : (
+                <div>
+                  <Input.Search
+                    style={{
+                      margin: '0 0 10px 0',
+                      width: isMobile ? '100%' : '30%',
+                      float: 'right',
+                    }}
+                    placeholder="Search here..."
+                    enterButton
+                    // onSearch={handleSearch}
+                    onChange={e => handleSearch(e)}
+                  />
+                  <Table
+                    columns={columns}
+                    dataSource={inventoryTable}
+                    exportableProps={{
+                      fileName: `Invertory_Journal_${currentDateTime}`,
+                      btnProps: {
+                        type: 'primary',
+                        icon: <FileExcelOutlined />,
+                        children: <span>Export to CSV</span>,
+                      },
+                    }}
+                    pagination={{
+                      pageSizeOptions: ['10', '20', '30', '50', [inventoryTable?.length]],
+                      showSizeChanger: true,
+                      defaultPageSize: 10,
+                    }}
+                    scroll={{ y: 400 }}
+                    onChange={handleChange}
+                  />
+                </div>
+              )}
             </div>
             {/* // ) : null} */}
           </Form>

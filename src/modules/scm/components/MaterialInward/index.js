@@ -13,6 +13,7 @@ import {
   Col,
   Space,
   Popconfirm,
+  Skeleton,
 } from 'antd'
 import store from 'store'
 import moment from 'moment'
@@ -130,6 +131,7 @@ const MaterialInward = () => {
 
   const [showpopupcrtetbl, setshowpopupcrtetbl] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [listLoading, setListLoading] = useState(false)
   const [clearForm, setClearForm] = useState(false)
   const [locationlist, setlocationlist] = useState([])
   const [vendorlist, setVendorlist] = useState([])
@@ -222,22 +224,27 @@ const MaterialInward = () => {
 
   const getMaterialInwardDetls = async value => {
     // retrive service
-    const response = await indentFileUpload({
-      requestPath: 'getMaterialInwardHdrDtls',
-      requestData: {
-        tenantId,
-        fromDate: moment(value.FromDate).format('YYYY-MM-DD'),
-        toDate: moment(value.ToDate).format('YYYY-MM-DD'),
-        poId: value.PONo,
-        pmHdrId: value.Projectcode,
-      },
-    })
-    if (response?.responseCode === '200') {
-      setRespMatrlInwrdDtls(response?.responseData)
-      console.log(response?.responseData, ': getMaterialInwardDetls valuessssss')
-    } else {
-      setRespMatrlInwrdDtls([])
-      message.error(response?.responseMessage)
+    setListLoading(true)
+    try {
+      const response = await indentFileUpload({
+        requestPath: 'getMaterialInwardHdrDtls',
+        requestData: {
+          tenantId,
+          fromDate: moment(value.FromDate).format('YYYY-MM-DD'),
+          toDate: moment(value.ToDate).format('YYYY-MM-DD'),
+          poId: value.PONo,
+          pmHdrId: value.Projectcode,
+        },
+      })
+      if (response?.responseCode === '200') {
+        setRespMatrlInwrdDtls(response?.responseData)
+        console.log(response?.responseData, ': getMaterialInwardDetls valuessssss')
+      } else {
+        setRespMatrlInwrdDtls([])
+        message.error(response?.responseMessage)
+      }
+    } finally {
+      setListLoading(false)
     }
   }
 
@@ -1744,7 +1751,8 @@ const MaterialInward = () => {
             isPono="0"
             getAllEnable
           />
-          {respMatrlInwrdDtls && respMatrlInwrdDtls.length > 0 && (
+          {listLoading && <Skeleton active paragraph={{ rows: 6 }} style={{ marginTop: '16px' }} />}
+          {!listLoading && respMatrlInwrdDtls && respMatrlInwrdDtls.length > 0 && (
             <div style={{ display: showInwardDetail ? 'block' : 'none' }}>
               <Row>
                 <Divider orientation="left">Material Inward Details</Divider>

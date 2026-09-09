@@ -3,8 +3,8 @@ import React, { useState, useEffect } from 'react'
 import store from 'store'
 import moment from 'moment'
 import { useHistory } from 'react-router-dom'
-import { Card, Row, Divider, message, Form, Select, Button, Input, Skeleton } from 'antd'
-import { PlusOutlined, FileExcelOutlined } from '@ant-design/icons'
+import { Card, Row, Divider, message, Form, Select, Button, Input, Skeleton, Popover, Spin } from 'antd'
+import { PlusOutlined, FileExcelOutlined, InfoCircleOutlined } from '@ant-design/icons'
 
 import ButtonComponent from 'components/shared/ButtonComponent'
 import { Table } from 'ant-table-extensions'
@@ -59,6 +59,10 @@ const IndentGroupComponent = ({ isTailview }) => {
   const [searchText, setSearchText] = useState('')
   const [empId, setEmpId] = useState('')
   const [productCodes, setProductCodes] = useState([])
+  // "ⓘ" popover on the PJS list: per-indent breakdown for a group that spans multiple indents.
+  const [breakdownRows, setBreakdownRows] = useState([])
+  const [breakdownForHdr, setBreakdownForHdr] = useState('')
+  const [breakdownLoading, setBreakdownLoading] = useState(false)
   // const [prodCodeInDetail, setProdCodeInDetail] = useState([])
   // const [indentIds, setIndentIds] = useState()
   // const [commondropdown, setcommondropdown] = useState(false)
@@ -323,6 +327,55 @@ const IndentGroupComponent = ({ isTailview }) => {
     }
   }
 
+  const loadBreakdown = async record => {
+    if (breakdownForHdr === record.igHdrId && breakdownRows.length > 0) return
+    setBreakdownLoading(true)
+    setBreakdownForHdr(record.igHdrId)
+    setBreakdownRows([])
+    const httpgetdetails = await IndentGroupgetDetails({
+      requestPath: 'getPjsIndentBreakdown',
+      requestData: { hdrId: record.igHdrId, tenantId },
+    })
+    setBreakdownRows(
+      httpgetdetails?.responseCode === '200' ? httpgetdetails.responseData || [] : [],
+    )
+    setBreakdownLoading(false)
+  }
+
+  const cellStyle = { padding: '3px 12px 3px 0', whiteSpace: 'nowrap' }
+  const renderBreakdownContent = record => {
+    if (breakdownLoading || breakdownForHdr !== record.igHdrId) {
+      return (
+        <div style={{ padding: '6px 2px' }}>
+          <Spin size="small" /> <span style={{ marginLeft: 6 }}>Loading…</span>
+        </div>
+      )
+    }
+    if (!breakdownRows.length) return <div style={{ padding: 4 }}>No detail available</div>
+    return (
+      <table style={{ borderCollapse: 'collapse', fontSize: 12 }}>
+        <thead>
+          <tr style={{ borderBottom: '1px solid #e8e8e8', color: '#888' }}>
+            <th style={{ ...cellStyle, textAlign: 'left' }}>Indent No.</th>
+            <th style={{ ...cellStyle, textAlign: 'left' }}>Indent Type</th>
+            <th style={{ ...cellStyle, textAlign: 'left' }}>Sub Assembly</th>
+            <th style={{ ...cellStyle, textAlign: 'right', paddingRight: 0 }}>Parts</th>
+          </tr>
+        </thead>
+        <tbody>
+          {breakdownRows.map(r => (
+            <tr key={r.indentId}>
+              <td style={cellStyle}>{r.indentCode}</td>
+              <td style={cellStyle}>{r.indentType}</td>
+              <td style={cellStyle}>{r.subAssembly}</td>
+              <td style={{ ...cellStyle, textAlign: 'right', paddingRight: 0 }}>{r.partCount}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )
+  }
+
   const FieldsComponent = () => {
     const emptyRow = () => ({
       key: 'new',
@@ -349,7 +402,25 @@ const IndentGroupComponent = ({ isTailview }) => {
       setNewRow(emptyRow())
     }
 
+    // When the group draws from more than one indent, show each part's own indent context.
+    const groupIndentCodes = [
+      ...new Set(dtlretrievedata.map(r => r.indentCode).filter(Boolean)),
+    ]
+    const multiIndent = groupIndentCodes.length > 1
+    const perPartIndentCol = (title, dataIndex) => ({
+      title,
+      dataIndex,
+      render: (text, record) => (record.key === 'new' ? '' : text || '-'),
+    })
+
     const detailcolumn = [
+      ...(multiIndent
+        ? [
+            perPartIndentCol('Indent Code', 'indentCode'),
+            perPartIndentCol('Indent Type', 'indentType'),
+            perPartIndentCol('Sub Assembly', 'subAssembly'),
+          ]
+        : []),
       {
         title: 'Part Number',
         dataIndex: 'productCode',
@@ -504,26 +575,46 @@ const IndentGroupComponent = ({ isTailview }) => {
           className="row"
           style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}
         >
-          <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
-            <p>
-              <span style={{ fontWeight: 'bold' }}>IndentCode</span> : {indId}
-            </p>
-          </div>
-          <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
-            <p>
-              <span style={{ fontWeight: 'bold' }}>Indent Type</span> : {indentType}
-            </p>
-          </div>
-          <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
-            <p>
-              <span style={{ fontWeight: 'bold' }}>Station</span> : {station}
-            </p>
-          </div>
-          <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
-            <p>
-              <span style={{ fontWeight: 'bold' }}>Sub Assembly</span> : {subAssy}
-            </p>
-          </div>
+          {/* Multi-indent group: IndentCode / Type / Sub Assembly are per-part in the table below,
+              so only Station (always single) stays in the header. */}
+          {multiIndent ? (
+            <>
+              <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                <p>
+                  <span style={{ fontWeight: 'bold' }}>Indents</span> : {groupIndentCodes.length}{' '}
+                  (see table)
+                </p>
+              </div>
+              <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                <p>
+                  <span style={{ fontWeight: 'bold' }}>Station</span> : {station}
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                <p>
+                  <span style={{ fontWeight: 'bold' }}>IndentCode</span> : {indId}
+                </p>
+              </div>
+              <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                <p>
+                  <span style={{ fontWeight: 'bold' }}>Indent Type</span> : {indentType}
+                </p>
+              </div>
+              <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                <p>
+                  <span style={{ fontWeight: 'bold' }}>Station</span> : {station}
+                </p>
+              </div>
+              <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                <p>
+                  <span style={{ fontWeight: 'bold' }}>Sub Assembly</span> : {subAssy}
+                </p>
+              </div>
+            </>
+          )}
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <div style={{ textDecoration: 'underline' }}>
@@ -591,11 +682,20 @@ const IndentGroupComponent = ({ isTailview }) => {
   const groupName1 = []
   const type1 = []
 
+  // A group can span multiple indents (station grouping) - indentCode / sbcDesc / pskDesc arrive
+  // as ", "-joined lists. Split them so filters show individual values, not the combined string.
+  const splitList = value =>
+    (value || '')
+      .toString()
+      .split(', ')
+      .map(v => v.trim())
+      .filter(Boolean)
+
   hdretrievedata.map(h => {
     return nextStatus1.push(h.nextStatus)
   })
   hdretrievedata.map(h => {
-    return indentCode1.push(h.indentCode)
+    return indentCode1.push(...splitList(h.indentCode))
   })
   hdretrievedata.map(h => {
     return pjsRefNo1.push(h.pjsRefNo)
@@ -619,14 +719,14 @@ const IndentGroupComponent = ({ isTailview }) => {
   })
 
   hdretrievedata.map(h => {
-    return sbcDesc1.push(h.sbcDesc)
+    return sbcDesc1.push(...splitList(h.sbcDesc))
   })
 
   hdretrievedata.map(h => {
     return pkDesc1.push(h.pkDesc)
   })
   hdretrievedata.map(h => {
-    return pskDesc1.push(h.pskDesc)
+    return pskDesc1.push(...splitList(h.pskDesc))
   })
   hdretrievedata.map(h => {
     return groupName1.push(h.groupName)
@@ -847,17 +947,38 @@ const IndentGroupComponent = ({ isTailview }) => {
       title: 'Indent No.',
       dataIndex: 'indentCode',
       key: 'indentCode',
-      render: (text, record) => ({
-        props: {
-          style: {
-            backgroundColor: record.versionCheck === '1' ? '#FFFF00' : 'transparent',
-          },
-        },
-        children: text != null ? text : '-',
-      }),
+      render: (text, record) => {
+        const style = {
+          backgroundColor: record.versionCheck === '1' ? '#FFFF00' : 'transparent',
+        }
+        const codes = splitList(text)
+        const count = Number(record.indentCount) || codes.length
+        return {
+          props: { style },
+          children:
+            count > 1 ? (
+              <span>
+                {count} indents{' '}
+                <Popover
+                  trigger="click"
+                  placement="rightTop"
+                  title={`Indents in ${record.groupName || 'group'}`}
+                  content={renderBreakdownContent(record)}
+                  onVisibleChange={visible => {
+                    if (visible) loadBreakdown(record)
+                  }}
+                >
+                  <InfoCircleOutlined style={{ color: '#1890ff', cursor: 'pointer' }} />
+                </Popover>
+              </span>
+            ) : (
+              codes[0] || '-'
+            ),
+        }
+      },
       filters: indentCode3,
       filteredValue: filtersinfo.indentCode,
-      onFilter: (value, record) => record?.indentCode === value,
+      onFilter: (value, record) => splitList(record?.indentCode).includes(value),
     },
     {
       title: 'PJS No.',
@@ -873,17 +994,16 @@ const IndentGroupComponent = ({ isTailview }) => {
       title: 'Indent Type',
       dataIndex: 'sbcDesc',
       key: 'sbcDesc',
-      render: (text, record) => ({
-        props: {
-          style: {
-            backgroundColor: record.versionCheck === '1' ? '#FFFF00' : 'transparent',
-          },
-        },
-        children: text != null ? text : '-',
-      }),
+      render: (text, record) => {
+        const style = {
+          backgroundColor: record.versionCheck === '1' ? '#FFFF00' : 'transparent',
+        }
+        const vals = splitList(text)
+        return { props: { style }, children: vals.length > 1 ? 'Multiple' : vals[0] || '-' }
+      },
       filters: sbcDesc3,
       filteredValue: filtersinfo.sbcDesc,
-      onFilter: (value, record) => record?.sbcDesc === value,
+      onFilter: (value, record) => splitList(record?.sbcDesc).includes(value),
     },
     {
       title: 'Station',
@@ -906,17 +1026,16 @@ const IndentGroupComponent = ({ isTailview }) => {
       dataIndex: 'pskDesc',
       key: 'pskDesc',
       width: '7%',
-      render: (text, record) => ({
-        props: {
-          style: {
-            backgroundColor: record.versionCheck === '1' ? '#FFFF00' : 'transparent',
-          },
-        },
-        children: text != null ? text : '-',
-      }),
+      render: (text, record) => {
+        const style = {
+          backgroundColor: record.versionCheck === '1' ? '#FFFF00' : 'transparent',
+        }
+        const vals = splitList(text)
+        return { props: { style }, children: vals.length > 1 ? 'Multiple' : vals[0] || '-' }
+      },
       filters: pskDesc3,
       filteredValue: filtersinfo.pskDesc,
-      onFilter: (value, record) => record?.pskDesc === value,
+      onFilter: (value, record) => splitList(record?.pskDesc).includes(value),
     },
     {
       title: 'Group Name',

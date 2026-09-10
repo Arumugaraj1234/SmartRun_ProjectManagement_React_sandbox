@@ -1,6 +1,7 @@
 /* eslint-disable eqeqeq */
-import React, { useState, useEffect } from 'react'
-import { Form, DatePicker, message, Input, Select, Spin } from 'antd'
+import React, { useState, useEffect, useRef } from 'react'
+import { Form, DatePicker, message, Input, Select, Spin, Checkbox } from 'antd'
+import { debounce } from 'lodash'
 import store from 'store'
 import moment from 'moment'
 import ButtonComponent from 'components/shared/ButtonComponent'
@@ -9,6 +10,7 @@ import ModalPopup from 'components/shared/ModalPopupComponent'
 import InputComponent from 'components/shared/InputComponent'
 import IndentGroupgetDetails from 'services/common/IndentGroupService'
 import messageReturn from '_helpers/messageReturn'
+import './style.scss'
 // import TailviewIndentGroup from '../TailviewIndentGroup'
 
 const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) => {
@@ -38,13 +40,52 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
   }
   const [indentList, setIndentList] = useState([])
   const [projectList, setProjectList] = useState([])
+  // Station-based grouping is NEW-flow only; LEGACY projects keep the single-indent dropdown.
+  const [stationList, setStationList] = useState([])
+  const [costFlowType, setCostFlowType] = useState('LEGACY')
+  const isNewFlow = costFlowType === 'NEW'
 
   const [indentTable, setIndentTable] = useState([])
   const [filtersinfo, setfilterinfo] = useState([])
 
+  // Parts-table search + "show selected only" (rows with Allocate Qty > 0).
+  const [searchText, setSearchText] = useState('')
+  const [searchInputValue, setSearchInputValue] = useState('')
+  const [showSelectedOnly, setShowSelectedOnly] = useState(false)
+  const [selectedSnos, setSelectedSnos] = useState(new Set())
+  const handleSearchRef = useRef(debounce(value => setSearchText(value), 300))
+  // FieldsComponent is rendered as <FieldsComponent /> inside ModalPopup, so redefining it every
+  // render would remount the whole subtree (losing input focus) whenever search/checkbox state
+  // changes. Keep one stable function and feed it live data through this ref (same pattern as
+  // AddAssyMaterialStaging).
+  const fieldsStateRef = useRef({})
+
+  const updateSelected = (sno, value) => {
+    setSelectedSnos(prev => {
+      const next = new Set(prev)
+      if (value !== '' && value !== undefined && value !== null && Number(value) > 0) {
+        next.add(sno)
+      } else {
+        next.delete(sno)
+      }
+      return next
+    })
+  }
+
   useEffect(() => {
     getProjectList()
+    getCostFlowType()
   }, [])
+
+  const getCostFlowType = async () => {
+    const response = await IndentGroupgetDetails({
+      requestPath: 'getCostFlowTypeByPmHdrId',
+      requestData: { projectID: proId, tenantID: tenantId },
+    })
+    if (response?.responseDataMessage) {
+      setCostFlowType(response.responseDataMessage)
+    }
+  }
 
   const getProjectList = async () => {
     const formData = form.getFieldsValue()
@@ -64,9 +105,28 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
       form.setFieldsValue({
         Projectcode: proId,
       })
-      getIndentList()
+      if (costFlowType === 'NEW') {
+        getStationList()
+      } else {
+        getIndentList()
+      }
     }
-  }, [projectList])
+  }, [projectList, costFlowType])
+
+  const getStationList = async () => {
+    setStationList([])
+    const response = await IndentGroupgetDetails({
+      requestPath: 'getStationsForGrouping',
+      requestData: {
+        tenantId,
+        empId: employeeId,
+        pmId: '5',
+        projectId: proId,
+        getIndent: isInternal == 1 ? '5' : '6',
+      },
+    })
+    setStationList(response?.responseData || [])
+  }
 
   const getIndentList = async () => {
     setIndentList([])
@@ -98,18 +158,27 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
   const handleQtyChange = (index, e, indentQty) => {
     const newData = [...indentTable]
     const { value } = e.target
-    let numValue = parseFloat(value) || 0
     const maxQty = parseFloat(indentQty) || 0
+    let finalValue = value
 
-    if (numValue > maxQty) {
-      message.warning(`Allocate Qty cannot exceed ${maxQty}. Auto-corrected.`)
-      numValue = maxQty
-
-      newData[index].allocateQty = numValue.toString()
-      setIndentTable(newData)
-
-      allqtyForm.setFieldsValue({ [`allocateqty${index}`]: numValue.toString() })
+    if (value !== '') {
+      const numValue = parseFloat(value)
+      if (!Number.isNaN(numValue) && numValue < 0) {
+        message.warning('Allocate Qty cannot be negative. Auto-corrected.')
+        finalValue = '0'
+        newData[index].allocateQty = finalValue
+        setIndentTable(newData)
+        allqtyForm.setFieldsValue({ [`allocateqty${index}`]: finalValue })
+      } else if (!Number.isNaN(numValue) && numValue > maxQty) {
+        message.warning(`Allocate Qty cannot exceed ${maxQty}. Auto-corrected.`)
+        finalValue = maxQty.toString()
+        newData[index].allocateQty = finalValue
+        setIndentTable(newData)
+        allqtyForm.setFieldsValue({ [`allocateqty${index}`]: finalValue })
+      }
     }
+
+    updateSelected(index, finalValue)
   }
 
   const fromdateChange = () => {
@@ -125,7 +194,16 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
   const handleinsertSubmit = async () => {
     setDisableSubmitButton(true)
     try {
-      const formvalues = allqtyForm.getFieldValue()
+      // Block submit while any Allocate Qty is invalid (negative / over indent qty).
+      try {
+        await allqtyForm.validateFields()
+      } catch (validationErr) {
+        message.error('Please fix the highlighted Allocate Qty values')
+        return
+      }
+      // getFieldsValue(true) so rows hidden by the search / "show selected only" filter
+      // (unmounted Form.Items) are still included - see feedback_antd_paginated_form_getfieldsvalue.
+      const formvalues = allqtyForm.getFieldsValue(true)
 
       const updatedTableData = indentTable.map((item, index) => {
         return {
@@ -134,7 +212,11 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
         }
       })
       const filteredData = updatedTableData.filter(
-        item => item.allocateQty !== '' && item.allocateQty !== '0',
+        item =>
+          item.allocateQty !== '' &&
+          item.allocateQty !== '0' &&
+          Number(item.allocateQty) > 0 &&
+          Number(item.allocateQty) <= Number(item.indentQty),
       )
       const formValues = form.getFieldsValue()
       const grpname = formValues.groupname
@@ -168,7 +250,8 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
         if (httpinsert.responseCode === '200') {
           message.success(httpinsert.responseMessage)
           submit(
-            indentId || formValues.IndentCode,
+            // Station groups span multiple indents - refresh the list unfiltered rather than by one indent.
+            isNewFlow ? 'getAll' : indentId || formValues.IndentCode,
             formValues.FromDate,
             formValues.ToDate,
             formValues.Projectcode,
@@ -260,6 +343,17 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
   })
 
   const insertcolumns = [
+    // Station grouping pulls parts from several indents at once, so show which indent each row came from.
+    ...(isNewFlow
+      ? [
+          {
+            title: 'Indent',
+            dataIndex: 'indentCode',
+            width: '12%',
+            key: 'indentCode',
+          },
+        ]
+      : []),
     {
       title: 'Part Number',
       dataIndex: 'productCode',
@@ -342,6 +436,9 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
             {
               validator: (_, value) => {
                 if (value === undefined || value === '') return Promise.resolve()
+                if (Number(value) < 0) {
+                  return Promise.reject(new Error('Allocate Qty cannot be negative'))
+                }
                 if (Number(value) > Number(record.indentQty)) {
                   return Promise.reject(new Error(`Max allowed is ${record.indentQty}`))
                 }
@@ -352,6 +449,7 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
         >
           <Input
             type="number"
+            min={0}
             placeholder="Allocate Qty.."
             onChange={e => handleQtyChange(record.sno, e, record.indentQty)}
           />
@@ -371,21 +469,30 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
     setIndentId(formValues.IndentCode)
     // const indent = indentId || formValues.IndentCode
 
+    // NEW-flow keys the item list off a station (PKA); LEGACY off a single indent.
+    const keyField = isNewFlow ? formValues.Station : formValues.IndentCode
     if (
       grpname !== '' &&
       grpname !== undefined &&
-      formValues.IndentCode !== '' &&
-      formValues.IndentCode !== undefined &&
+      keyField !== '' &&
+      keyField !== undefined &&
       isInv !== null &&
       isInv !== undefined
     ) {
-      const props = {
-        indentId: formValues.IndentCode,
-        tenantId,
-        empId: employeeId,
-      }
+      const props = isNewFlow
+        ? {
+            pkaId: formValues.Station,
+            tenantId,
+            empId: employeeId,
+            getIndent: isInternal == 1 ? '5' : '6',
+          }
+        : {
+            indentId: formValues.IndentCode,
+            tenantId,
+            empId: employeeId,
+          }
       const httpgetdetails = await IndentGroupgetDetails({
-        requestPath: 'getIndentGrpNewProd',
+        requestPath: isNewFlow ? 'getIndentGrpNewProdByStation' : 'getIndentGrpNewProd',
         requestData: props,
       })
       if (httpgetdetails.responseCode === '200') {
@@ -398,13 +505,20 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
           ...item,
           allocateQty: (parseFloat(item.indentQty) - parseFloat(item.indentGrpQty)).toString(),
         }))
+        const initSelected = new Set()
         updatedData.forEach(item => {
           const allocateQtyValue = item.allocateQty
           allqtyForm.setFieldsValue({ [`allocateqty${item.sno}`]: allocateQtyValue })
+          if (Number(allocateQtyValue) > 0) initSelected.add(item.sno)
         })
+        setSelectedSnos(initSelected)
+        setShowSelectedOnly(false)
+        setSearchText('')
+        setSearchInputValue('')
         setIndentTable(responseDataWithAllocateQty)
       } else {
         setIndentTable([])
+        setSelectedSnos(new Set())
         message.error(httpgetdetails.responseMessage)
       }
     } else {
@@ -418,10 +532,13 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
       allocateQty: (parseFloat(item.indentQty) - parseFloat(item.indentGrpQty)).toString(),
     }))
     setIndentTable(updatedData)
+    const nextSelected = new Set()
     updatedData.forEach(item => {
       const allocateQtyValue = item.allocateQty
       allqtyForm.setFieldsValue({ [`allocateqty${item.sno}`]: allocateQtyValue })
+      if (Number(allocateQtyValue) > 0) nextSelected.add(item.sno)
     })
+    setSelectedSnos(nextSelected)
   }
 
   const handleUnAllocateRow = () => {
@@ -434,6 +551,8 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
       const allocateQtyValue = item.allocateQty
       allqtyForm.setFieldsValue({ [`allocateqty${item.sno}`]: allocateQtyValue })
     })
+    setSelectedSnos(new Set())
+    setShowSelectedOnly(false)
   }
 
   // const handlegroupnamecheck = async () => {
@@ -461,10 +580,25 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
     setfilterinfo(filters)
   }
 
-  const FieldsComponent = () => {
+  // Non-destructive filter over the parts table: free-text search across all columns +
+  // optional "show only rows with an allocated qty".
+  const displayedData = indentTable.filter(item => {
+    if (showSelectedOnly && !selectedSnos.has(item.sno)) return false
+    if (!searchText) return true
+    return Object.keys(item).some(key =>
+      item[key]
+        ?.toString()
+        .toLowerCase()
+        .includes(searchText.toLowerCase()),
+    )
+  })
+
+  const FieldsComponent = useRef(() => {
+    const fs = fieldsStateRef.current
+    const handleSearch = handleSearchRef.current
     return (
       // Covers the whole Create Indent Group form/table while Submit is in flight.
-      <Spin spinning={disableSubmitButton} size="large" tip="Please wait...">
+      <Spin spinning={fs.disableSubmitButton} size="large" tip="Please wait...">
         <div>
           <Form form={form}>
             <div className="row">
@@ -483,7 +617,7 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
                   <DatePicker
                     style={{ width: '100%' }}
                     disabled
-                    onChange={fromdateChange}
+                    onChange={fs.fromdateChange}
                     format="DD-MMM-YYYY"
                   />
                 </Form.Item>
@@ -501,7 +635,7 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
                   <DatePicker
                     style={{ width: '100%' }}
                     disabled
-                    onChange={toDateChange}
+                    onChange={fs.toDateChange}
                     format="DD-MMM-YYYY"
                   />
                 </Form.Item>
@@ -518,7 +652,7 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
                   <Select
                     style={{ width: '100%' }}
                     placeholder="Select Project"
-                    onChange={ProjId => getIndentList(ProjId)}
+                    onChange={ProjId => fs.getIndentList(ProjId)}
                     disabled={isTailview}
                     showSearch
                     filterOption={(input, option) =>
@@ -528,7 +662,7 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
                         .indexOf(input.toUpperCase()) !== -1
                     }
                   >
-                    {projectList?.map(item => (
+                    {fs.projectList?.map(item => (
                       <Option key={item.projectId} value={item.projectId}>
                         {item.projectCode}-{item.customerName}
                       </Option>
@@ -537,44 +671,75 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
                 </Form.Item>
               </div>
               <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
-                <Form.Item
-                  name="IndentCode"
-                  label={
-                    <span>
-                      Indent<span style={{ color: 'red' }}>*</span>{' '}
-                    </span>
-                  }
-                >
-                  <Select
-                    style={{ width: '100%' }}
-                    placeholder="Select Indent"
-                    onChange={(value, option) => handleDueDate(value, option)}
+                {fs.isNewFlow ? (
+                  <Form.Item
+                    name="Station"
+                    label={
+                      <span>
+                        Station<span style={{ color: 'red' }}>*</span>{' '}
+                      </span>
+                    }
                   >
-                    {indentList?.map(item => (
-                      <Option
-                        key={item.indentId}
-                        expectedDeliveryDate={item.expectedDeliveryDate}
-                        value={item.indentId}
-                      >
-                        {item.indentCode}
-                      </Option>
-                    ))}
-                  </Select>
-                </Form.Item>
+                    <Select
+                      style={{ width: '100%' }}
+                      placeholder="Select Station"
+                      showSearch
+                      filterOption={(input, option) =>
+                        option.children
+                          .toString()
+                          .toUpperCase()
+                          .indexOf(input.toUpperCase()) !== -1
+                      }
+                    >
+                      {fs.stationList?.map(item => (
+                        <Option key={item.pkaId} value={item.pkaId}>
+                          {item.stationDesc}
+                        </Option>
+                      ))}
+                    </Select>
+                  </Form.Item>
+                ) : (
+                  <Form.Item
+                    name="IndentCode"
+                    label={
+                      <span>
+                        Indent<span style={{ color: 'red' }}>*</span>{' '}
+                      </span>
+                    }
+                  >
+                    <Select
+                      style={{ width: '100%' }}
+                      placeholder="Select Indent"
+                      onChange={(value, option) => fs.handleDueDate(value, option)}
+                    >
+                      {fs.indentList?.map(item => (
+                        <Option
+                          key={item.indentId}
+                          expectedDeliveryDate={item.expectedDeliveryDate}
+                          value={item.indentId}
+                        >
+                          {item.indentCode}
+                        </Option>
+                      ))}
+                    </Select>
+                  </Form.Item>
+                )}
               </div>
 
-              <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
-                <Form.Item
-                  name="duedate"
-                  label={
-                    <span>
-                      Due Date<span style={{ color: 'red' }}>*</span>{' '}
-                    </span>
-                  }
-                >
-                  <DatePicker style={{ width: '100%' }} disabled />
-                </Form.Item>
-              </div>
+              {!fs.isNewFlow && (
+                <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                  <Form.Item
+                    name="duedate"
+                    label={
+                      <span>
+                        Due Date<span style={{ color: 'red' }}>*</span>{' '}
+                      </span>
+                    }
+                  >
+                    <DatePicker style={{ width: '100%' }} disabled />
+                  </Form.Item>
+                </div>
+              )}
               <div className="col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
                 <Form.Item
                   name="isInventory"
@@ -611,25 +776,54 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
               <ButtonComponent
                 text="Get Details"
                 type="primary"
-                onClick={() => handleInsertData()}
+                onClick={() => fs.handleInsertData()}
               />
             </div>
           </Form>
-          <div className="custom_antd_Table">
-            {indentTable.length > 0 ? (
+          <div className="custom_antd_Table aig-parts-table">
+            {fs.indentTable.length > 0 ? (
               <>
-                <div style={{ marginBottom: '10px' }}>
-                  <ButtonComponent
-                    text="Allocate All"
-                    type="primary"
-                    onClick={() => handleAllocateRow()}
-                  />
-                  <span style={{ margin: '0 8px' }} />
-                  <ButtonComponent
-                    text="Unallocate All"
-                    type="primary"
-                    onClick={() => handleUnAllocateRow()}
-                  />
+                <div
+                  style={{
+                    marginBottom: '10px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '10px',
+                  }}
+                >
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <ButtonComponent
+                      text="Allocate All"
+                      type="primary"
+                      onClick={() => fs.handleAllocateRow()}
+                    />
+                    <ButtonComponent
+                      text="Unallocate All"
+                      type="primary"
+                      onClick={() => fs.handleUnAllocateRow()}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                    <Checkbox
+                      checked={fs.showSelectedOnly}
+                      disabled={fs.selectedSnos.size === 0}
+                      onChange={e => setShowSelectedOnly(e.target.checked)}
+                    >
+                      Show selected only ({fs.selectedSnos.size})
+                    </Checkbox>
+                    <Input.Search
+                      style={{ width: '280px' }}
+                      placeholder="Search parts..."
+                      allowClear
+                      value={fs.searchInputValue}
+                      onChange={e => {
+                        setSearchInputValue(e.target.value)
+                        handleSearch(e.target.value)
+                      }}
+                    />
+                  </div>
                 </div>
                 {/* <TableComponent
                   scrollY={700}
@@ -639,10 +833,13 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
                 /> */}
                 <Form form={allqtyForm}>
                   <Table
-                    columns={insertcolumns}
-                    dataSource={indentTable}
-                    scroll={{ y: 700 }}
-                    onChange={handleChange}
+                    columns={fs.insertcolumns}
+                    dataSource={fs.displayedData}
+                    // Only turn on the fixed-header scroll body when there are enough rows to need it.
+                    // With scroll.y set, rc-table forces overflow-y:scroll on the body and shrinks the
+                    // header's last column by the scrollbar width - that's the gap on the table's right edge.
+                    scroll={fs.displayedData.length > 15 ? { y: 700 } : undefined}
+                    onChange={fs.handleChange}
                     pagination={false}
                     rowKey="sno"
                   />
@@ -653,7 +850,7 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
         </div>
       </Spin>
     )
-  }
+  }).current
 
   const ButtonsComponent = () => {
     return (
@@ -686,6 +883,29 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
         ) : null}
       </div>
     )
+  }
+
+  // Reassigned every render so the stable FieldsComponent above always reads current data.
+  fieldsStateRef.current = {
+    disableSubmitButton,
+    isNewFlow,
+    projectList,
+    stationList,
+    indentList,
+    indentTable,
+    displayedData,
+    insertcolumns,
+    showSelectedOnly,
+    selectedSnos,
+    searchInputValue,
+    fromdateChange,
+    toDateChange,
+    getIndentList,
+    handleDueDate,
+    handleInsertData,
+    handleAllocateRow,
+    handleUnAllocateRow,
+    handleChange,
   }
 
   return (

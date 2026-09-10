@@ -1,0 +1,6 @@
+/* global.scss clamps every `.ant-table` to `max-width: 94vw`, which leaves the parts table
+   short of the modal's right edge (and out of line with the search box). Restore full width
+   for this screen's table only. */
+.aig-parts-table .ant-table {
+  max-width: 100%;
+}

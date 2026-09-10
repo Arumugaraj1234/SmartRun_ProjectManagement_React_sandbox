@@ -59,6 +59,9 @@ const IndentGroupComponent = ({ isTailview }) => {
   const [searchText, setSearchText] = useState('')
   const [empId, setEmpId] = useState('')
   const [productCodes, setProductCodes] = useState([])
+  // Whether the group open in the Details popup belongs to a NEW-flow project - gates the
+  // station-scoped "Indent" picker on the add-item row (LEGACY groups stay single-indent).
+  const [detailIsNewFlow, setDetailIsNewFlow] = useState(false)
   // "ⓘ" popover on the PJS list: per-indent breakdown for a group that spans multiple indents.
   const [breakdownRows, setBreakdownRows] = useState([])
   const [breakdownForHdr, setBreakdownForHdr] = useState('')
@@ -310,21 +313,31 @@ const IndentGroupComponent = ({ isTailview }) => {
     }
   }
 
-  const addRowInDetail = async id => {
-    const props = {
-      indentId: id,
-      tenantId,
-      empId: employeeId,
-    }
+  // NEW-flow: pull every groupable item across the whole station (PKA_ID) so the "add item" row
+  // can offer items from any indent in the station, not just the group's representative indent.
+  // LEGACY: unchanged, single-indent lookup.
+  const addRowInDetail = async record => {
+    const isNewFlow = record.costFlowType === 'NEW'
+    setDetailIsNewFlow(isNewFlow)
+    const props = isNewFlow
+      ? {
+          pkaId: record.pkId,
+          tenantId,
+          empId: employeeId,
+          getIndent: isInternal == 1 ? '5' : '1',
+        }
+      : {
+          indentId: record.indentId,
+          tenantId,
+          empId: employeeId,
+        }
 
     const httpgetdetails = await IndentGroupgetDetails({
-      requestPath: 'getIndentGrpNewProd',
+      requestPath: isNewFlow ? 'getIndentGrpNewProdByStation' : 'getIndentGrpNewProd',
       requestData: props,
     })
 
-    if (httpgetdetails?.responseData) {
-      setProductCodes(httpgetdetails.responseData)
-    }
+    setProductCodes(httpgetdetails?.responseData || [])
   }
 
   const loadBreakdown = async record => {
@@ -390,35 +403,101 @@ const IndentGroupComponent = ({ isTailview }) => {
       indentGrpQty: '',
     })
     const [newRow, setNewRow] = useState(emptyRow())
-
-    const handleAddRow = () => {
-      if (!newRow.productCode || !newRow.description) {
-        message.error('Please fill required fields')
-        return
-      }
-
-      setDtlretrievedata(prev => [...prev, { ...newRow, key: prev.length + 1, isNew: true }])
-
-      setNewRow(emptyRow())
-    }
+    const [newRowIndentId, setNewRowIndentId] = useState('')
 
     // When the group draws from more than one indent, show each part's own indent context.
     const groupIndentCodes = [
       ...new Set(dtlretrievedata.map(r => r.indentCode).filter(Boolean)),
     ]
     const multiIndent = groupIndentCodes.length > 1
-    const perPartIndentCol = (title, dataIndex) => ({
+    // NEW-flow only: distinct indents available in this group's station (from the station-scoped
+    // productCodes fetch), so the "add item" row can pull from any indent in the station, not
+    // just the ones that already happen to be in this group.
+    const groupIndentOptions = detailIsNewFlow
+      ? [...new Map(productCodes.filter(p => p.indentId).map(p => [p.indentId, p])).values()]
+      : []
+    const selectedIndent = groupIndentOptions.find(opt => opt.indentId === newRowIndentId)
+    // Items belonging to the picked indent only - getIndentGrpNewProdByStation already excludes
+    // fully-consumed lines (HAVING remaining qty > 0), so anything listed here is addable.
+    const availableProducts = detailIsNewFlow
+      ? productCodes.filter(p => p.indentId === newRowIndentId)
+      : productCodes
+    // Show the Indent-context columns whenever the group already spans indents, or it's a
+    // NEW-flow group that could gain another indent via the add-item row below.
+    const showIndentColumns = multiIndent || detailIsNewFlow
+
+    const handleIndentSelect = value => {
+      setNewRowIndentId(value)
+      setNewRow(emptyRow())
+    }
+
+    const handleAddRow = () => {
+      if (detailIsNewFlow && !newRowIndentId) {
+        message.error('Please select an indent first')
+        return
+      }
+      if (!newRow.productCode || !newRow.description) {
+        message.error('Please fill required fields')
+        return
+      }
+
+      setDtlretrievedata(prev => [
+        ...prev,
+        {
+          ...newRow,
+          key: prev.length + 1,
+          isNew: true,
+          ...(detailIsNewFlow
+            ? {
+                indentId: newRowIndentId,
+                indentCode: selectedIndent?.indentCode,
+                indentType: selectedIndent?.indentType,
+                subAssembly: selectedIndent?.subAssembly,
+              }
+            : {}),
+        },
+      ])
+
+      setNewRow(emptyRow())
+      setNewRowIndentId('')
+    }
+
+    const perPartIndentCol = (title, dataIndex, newRowRender) => ({
       title,
       dataIndex,
-      render: (text, record) => (record.key === 'new' ? '' : text || '-'),
+      render: (text, record) => {
+        if (record.key === 'new') return newRowRender ? newRowRender() : ''
+        return text || '-'
+      },
     })
 
     const detailcolumn = [
-      ...(multiIndent
+      ...(showIndentColumns
         ? [
-            perPartIndentCol('Indent Code', 'indentCode'),
-            perPartIndentCol('Indent Type', 'indentType'),
-            perPartIndentCol('Sub Assembly', 'subAssembly'),
+            perPartIndentCol('Indent Code', 'indentCode', () =>
+              detailIsNewFlow ? (
+                <Select
+                  style={{ width: '160px' }}
+                  showSearch
+                  placeholder="Select Indent"
+                  optionFilterProp="label"
+                  value={newRowIndentId || undefined}
+                  onChange={handleIndentSelect}
+                  options={groupIndentOptions.map(opt => ({
+                    value: opt.indentId,
+                    label: opt.indentCode,
+                  }))}
+                />
+              ) : (
+                ''
+              ),
+            ),
+            perPartIndentCol('Indent Type', 'indentType', () => selectedIndent?.indentType || '-'),
+            perPartIndentCol(
+              'Sub Assembly',
+              'subAssembly',
+              () => selectedIndent?.subAssembly || '-',
+            ),
           ]
         : []),
       {
@@ -426,15 +505,19 @@ const IndentGroupComponent = ({ isTailview }) => {
         dataIndex: 'productCode',
         render: (text, record) => {
           if (record.key === 'new') {
+            const productSelectDisabled = detailIsNewFlow && !newRowIndentId
             return (
               <Select
                 style={{ width: '250px' }}
                 showSearch
-                placeholder="Select Product"
+                disabled={productSelectDisabled}
+                placeholder={productSelectDisabled ? 'Select Indent first' : 'Select Product'}
                 optionFilterProp="label"
                 value={newRow.productCode || undefined}
                 onChange={value => {
-                  const selectedProduct = productCodes.find(prod => prod.productCode === value)
+                  const selectedProduct = availableProducts.find(
+                    prod => prod.productCode === value,
+                  )
                   if (selectedProduct) {
                     setNewRow({
                       ...newRow,
@@ -453,7 +536,7 @@ const IndentGroupComponent = ({ isTailview }) => {
                     setNewRow({ ...newRow, productCode: value })
                   }
                 }}
-                options={productCodes.map(prod => ({
+                options={availableProducts.map(prod => ({
                   value: prod.productCode,
                   label: prod.productCode,
                 }))}
@@ -1291,7 +1374,7 @@ const IndentGroupComponent = ({ isTailview }) => {
               type="primary"
               text="Details"
               onClick={() => {
-                addRowInDetail(record.indentId)
+                addRowInDetail(record)
                 setEmpId(record.empId)
                 OpenDetailCard(
                   record.igHdrId,

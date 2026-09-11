@@ -1,6 +1,7 @@
 /* eslint-disable eqeqeq */
-import React, { useState, useEffect, useRef } from 'react'
-import { Form, DatePicker, message, Input, Select, Spin, Checkbox } from 'antd'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
+import { Form, DatePicker, message, Input, Select, Spin, Checkbox, Popover } from 'antd'
+import { InfoCircleOutlined } from '@ant-design/icons'
 import { debounce } from 'lodash'
 import store from 'store'
 import moment from 'moment'
@@ -155,10 +156,54 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
       }
     }
   }
-  const handleQtyChange = (index, e, indentQty) => {
-    const newData = [...indentTable]
+  // Station-scoped fetches return one row per source indent; for NEW-flow, group them here by
+  // Part Number so the same part pulled from multiple indents shows/allocates as a single row
+  // instead of one row per indent. LEGACY is single-indent already, so it passes through 1:1.
+  // The underlying `indentTable` (and its per-source indentDtlId/allocateQty fields used by
+  // handleinsertSubmit) is never restructured - this only builds a display/allocation view over it.
+  const buildMergedRows = rows => {
+    if (!isNewFlow) {
+      return rows.map(item => ({ ...item, sourceSnos: [item.sno], breakdown: [] }))
+    }
+    const byProduct = new Map()
+    rows.forEach(item => {
+      const key = item.productCode
+      if (!byProduct.has(key)) byProduct.set(key, [])
+      byProduct.get(key).push(item)
+    })
+    return Array.from(byProduct.values()).map(group => {
+      const ordered = [...group].sort((a, b) => (a.indentCode || '').localeCompare(b.indentCode || ''))
+      const sumField = f => ordered.reduce((sum, g) => sum + (parseFloat(g[f]) || 0), 0)
+      return {
+        ...ordered[0],
+        sno: Math.min(...ordered.map(g => g.sno)),
+        sourceSnos: ordered.map(g => g.sno),
+        indentCode: ordered.length === 1 ? ordered[0].indentCode : null,
+        breakdown: ordered.map(g => ({
+          indentCode: g.indentCode,
+          indentType: g.indentType,
+          subAssembly: g.subAssembly,
+          indentQty: g.indentQty,
+        })),
+        indentQty: sumField('indentQty'),
+        indentGrpQty: sumField('indentGrpQty'),
+        allocateQty: sumField('allocateQty').toString(),
+      }
+    })
+  }
+
+  const mergedRows = useMemo(() => buildMergedRows(indentTable), [indentTable, isNewFlow])
+
+  // record is a merged row (see buildMergedRows) - for a part sourced from >1 indent, the entered
+  // total is split across its source rows, filling each up to its own remaining capacity
+  // (indentQty - indentGrpQty) in ascending Indent No. order, so the split is deterministic and
+  // reviewable via the "N indents" breakdown popover. A single-source row splits trivially to itself.
+  const handleQtyChange = (record, e) => {
     const { value } = e.target
-    const maxQty = parseFloat(indentQty) || 0
+    const totalAvailable = record.sourceSnos.reduce((sum, sno) => {
+      const src = indentTable[sno]
+      return sum + (parseFloat(src.indentQty) - parseFloat(src.indentGrpQty))
+    }, 0)
     let finalValue = value
 
     if (value !== '') {
@@ -166,19 +211,26 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
       if (!Number.isNaN(numValue) && numValue < 0) {
         message.warning('Allocate Qty cannot be negative. Auto-corrected.')
         finalValue = '0'
-        newData[index].allocateQty = finalValue
-        setIndentTable(newData)
-        allqtyForm.setFieldsValue({ [`allocateqty${index}`]: finalValue })
-      } else if (!Number.isNaN(numValue) && numValue > maxQty) {
-        message.warning(`Allocate Qty cannot exceed ${maxQty}. Auto-corrected.`)
-        finalValue = maxQty.toString()
-        newData[index].allocateQty = finalValue
-        setIndentTable(newData)
-        allqtyForm.setFieldsValue({ [`allocateqty${index}`]: finalValue })
+      } else if (!Number.isNaN(numValue) && numValue > totalAvailable) {
+        message.warning(`Allocate Qty cannot exceed ${totalAvailable}. Auto-corrected.`)
+        finalValue = totalAvailable.toString()
       }
     }
 
-    updateSelected(index, finalValue)
+    let remaining = finalValue === '' ? 0 : parseFloat(finalValue) || 0
+    const newData = [...indentTable]
+    const orderedSnos = [...record.sourceSnos].sort((a, b) =>
+      (indentTable[a].indentCode || '').localeCompare(indentTable[b].indentCode || ''),
+    )
+    orderedSnos.forEach(sno => {
+      const capacity = parseFloat(newData[sno].indentQty) - parseFloat(newData[sno].indentGrpQty)
+      const take = Math.min(Math.max(remaining, 0), capacity)
+      newData[sno] = { ...newData[sno], allocateQty: take.toString() }
+      remaining -= take
+      allqtyForm.setFieldsValue({ [`allocateqty${sno}`]: newData[sno].allocateQty })
+    })
+    setIndentTable(newData)
+    updateSelected(record.sno, finalValue)
   }
 
   const fromdateChange = () => {
@@ -274,19 +326,19 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
   const Material1 = []
   const make1 = []
 
-  indentTable.map(h => {
+  mergedRows.map(h => {
     return productCode1.push(h.productCode)
   })
-  indentTable.map(h => {
+  mergedRows.map(h => {
     return description1.push(h.description)
   })
-  indentTable.map(h => {
+  mergedRows.map(h => {
     return specification1.push(h.specification)
   })
-  indentTable.map(h => {
+  mergedRows.map(h => {
     return Material1.push(h.material)
   })
-  indentTable.map(h => {
+  mergedRows.map(h => {
     return make1.push(h.make)
   })
 
@@ -351,6 +403,42 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
             dataIndex: 'indentCode',
             width: '12%',
             key: 'indentCode',
+            render: (text, record) =>
+              record.breakdown.length > 1 ? (
+                <Popover
+                  trigger="click"
+                  placement="right"
+                  title="Indents for this part"
+                  content={
+                    <table style={{ borderCollapse: 'collapse', fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid #e8e8e8', color: '#888' }}>
+                          <th style={{ textAlign: 'left', padding: '2px 8px' }}>Indent No.</th>
+                          <th style={{ textAlign: 'left', padding: '2px 8px' }}>Type</th>
+                          <th style={{ textAlign: 'left', padding: '2px 8px' }}>Sub Assembly</th>
+                          <th style={{ textAlign: 'right', padding: '2px 8px' }}>Qty</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {record.breakdown.map(b => (
+                          <tr key={b.indentCode}>
+                            <td style={{ padding: '2px 8px' }}>{b.indentCode}</td>
+                            <td style={{ padding: '2px 8px' }}>{b.indentType}</td>
+                            <td style={{ padding: '2px 8px' }}>{b.subAssembly}</td>
+                            <td style={{ padding: '2px 8px', textAlign: 'right' }}>{b.indentQty}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  }
+                >
+                  <span style={{ cursor: 'pointer', color: '#1890ff' }}>
+                    {record.breakdown.length} indents <InfoCircleOutlined />
+                  </span>
+                </Popover>
+              ) : (
+                text
+              ),
           },
         ]
       : []),
@@ -429,31 +517,13 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
       width: '10%',
       key: 'allocateQty',
       render: (text, record) => (
-        <Form.Item
-          name={`allocateqty${record.sno}`}
-          style={{ margin: 0 }}
-          rules={[
-            {
-              validator: (_, value) => {
-                if (value === undefined || value === '') return Promise.resolve()
-                if (Number(value) < 0) {
-                  return Promise.reject(new Error('Allocate Qty cannot be negative'))
-                }
-                if (Number(value) > Number(record.indentQty)) {
-                  return Promise.reject(new Error(`Max allowed is ${record.indentQty}`))
-                }
-                return Promise.resolve()
-              },
-            },
-          ]}
-        >
-          <Input
-            type="number"
-            min={0}
-            placeholder="Allocate Qty.."
-            onChange={e => handleQtyChange(record.sno, e, record.indentQty)}
-          />
-        </Form.Item>
+        <Input
+          type="number"
+          min={0}
+          placeholder="Allocate Qty.."
+          value={record.allocateQty}
+          onChange={e => handleQtyChange(record, e)}
+        />
       ),
     },
   ]
@@ -505,11 +575,12 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
           ...item,
           allocateQty: (parseFloat(item.indentQty) - parseFloat(item.indentGrpQty)).toString(),
         }))
-        const initSelected = new Set()
         updatedData.forEach(item => {
-          const allocateQtyValue = item.allocateQty
-          allqtyForm.setFieldsValue({ [`allocateqty${item.sno}`]: allocateQtyValue })
-          if (Number(allocateQtyValue) > 0) initSelected.add(item.sno)
+          allqtyForm.setFieldsValue({ [`allocateqty${item.sno}`]: item.allocateQty })
+        })
+        const initSelected = new Set()
+        buildMergedRows(updatedData).forEach(group => {
+          if (Number(group.allocateQty) > 0) initSelected.add(group.sno)
         })
         setSelectedSnos(initSelected)
         setShowSelectedOnly(false)
@@ -532,11 +603,12 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
       allocateQty: (parseFloat(item.indentQty) - parseFloat(item.indentGrpQty)).toString(),
     }))
     setIndentTable(updatedData)
-    const nextSelected = new Set()
     updatedData.forEach(item => {
-      const allocateQtyValue = item.allocateQty
-      allqtyForm.setFieldsValue({ [`allocateqty${item.sno}`]: allocateQtyValue })
-      if (Number(allocateQtyValue) > 0) nextSelected.add(item.sno)
+      allqtyForm.setFieldsValue({ [`allocateqty${item.sno}`]: item.allocateQty })
+    })
+    const nextSelected = new Set()
+    buildMergedRows(updatedData).forEach(group => {
+      if (Number(group.allocateQty) > 0) nextSelected.add(group.sno)
     })
     setSelectedSnos(nextSelected)
   }
@@ -548,8 +620,7 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
     }))
     setIndentTable(updatedData)
     updatedData.forEach(item => {
-      const allocateQtyValue = item.allocateQty
-      allqtyForm.setFieldsValue({ [`allocateqty${item.sno}`]: allocateQtyValue })
+      allqtyForm.setFieldsValue({ [`allocateqty${item.sno}`]: item.allocateQty })
     })
     setSelectedSnos(new Set())
     setShowSelectedOnly(false)
@@ -582,7 +653,7 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
 
   // Non-destructive filter over the parts table: free-text search across all columns +
   // optional "show only rows with an allocated qty".
-  const displayedData = indentTable.filter(item => {
+  const displayedData = mergedRows.filter(item => {
     if (showSelectedOnly && !selectedSnos.has(item.sno)) return false
     if (!searchText) return true
     return Object.keys(item).some(key =>

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Table } from 'ant-table-extensions'
 import store from 'store'
-import { Input, Skeleton } from 'antd'
+import { Input, Skeleton, Popover, Spin } from 'antd'
 import moment from 'moment'
 import { useHistory } from 'react-router-dom'
 import ModalPopup from 'components/shared/ModalPopupComponent'
@@ -10,7 +10,7 @@ import ButtonComponent from 'components/shared/ButtonComponent'
 import SupCompState from 'modules/scm/components/ScsComponent'
 import { indentFileUpload } from 'services/common/AppeovedDocumentService/adddocumentservice'
 import currentDateTime from 'currentDateTime'
-import { FileExcelOutlined } from '@ant-design/icons'
+import { FileExcelOutlined, InfoCircleOutlined } from '@ant-design/icons'
 import ViewPoModal from 'modules/scm/components/IndentGroup/ViewPoModal'
 
 const CommonPJSComponent = () => {
@@ -79,6 +79,71 @@ const CommonPJSComponent = () => {
     setfilterinfo(filters)
   }
 
+  // A group can span multiple indents (station grouping) - indentCode / sbcDesc / pskDesc arrive
+  // as ", "-joined lists (see IndentGroupDAO.getIndentGroupDtlsForSCS). Split them so filters show
+  // individual values, not the combined string - same pattern as the SCM PJS list.
+  const splitList = value =>
+    (value || '')
+      .toString()
+      .split(', ')
+      .map(v => v.trim())
+      .filter(Boolean)
+
+  const [breakdownRows, setBreakdownRows] = useState([])
+  const [breakdownForHdr, setBreakdownForHdr] = useState('')
+  const [breakdownLoading, setBreakdownLoading] = useState(false)
+
+  const loadBreakdown = async record => {
+    if (breakdownForHdr === record.igHdrId && breakdownRows.length > 0) return
+    setBreakdownLoading(true)
+    setBreakdownForHdr(record.igHdrId)
+    setBreakdownRows([])
+    const httpgetdetails = await indentFileUpload({
+      requestPath: 'getPjsIndentBreakdown',
+      requestData: { hdrId: record.igHdrId, tenantId: tenantid },
+    })
+    setBreakdownRows(
+      httpgetdetails?.responseCode === '200' ? httpgetdetails.responseData || [] : [],
+    )
+    setBreakdownLoading(false)
+  }
+
+  const breakdownCellStyle = { padding: '3px 12px 3px 0', whiteSpace: 'nowrap' }
+  const renderBreakdownContent = record => {
+    if (breakdownLoading || breakdownForHdr !== record.igHdrId) {
+      return (
+        <div style={{ padding: '6px 2px' }}>
+          <Spin size="small" /> <span style={{ marginLeft: 6 }}>Loading…</span>
+        </div>
+      )
+    }
+    if (!breakdownRows.length) return <div style={{ padding: 4 }}>No detail available</div>
+    return (
+      <table style={{ borderCollapse: 'collapse', fontSize: 12 }}>
+        <thead>
+          <tr style={{ borderBottom: '1px solid #e8e8e8', color: '#888' }}>
+            <th style={{ ...breakdownCellStyle, textAlign: 'left' }}>Indent No.</th>
+            <th style={{ ...breakdownCellStyle, textAlign: 'left' }}>Indent Type</th>
+            <th style={{ ...breakdownCellStyle, textAlign: 'left' }}>Sub Assembly</th>
+            <th style={{ ...breakdownCellStyle, textAlign: 'right', paddingRight: 0 }}>Parts</th>
+          </tr>
+        </thead>
+        <tbody>
+          {breakdownRows.map(r => (
+            <tr key={r.indentId}>
+              <td style={breakdownCellStyle}>{r.indentCode}</td>
+              <td style={breakdownCellStyle}>{r.indentType}</td>
+              <td style={breakdownCellStyle}>{r.subAssembly}</td>
+              <td style={{ ...breakdownCellStyle, textAlign: 'right', paddingRight: 0 }}>
+                {r.partCount}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )
+  }
+
   const IndentCode1 = []
   const ScsStatus1 = []
   const PoStatus1 = []
@@ -91,12 +156,12 @@ const CommonPJSComponent = () => {
   const expectedDeliveryDate1 = []
 
   if (pJSCompTablData && pJSCompTablData.length > 0) {
-    pJSCompTablData.forEach(h => IndentCode1.push(h.indentCode))
+    pJSCompTablData.forEach(h => IndentCode1.push(...splitList(h.indentCode)))
     pJSCompTablData.forEach(h => ScsStatus1.push(h.scsStatus))
     pJSCompTablData.forEach(h => PoStatus1.push(h.poStatus))
-    pJSCompTablData.forEach(h => sbcDesc1.push(h.sbcDesc))
+    pJSCompTablData.forEach(h => sbcDesc1.push(...splitList(h.sbcDesc)))
     pJSCompTablData.forEach(h => pkDesc1.push(h.pkDesc))
-    pJSCompTablData.forEach(h => pskDesc1.push(h.pskDesc))
+    pJSCompTablData.forEach(h => pskDesc1.push(...splitList(h.pskDesc)))
     pJSCompTablData.forEach(h => isInventory1.push(h.isInventory))
     pJSCompTablData.forEach(h => groupName1.push(h.groupName))
     pJSCompTablData.forEach(h => nextStatus1.push(h.nextStatus))
@@ -254,17 +319,38 @@ const CommonPJSComponent = () => {
       title: 'Indent No.',
       dataIndex: 'indentCode',
       key: 'indentCode',
-      render: (text, record) => ({
-        props: {
-          style: {
-            backgroundColor: record.versionCheck === '1' ? '#FFFF00' : 'transparent',
-          },
-        },
-        children: text != null ? text : '-',
-      }),
+      render: (text, record) => {
+        const style = {
+          backgroundColor: record.versionCheck === '1' ? '#FFFF00' : 'transparent',
+        }
+        const codes = splitList(text)
+        const count = Number(record.indentCount) || codes.length
+        return {
+          props: { style },
+          children:
+            count > 1 ? (
+              <span>
+                {count} indents{' '}
+                <Popover
+                  trigger="click"
+                  placement="rightTop"
+                  title={`Indents in ${record.groupName || 'group'}`}
+                  content={renderBreakdownContent(record)}
+                  onVisibleChange={visible => {
+                    if (visible) loadBreakdown(record)
+                  }}
+                >
+                  <InfoCircleOutlined style={{ color: '#1890ff', cursor: 'pointer' }} />
+                </Popover>
+              </span>
+            ) : (
+              codes[0] || '-'
+            ),
+        }
+      },
       filters: IndentCode3,
       filteredValue: filtersinfo.indentCode,
-      onFilter: (value, record) => record?.indentCode === value,
+      onFilter: (value, record) => splitList(record?.indentCode).includes(value),
     },
     {
       title: 'PJS No.',
@@ -276,17 +362,16 @@ const CommonPJSComponent = () => {
       title: 'Indent Type',
       dataIndex: 'sbcDesc',
       key: 'sbcDesc',
-      render: (text, record) => ({
-        props: {
-          style: {
-            backgroundColor: record.versionCheck === '1' ? '#FFFF00' : 'transparent',
-          },
-        },
-        children: text != null ? text : '-',
-      }),
+      render: (text, record) => {
+        const style = {
+          backgroundColor: record.versionCheck === '1' ? '#FFFF00' : 'transparent',
+        }
+        const vals = splitList(text)
+        return { props: { style }, children: vals.length > 1 ? 'Multiple' : vals[0] || '-' }
+      },
       filters: sbcDesc3,
       filteredValue: filtersinfo.sbcDesc,
-      onFilter: (value, record) => record?.sbcDesc === value,
+      onFilter: (value, record) => splitList(record?.sbcDesc).includes(value),
     },
     {
       title: 'Station',
@@ -308,17 +393,16 @@ const CommonPJSComponent = () => {
       title: 'Sub Assembly',
       dataIndex: 'pskDesc',
       key: 'pskDesc',
-      render: (text, record) => ({
-        props: {
-          style: {
-            backgroundColor: record.versionCheck === '1' ? '#FFFF00' : 'transparent',
-          },
-        },
-        children: text != null ? text : '-',
-      }),
+      render: (text, record) => {
+        const style = {
+          backgroundColor: record.versionCheck === '1' ? '#FFFF00' : 'transparent',
+        }
+        const vals = splitList(text)
+        return { props: { style }, children: vals.length > 1 ? 'Multiple' : vals[0] || '-' }
+      },
       filters: pskDesc3,
       filteredValue: filtersinfo.pskDesc,
-      onFilter: (value, record) => record?.pskDesc === value,
+      onFilter: (value, record) => splitList(record?.pskDesc).includes(value),
     },
 
     {

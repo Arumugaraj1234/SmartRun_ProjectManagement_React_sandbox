@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import store from 'store'
 import moment from 'moment'
 import {
@@ -73,6 +73,20 @@ const SupCompState = ({
   const [allocateModalVisible, setAllocateModalVisible] = useState(false)
   const [scmretrievaldata, setScmretrievaldata] = useState([])
   const [vendorQuafylst, setVendorQuafylst] = useState(null)
+  // Multi-indent (station) groups: indentType/subAssy/indentcode arrive from the parent list as
+  // ", "-joined strings (see IndentGroupDAO.getIndentGroupDtlsForSCS). Show a count + breakdown
+  // popover instead, same treatment as the SCM PJS screens.
+  const splitList = value =>
+    (value || '')
+      .toString()
+      .split(', ')
+      .map(v => v.trim())
+      .filter(Boolean)
+  const indentCodes = splitList(indentcode)
+  const multiIndent = indentCodes.length > 1
+  const [pjsBreakdownRows, setPjsBreakdownRows] = useState([])
+  const [pjsBreakdownLoaded, setPjsBreakdownLoaded] = useState(false)
+  const [pjsBreakdownLoading, setPjsBreakdownLoading] = useState(false)
   const [scmHdrdata, setScmHdrdata] = useState([])
   const [priceTable, setPriceTable] = useState([])
   const [vendorlist, setVendorlist] = useState([])
@@ -813,6 +827,10 @@ const SupCompState = ({
             uom: item.uom,
             qty: item.indentQty,
             dmId: item.dmId,
+            indentCode: item.indentCode,
+            indentType: item.indentType,
+            subAssembly: item.subAssembly,
+            indentQty: item.indentQty,
           }))
           setPriceTable(newData)
           setPaymenttermdatal1([emptyPaymentTerms])
@@ -865,6 +883,10 @@ const SupCompState = ({
           uom: item.uom,
           qty: item.indentQty,
           dmId: item.dmId,
+          indentCode: item.indentCode,
+          indentType: item.indentType,
+          subAssembly: item.subAssembly,
+          indentQty: item.indentQty,
         }))
         setPriceTable(newData)
         setPaymenttermdatal1([emptyPaymentTerms])
@@ -2590,6 +2612,143 @@ const SupCompState = ({
     setBasevalues(dataWithSum)
   }
 
+  // Same-part rows pulled from multiple indents in this PJS are shown as one row so pricing only
+  // has to be entered once. `priceTable` (the real per-indent rows actually submitted - see
+  // `scpDtlList: priceTable` in the Save handler) is never restructured; this only builds a
+  // display view over it, same pattern as ScsComponent2 / AddIndentGroup.
+  const rateExtendedFieldPairs = [
+    ['l1UnitPrice', 'l1ExtendedPrice'],
+    ['l1UnitPriceFx', 'l1ExtendedPriceFx'],
+    ['finalL1UnitPrice', 'finalL1ExtendedPrice'],
+    ['finalL1UnitPriceFx', 'finalL1ExtendedPriceFx'],
+    ['l2UnitPrice', 'l2ExtendedPrice'],
+    ['l2UnitPriceFx', 'l2ExtendedPriceFx'],
+    ['finalL2UnitPrice', 'finalL2ExtendedPrice'],
+    ['finalL2UnitPriceFx', 'finalL2ExtendedPriceFx'],
+    ['l3UnitPrice', 'l3ExtendedPrice'],
+    ['l3UnitPriceFx', 'l3ExtendedPriceFx'],
+    ['finalL3UnitPrice', 'finalL3ExtendedPrice'],
+    ['finalL3UnitPriceFx', 'finalL3ExtendedPriceFx'],
+  ]
+
+  const buildMergedPriceRows = rows => {
+    const byProduct = new Map()
+    rows.forEach(item => {
+      const key = item.prodCode
+      if (!byProduct.has(key)) byProduct.set(key, [])
+      byProduct.get(key).push(item)
+    })
+    return Array.from(byProduct.values()).map(group => {
+      const ordered = [...group].sort((a, b) =>
+        (a.indentCode || '').localeCompare(b.indentCode || ''),
+      )
+      const rep = ordered[0]
+      const totalQty = ordered.reduce((sum, g) => sum + (parseFloat(g.qty) || 0), 0)
+      const merged = {
+        ...rep,
+        sourceSnos: ordered.map(g => g.sno),
+        qty: totalQty,
+        indentCode: ordered.length === 1 ? rep.indentCode : null,
+        breakdown: ordered.map(g => ({
+          indentCode: g.indentCode,
+          indentType: g.indentType,
+          subAssembly: g.subAssembly,
+          indentQty: g.indentQty,
+        })),
+      }
+      // Every source shares the same rate by design (see handleRateChange/handleRateChangeFx),
+      // so the merged row's own Extended Price is simply rate x total qty.
+      rateExtendedFieldPairs.forEach(([rateField, extField]) => {
+        const rate = parseFloat(String(rep[rateField] || '').replace(/,/g, ''))
+        merged[extField] = rate ? (rate * totalQty).toString() : rep[extField]
+      })
+      return merged
+    })
+  }
+
+  // A merged (multi-indent) row's Extended Price display is a derived (rate x total qty) value
+  // that must never be written into any one source's real submission field - it gets its own
+  // shadow field name instead. A single-source row is unaffected (uses the real field, as before).
+  const extFieldName = (record, extField) =>
+    record.sourceSnos && record.sourceSnos.length > 1
+      ? `merged_${extField}${record.sno}`
+      : `${extField}${record.sno}`
+
+  // record[rateField] holds the just-typed rate (kept fresh by handleTableChange's Form->priceTable
+  // sync - this file's existing convention of reading record.xxx directly rather than an event
+  // value on these Rs-only columns). For a merged row, propagate the same rate to every OTHER
+  // source indent's own real price fields (each computed against ITS OWN qty) - mutating
+  // `priceTable` directly (what actually gets submitted) as well as `tableform` (for grand totals
+  // and any later handleTableChange resync).
+  const handleRateChange = (record, rateField, extField) => {
+    const rateVal = record[rateField]
+    if (record.sourceSnos && record.sourceSnos.length > 1) {
+      const rate = parseFloat(String(rateVal || '').replace(/,/g, '')) || 0
+      record.sourceSnos.forEach(sno => {
+        if (sno === record.sno) return
+        const source = priceTable.find(p => p.sno === sno)
+        if (!source) return
+        const srcQty = parseFloat(source.qty) || 0
+        const extVal = rate ? (rate * srcQty).toLocaleString('en-IN') : ''
+        source[rateField] = rateVal
+        source[extField] = extVal
+        tableform.setFieldsValue({ [`${rateField}${sno}`]: rateVal })
+        tableform.setFieldsValue({ [`${extField}${sno}`]: extVal })
+      })
+    }
+    handleChangeInput(extFieldName(record, extField), rateVal, record.qty)
+  }
+
+  // Same idea for the "other country" (FX) rate columns, which also derive the Rs. rate/extended
+  // pair from the entered FX rate x exchange rate - see handleChangeInputForOtherCountry. The Rs.
+  // rate mirrors the representative's real field either way (it's a rate, identical across every
+  // source by design); only the two Extended Price fields need shadowing for a merged row.
+  const handleRateChangeFx = (
+    record,
+    fxRateField,
+    rsRateField,
+    fxExtField,
+    rsExtField,
+    value,
+    isIndia,
+    level,
+  ) => {
+    handleChangeInputForOtherCountry(
+      value,
+      extFieldName(record, fxExtField),
+      `${rsRateField}${record.sno}`,
+      extFieldName(record, rsExtField),
+      record,
+      isIndia,
+      level,
+    )
+    if (!record.sourceSnos || record.sourceSnos.length <= 1 || isIndia) return
+    const exchangeRateField = { L1: 'exchangeRate1', L2: 'exchangeRate2', L3: 'exchangeRate3' }[
+      level
+    ]
+    const exchangeRate = parseFloat(allPropForm.getFieldValue(exchangeRateField)) || 0
+    const rate = parseFloat(String(value).replace(/,/g, '')) || 0
+    record.sourceSnos.forEach(sno => {
+      if (sno === record.sno) return
+      const source = priceTable.find(p => p.sno === sno)
+      if (!source) return
+      const qty = parseFloat(source.qty) || 0
+      const fxExtVal = rate ? (rate * qty).toLocaleString('en-IN') : ''
+      const rsRateVal = (rate * exchangeRate).toLocaleString('en-IN')
+      const rsExtVal = (rate * exchangeRate * qty).toLocaleString('en-IN')
+      source[fxRateField] = value
+      source[fxExtField] = fxExtVal
+      source[rsRateField] = rsRateVal
+      source[rsExtField] = rsExtVal
+      tableform.setFieldsValue({ [`${fxRateField}${sno}`]: value })
+      tableform.setFieldsValue({ [`${fxExtField}${sno}`]: fxExtVal })
+      tableform.setFieldsValue({ [`${rsRateField}${sno}`]: rsRateVal })
+      tableform.setFieldsValue({ [`${rsExtField}${sno}`]: rsExtVal })
+    })
+  }
+
+  const mergedPriceRows = useMemo(() => buildMergedPriceRows(priceTable), [priceTable])
+
   const pricecolumns = [
     {
       title: 'S.No',
@@ -2608,6 +2767,72 @@ const SupCompState = ({
       //     />
       //   </div>
       // )
+    },
+    {
+      title: 'Indent No.',
+      dataIndex: 'indentCode',
+      key: 'indentCode',
+      render: (text, record) =>
+        record.sourceSnos && record.sourceSnos.length > 1 ? (
+          <Popover
+            trigger="click"
+            placement="right"
+            title="Indents for this part"
+            content={
+              <table style={{ borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #e8e8e8', color: '#888' }}>
+                    <th style={{ textAlign: 'left', padding: '2px 8px' }}>Indent No.</th>
+                    <th style={{ textAlign: 'left', padding: '2px 8px' }}>Type</th>
+                    <th style={{ textAlign: 'left', padding: '2px 8px' }}>Sub Assembly</th>
+                    <th style={{ textAlign: 'right', padding: '2px 8px' }}>Qty</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {record.breakdown.map(b => (
+                    <tr key={b.indentCode}>
+                      <td style={{ padding: '2px 8px' }}>{b.indentCode}</td>
+                      <td style={{ padding: '2px 8px' }}>{b.indentType}</td>
+                      <td style={{ padding: '2px 8px' }}>{b.subAssembly}</td>
+                      <td style={{ padding: '2px 8px', textAlign: 'right' }}>{b.indentQty}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            }
+          >
+            <span style={{ cursor: 'pointer', color: '#1890ff' }}>
+              {record.breakdown.length} indents <InfoCircleOutlined />
+            </span>
+          </Popover>
+        ) : (
+          <span>
+            {text || '-'}{' '}
+            <Popover
+              trigger="click"
+              placement="right"
+              title="Indent Details"
+              content={
+                <div style={{ fontSize: 12, lineHeight: '20px' }}>
+                  <div>
+                    <strong>Indent No.:</strong> {record.indentCode || '-'}
+                  </div>
+                  <div>
+                    <strong>Indent Type:</strong> {record.indentType || '-'}
+                  </div>
+                  <div>
+                    <strong>Sub Assembly:</strong> {record.subAssembly || '-'}
+                  </div>
+                  <div>
+                    <strong>Unit Qty:</strong> {record.indentQty || '-'}
+                  </div>
+                </div>
+              }
+            >
+              <InfoCircleOutlined style={{ color: '#1890ff', cursor: 'pointer' }} />
+            </Popover>
+          </span>
+        ),
     },
     {
       title: 'Part Number',
@@ -2678,12 +2903,13 @@ const SupCompState = ({
             <Input
               disabled={formdisable || countryL1}
               onChange={e =>
-                handleChangeInputForOtherCountry(
-                  e.target.value,
-                  `l1ExtendedPriceFx${record.sno}`,
-                  `l1UnitPrice${record.sno}`,
-                  `l1ExtendedPrice${record.sno}`,
+                handleRateChangeFx(
                   record,
+                  'l1UnitPriceFx',
+                  'l1UnitPrice',
+                  'l1ExtendedPriceFx',
+                  'l1ExtendedPrice',
+                  e.target.value,
                   countryL1,
                   'L1',
                 )
@@ -2705,7 +2931,7 @@ const SupCompState = ({
       render: (text, record) => (
         <div style={{ backgroundColor: finalVal === 'L1' ? 'gray' : 'none', padding: '3px' }}>
           <Form.Item
-            name={`l1ExtendedPriceFx${record.sno}`}
+            name={extFieldName(record, 'l1ExtendedPriceFx')}
             initialValue={
               record.l1ExtendedPriceFx
                 ? parseFloat(record.l1ExtendedPriceFx).toLocaleString('en-IN')
@@ -2746,7 +2972,7 @@ const SupCompState = ({
           >
             <Input
               onChange={() =>
-                handleChangeInput(`l1ExtendedPrice${record.sno}`, record.l1UnitPrice, record.qty)
+                handleRateChange(record, 'l1UnitPrice', 'l1ExtendedPrice')
               }
               type="text"
               readOnly={!countryL1}
@@ -2766,7 +2992,7 @@ const SupCompState = ({
       render: (text, record) => (
         <div style={{ backgroundColor: finalVal === 'L1' ? 'gray' : 'none', padding: '3px' }}>
           <Form.Item
-            name={`l1ExtendedPrice${record.sno}`}
+            name={extFieldName(record, 'l1ExtendedPrice')}
             initialValue={
               record.l1ExtendedPrice
                 ? parseFloat(record.l1ExtendedPrice).toLocaleString('en-IN')
@@ -2803,12 +3029,13 @@ const SupCompState = ({
           >
             <Input
               onChange={e =>
-                handleChangeInputForOtherCountry(
-                  e.target.value,
-                  `finalL1ExtendedPriceFx${record.sno}`,
-                  `finalL1UnitPrice${record.sno}`,
-                  `finalL1ExtendedPrice${record.sno}`,
+                handleRateChangeFx(
                   record,
+                  'finalL1UnitPriceFx',
+                  'finalL1UnitPrice',
+                  'finalL1ExtendedPriceFx',
+                  'finalL1ExtendedPrice',
+                  e.target.value,
                   countryL1,
                   'L1',
                 )
@@ -2833,7 +3060,7 @@ const SupCompState = ({
       render: (text, record) => (
         <div style={{ backgroundColor: finalVal === 'L1' ? 'gray' : 'none', padding: '3px' }}>
           <Form.Item
-            name={`finalL1ExtendedPriceFx${record.sno}`}
+            name={extFieldName(record, 'finalL1ExtendedPriceFx')}
             initialValue={
               record.finalL1ExtendedPriceFx
                 ? parseFloat(record.finalL1ExtendedPriceFx).toLocaleString('en-IN')
@@ -2879,11 +3106,7 @@ const SupCompState = ({
             <Input
               readOnly={!countryL1}
               onChange={() =>
-                handleChangeInput(
-                  `finalL1ExtendedPrice${record.sno}`,
-                  record.finalL1UnitPrice,
-                  record.qty,
-                )
+                handleRateChange(record, 'finalL1UnitPrice', 'finalL1ExtendedPrice')
               }
               type="text"
               value={
@@ -2904,7 +3127,7 @@ const SupCompState = ({
       render: (text, record) => (
         <div style={{ backgroundColor: finalVal === 'L1' ? 'gray' : 'none', padding: '3px' }}>
           <Form.Item
-            name={`finalL1ExtendedPrice${record.sno}`}
+            name={extFieldName(record, 'finalL1ExtendedPrice')}
             initialValue={
               record.finalL1ExtendedPrice
                 ? parseFloat(record.finalL1ExtendedPrice).toLocaleString('en-IN')
@@ -2939,12 +3162,13 @@ const SupCompState = ({
           >
             <Input
               onChange={e =>
-                handleChangeInputForOtherCountry(
-                  e.target.value,
-                  `l2ExtendedPriceFx${record.sno}`,
-                  `l2UnitPrice${record.sno}`,
-                  `l2ExtendedPrice${record.sno}`,
+                handleRateChangeFx(
                   record,
+                  'l2UnitPriceFx',
+                  'l2UnitPrice',
+                  'l2ExtendedPriceFx',
+                  'l2ExtendedPrice',
+                  e.target.value,
                   countryL2,
                   'L2',
                 )
@@ -2967,7 +3191,7 @@ const SupCompState = ({
       render: (text, record) => (
         <div style={{ backgroundColor: finalVal === 'L2' ? 'gray' : 'none', padding: '3px' }}>
           <Form.Item
-            name={`l2ExtendedPriceFx${record.sno}`}
+            name={extFieldName(record, 'l2ExtendedPriceFx')}
             initialValue={
               record.l2ExtendedPriceFx
                 ? parseFloat(record.l2ExtendedPriceFx).toLocaleString('en-IN')
@@ -3007,7 +3231,7 @@ const SupCompState = ({
           >
             <Input
               onChange={() =>
-                handleChangeInput(`l2ExtendedPrice${record.sno}`, record.l2UnitPrice, record.qty)
+                handleRateChange(record, 'l2UnitPrice', 'l2ExtendedPrice')
               }
               type="text"
               readOnly={!countryL2}
@@ -3027,7 +3251,7 @@ const SupCompState = ({
       render: (text, record) => (
         <div style={{ backgroundColor: finalVal === 'L2' ? 'gray' : 'none', padding: '3px' }}>
           <Form.Item
-            name={`l2ExtendedPrice${record.sno}`}
+            name={extFieldName(record, 'l2ExtendedPrice')}
             initialValue={
               record.l2ExtendedPrice
                 ? parseFloat(record.l2ExtendedPrice).toLocaleString('en-IN')
@@ -3064,12 +3288,13 @@ const SupCompState = ({
           >
             <Input
               onChange={e =>
-                handleChangeInputForOtherCountry(
-                  e.target.value,
-                  `finalL2ExtendedPriceFx${record.sno}`,
-                  `finalL2UnitPrice${record.sno}`,
-                  `finalL2ExtendedPrice${record.sno}`,
+                handleRateChangeFx(
                   record,
+                  'finalL2UnitPriceFx',
+                  'finalL2UnitPrice',
+                  'finalL2ExtendedPriceFx',
+                  'finalL2ExtendedPrice',
+                  e.target.value,
                   countryL2,
                   'L2',
                 )
@@ -3094,7 +3319,7 @@ const SupCompState = ({
       render: (text, record) => (
         <div style={{ backgroundColor: finalVal === 'L2' ? 'gray' : 'none', padding: '3px' }}>
           <Form.Item
-            name={`finalL2ExtendedPriceFx${record.sno}`}
+            name={extFieldName(record, 'finalL2ExtendedPriceFx')}
             initialValue={
               record.finalL2ExtendedPriceFx
                 ? parseFloat(record.finalL2ExtendedPriceFx).toLocaleString('en-IN')
@@ -3139,11 +3364,7 @@ const SupCompState = ({
           >
             <Input
               onChange={() =>
-                handleChangeInput(
-                  `finalL2ExtendedPrice${record.sno}`,
-                  record.finalL2UnitPrice,
-                  record.qty,
-                )
+                handleRateChange(record, 'finalL2UnitPrice', 'finalL2ExtendedPrice')
               }
               type="text"
               value={
@@ -3164,7 +3385,7 @@ const SupCompState = ({
       render: (text, record) => (
         <div style={{ backgroundColor: finalVal === 'L2' ? 'gray' : 'none', padding: '3px' }}>
           <Form.Item
-            name={`finalL2ExtendedPrice${record.sno}`}
+            name={extFieldName(record, 'finalL2ExtendedPrice')}
             initialValue={
               record.finalL2ExtendedPrice
                 ? parseFloat(record.finalL2ExtendedPrice).toLocaleString('en-IN')
@@ -3199,12 +3420,13 @@ const SupCompState = ({
           >
             <Input
               onChange={e =>
-                handleChangeInputForOtherCountry(
-                  e.target.value,
-                  `l3ExtendedPriceFx${record.sno}`,
-                  `l3UnitPrice${record.sno}`,
-                  `l3ExtendedPrice${record.sno}`,
+                handleRateChangeFx(
                   record,
+                  'l3UnitPriceFx',
+                  'l3UnitPrice',
+                  'l3ExtendedPriceFx',
+                  'l3ExtendedPrice',
+                  e.target.value,
                   countryL3,
                   'L3',
                 )
@@ -3227,7 +3449,7 @@ const SupCompState = ({
       render: (text, record) => (
         <div style={{ backgroundColor: finalVal === 'L3' ? 'gray' : 'none', padding: '3px' }}>
           <Form.Item
-            name={`l3ExtendedPriceFx${record.sno}`}
+            name={extFieldName(record, 'l3ExtendedPriceFx')}
             initialValue={
               record.l3ExtendedPriceFx
                 ? parseFloat(record.l3ExtendedPriceFx).toLocaleString('en-IN')
@@ -3264,7 +3486,7 @@ const SupCompState = ({
           >
             <Input
               onChange={() =>
-                handleChangeInput(`l3ExtendedPrice${record.sno}`, record.l3UnitPrice, record.qty)
+                handleRateChange(record, 'l3UnitPrice', 'l3ExtendedPrice')
               }
               type="text"
               readOnly={!countryL3}
@@ -3284,7 +3506,7 @@ const SupCompState = ({
       render: (text, record) => (
         <div style={{ backgroundColor: finalVal === 'L3' ? 'gray' : 'none', padding: '3px' }}>
           <Form.Item
-            name={`l3ExtendedPrice${record.sno}`}
+            name={extFieldName(record, 'l3ExtendedPrice')}
             initialValue={
               record.l3ExtendedPrice
                 ? parseFloat(record.l3ExtendedPrice).toLocaleString('en-IN')
@@ -3321,12 +3543,13 @@ const SupCompState = ({
           >
             <Input
               onChange={e =>
-                handleChangeInputForOtherCountry(
-                  e.target.value,
-                  `finalL3ExtendedPriceFx${record.sno}`,
-                  `finalL3UnitPrice${record.sno}`,
-                  `finalL3ExtendedPrice${record.sno}`,
+                handleRateChangeFx(
                   record,
+                  'finalL3UnitPriceFx',
+                  'finalL3UnitPrice',
+                  'finalL3ExtendedPriceFx',
+                  'finalL3ExtendedPrice',
+                  e.target.value,
                   countryL3,
                   'L3',
                 )
@@ -3351,7 +3574,7 @@ const SupCompState = ({
       render: (text, record) => (
         <div style={{ backgroundColor: finalVal === 'L3' ? 'gray' : 'none', padding: '3px' }}>
           <Form.Item
-            name={`finalL3ExtendedPriceFx${record.sno}`}
+            name={extFieldName(record, 'finalL3ExtendedPriceFx')}
             initialValue={
               record.finalL3ExtendedPriceFx
                 ? parseFloat(record.finalL3ExtendedPriceFx).toLocaleString('en-IN')
@@ -3396,11 +3619,7 @@ const SupCompState = ({
           >
             <Input
               onChange={() =>
-                handleChangeInput(
-                  `finalL3ExtendedPrice${record.sno}`,
-                  record.finalL3UnitPrice,
-                  record.qty,
-                )
+                handleRateChange(record, 'finalL3UnitPrice', 'finalL3ExtendedPrice')
               }
               type="text"
               value={
@@ -3421,7 +3640,7 @@ const SupCompState = ({
       render: (text, record) => (
         <div style={{ backgroundColor: finalVal === 'L3' ? 'gray' : 'none', padding: '3px' }}>
           <Form.Item
-            name={`finalL3ExtendedPrice${record.sno}`}
+            name={extFieldName(record, 'finalL3ExtendedPrice')}
             initialValue={
               record.finalL3ExtendedPrice
                 ? parseFloat(record.finalL3ExtendedPrice).toLocaleString('en-IN')
@@ -3940,7 +4159,26 @@ const SupCompState = ({
                       <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
                         Indent Type:
                       </p>
-                      <p style={{ marginBottom: '0' }}>{indentType}</p>
+                      <p style={{ marginBottom: '0' }}>
+                        {multiIndent ? (
+                          <span>
+                            Multiple{' '}
+                            <Popover
+                              trigger="click"
+                              placement="bottomLeft"
+                              title="Indent Types in this PJS"
+                              content={renderPjsBreakdownContent()}
+                              onVisibleChange={visible => {
+                                if (visible) loadPjsBreakdown()
+                              }}
+                            >
+                              <InfoCircleOutlined style={{ color: '#1890ff', cursor: 'pointer' }} />
+                            </Popover>
+                          </span>
+                        ) : (
+                          indentType
+                        )}
+                      </p>
                     </div>
                   </div>
                   <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
@@ -3948,7 +4186,26 @@ const SupCompState = ({
                       <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
                         Indent No.:
                       </p>
-                      <p style={{ marginBottom: '0' }}>{indentcode}</p>
+                      <p style={{ marginBottom: '0' }}>
+                        {multiIndent ? (
+                          <span>
+                            {indentCodes.length} indents{' '}
+                            <Popover
+                              trigger="click"
+                              placement="bottomLeft"
+                              title="Indents in this PJS"
+                              content={renderPjsBreakdownContent()}
+                              onVisibleChange={visible => {
+                                if (visible) loadPjsBreakdown()
+                              }}
+                            >
+                              <InfoCircleOutlined style={{ color: '#1890ff', cursor: 'pointer' }} />
+                            </Popover>
+                          </span>
+                        ) : (
+                          indentcode
+                        )}
+                      </p>
                     </div>
                     {scmHdrdata && scmHdrdata.length > 0 && scmHdrdata[0].pjsRefNo ? (
                       <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -3996,7 +4253,26 @@ const SupCompState = ({
                       <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
                         Sub Assy. :
                       </p>
-                      <p style={{ marginBottom: '0' }}>{subAssy}</p>
+                      <p style={{ marginBottom: '0' }}>
+                        {multiIndent ? (
+                          <span>
+                            Multiple{' '}
+                            <Popover
+                              trigger="click"
+                              placement="bottomLeft"
+                              title="Sub Assemblies in this PJS"
+                              content={renderPjsBreakdownContent()}
+                              onVisibleChange={visible => {
+                                if (visible) loadPjsBreakdown()
+                              }}
+                            >
+                              <InfoCircleOutlined style={{ color: '#1890ff', cursor: 'pointer' }} />
+                            </Popover>
+                          </span>
+                        ) : (
+                          subAssy
+                        )}
+                      </p>
                     </div>
                   </div>
                   {scmHdrdata?.[0]?.costFlowType !== 'NEW' ? (
@@ -5036,11 +5312,11 @@ const SupCompState = ({
                     /> */}
                     <Table
                       columns={pricecolumns}
-                      dataSource={priceTable}
+                      dataSource={mergedPriceRows}
                       pagination={{
-                        pageSizeOptions: ['10', '20', '30', '50', [priceTable.length]],
+                        pageSizeOptions: ['10', '20', '30', '50', [mergedPriceRows.length]],
                         showSizeChanger: true,
-                        defaultPageSize: priceTable.length,
+                        defaultPageSize: mergedPriceRows.length,
                       }}
                       // onChange={handleChange}
                       scroll={{ y: 450, x: 3000 }}
@@ -6185,6 +6461,60 @@ const SupCompState = ({
           </Skeleton>
         </Spin>
       </div>
+    )
+  }
+
+  // "ⓘ" popover next to Indent No. on the header, for a PJS raised on a multi-indent (station)
+  // group - reuses the same getPjsIndentBreakdown endpoint the SCM PJS screens use.
+  const loadPjsBreakdown = async () => {
+    if (pjsBreakdownLoaded) return
+    setPjsBreakdownLoading(true)
+    const httpgetdetails = await IndentGroupgetDetails({
+      requestPath: 'getPjsIndentBreakdown',
+      requestData: { hdrId, tenantId },
+    })
+    setPjsBreakdownRows(
+      httpgetdetails?.responseCode === '200' ? httpgetdetails.responseData || [] : [],
+    )
+    setPjsBreakdownLoaded(true)
+    setPjsBreakdownLoading(false)
+  }
+
+  const pjsBreakdownCellStyle = { padding: '3px 12px 3px 0', whiteSpace: 'nowrap' }
+  const renderPjsBreakdownContent = () => {
+    if (pjsBreakdownLoading) {
+      return (
+        <div style={{ padding: '6px 2px' }}>
+          <Spin size="small" /> <span style={{ marginLeft: 6 }}>Loading…</span>
+        </div>
+      )
+    }
+    if (!pjsBreakdownRows.length) return <div style={{ padding: 4 }}>No detail available</div>
+    return (
+      <table style={{ borderCollapse: 'collapse', fontSize: 12 }}>
+        <thead>
+          <tr style={{ borderBottom: '1px solid #e8e8e8', color: '#888' }}>
+            <th style={{ ...pjsBreakdownCellStyle, textAlign: 'left' }}>Indent No.</th>
+            <th style={{ ...pjsBreakdownCellStyle, textAlign: 'left' }}>Indent Type</th>
+            <th style={{ ...pjsBreakdownCellStyle, textAlign: 'left' }}>Sub Assembly</th>
+            <th style={{ ...pjsBreakdownCellStyle, textAlign: 'right', paddingRight: 0 }}>
+              Parts
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {pjsBreakdownRows.map(r => (
+            <tr key={r.indentId}>
+              <td style={pjsBreakdownCellStyle}>{r.indentCode}</td>
+              <td style={pjsBreakdownCellStyle}>{r.indentType}</td>
+              <td style={pjsBreakdownCellStyle}>{r.subAssembly}</td>
+              <td style={{ ...pjsBreakdownCellStyle, textAlign: 'right', paddingRight: 0 }}>
+                {r.partCount}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     )
   }
 

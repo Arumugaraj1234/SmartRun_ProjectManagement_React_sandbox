@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Divider, Row, Button, Space, message, Select, Input, Skeleton } from 'antd'
+import { Card, Divider, Row, Button, Space, message, Select, Input, Skeleton, Popover, Spin } from 'antd'
 import { Table } from 'ant-table-extensions'
 import {
   FileExcelOutlined,
   ImportOutlined,
   SecurityScanOutlined,
   DownloadOutlined,
+  InfoCircleOutlined,
 } from '@ant-design/icons'
 import moment from 'moment'
 import store from 'store'
@@ -37,6 +38,14 @@ const Podetail = ({ isTailview }) => {
   const [potabel, setPoTable] = useState([])
   const [potable1, setPoTable1] = useState([])
   const [pochangetable, setPochangeTable] = useState([])
+  // Multi-indent PJS support: a PO's own indentCode/indentID still resolve to one
+  // representative indent (po_hdr.INDENT_ID) - when indentCount>1 (station-grouped PJS
+  // spanning multiple indents) show "N indents" + this breakdown instead of the single
+  // misleading code. Mirrors IndentGroup/index.js's identical pattern. See
+  // project_multi_indent_pjs_grouping memory, Problem 4 follow-on.
+  const [breakdownRows, setBreakdownRows] = useState([])
+  const [breakdownLoading, setBreakdownLoading] = useState(false)
+  const [breakdownForHdr, setBreakdownForHdr] = useState('')
   const [importview, setImportview] = useState(false)
   const [localview, setLocalview] = useState(false)
   const [serviceview, setServiceview] = useState(false)
@@ -555,6 +564,57 @@ const Podetail = ({ isTailview }) => {
     )
   })
 
+  const loadBreakdown = async record => {
+    if (breakdownForHdr === record.igHdrId && breakdownRows.length > 0) return
+    setBreakdownLoading(true)
+    setBreakdownForHdr(record.igHdrId)
+    setBreakdownRows([])
+    const httpgetdetails = await IndentGroupgetDetails({
+      requestPath: 'getPjsIndentBreakdown',
+      requestData: { hdrId: record.igHdrId, tenantId },
+    })
+    setBreakdownRows(
+      httpgetdetails?.responseCode === '200' ? httpgetdetails.responseData || [] : [],
+    )
+    setBreakdownLoading(false)
+  }
+
+  const breakdownCellStyle = { padding: '3px 12px 3px 0', whiteSpace: 'nowrap' }
+  const renderBreakdownContent = record => {
+    if (breakdownLoading || breakdownForHdr !== record.igHdrId) {
+      return (
+        <div style={{ padding: '6px 2px' }}>
+          <Spin size="small" /> <span style={{ marginLeft: 6 }}>Loading…</span>
+        </div>
+      )
+    }
+    if (!breakdownRows.length) return <div style={{ padding: 4 }}>No detail available</div>
+    return (
+      <table style={{ borderCollapse: 'collapse', fontSize: 12 }}>
+        <thead>
+          <tr style={{ borderBottom: '1px solid #e8e8e8', color: '#888' }}>
+            <th style={{ ...breakdownCellStyle, textAlign: 'left' }}>Indent No.</th>
+            <th style={{ ...breakdownCellStyle, textAlign: 'left' }}>Indent Type</th>
+            <th style={{ ...breakdownCellStyle, textAlign: 'left' }}>Sub Assembly</th>
+            <th style={{ ...breakdownCellStyle, textAlign: 'right', paddingRight: 0 }}>Parts</th>
+          </tr>
+        </thead>
+        <tbody>
+          {breakdownRows.map(r => (
+            <tr key={r.indentId}>
+              <td style={breakdownCellStyle}>{r.indentCode}</td>
+              <td style={breakdownCellStyle}>{r.indentType}</td>
+              <td style={breakdownCellStyle}>{r.subAssembly}</td>
+              <td style={{ ...breakdownCellStyle, textAlign: 'right', paddingRight: 0 }}>
+                {r.partCount}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )
+  }
+
   const columns = [
     {
       title: 'S.No',
@@ -566,6 +626,28 @@ const Podetail = ({ isTailview }) => {
       title: 'Indent No',
       dataIndex: 'indentCode',
       key: 'indentCode',
+      render: (text, record) => {
+        const count = Number(record.indentCount) || 0
+        if (count > 1) {
+          return (
+            <span>
+              {count} indents{' '}
+              <Popover
+                trigger="click"
+                placement="rightTop"
+                title="Indents in this PO"
+                content={renderBreakdownContent(record)}
+                onVisibleChange={visible => {
+                  if (visible) loadBreakdown(record)
+                }}
+              >
+                <InfoCircleOutlined style={{ color: '#1890ff', cursor: 'pointer' }} />
+              </Popover>
+            </span>
+          )
+        }
+        return text || '-'
+      },
       filters: indentCode3,
       filteredValue: filtersinfo.indentCode,
       onFilter: (value, record) => record?.indentCode === value,

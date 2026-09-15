@@ -909,6 +909,18 @@ const BudgetExcessSheet = () => {
     children: text !== 'null' && text !== null && text !== 'NA' ? text : '-',
   })
 
+  // A multi-indent (station-grouped) PJS now raises one budget_excess_dtl row PER contributing
+  // indent instead of one row total (see project_multi_indent_pjs_grouping memory, Problem 4) —
+  // so 2 rows sharing the same pjsRefNo are a real, correct split, not a duplicate. Without a
+  // visual cue an approver could easily mistake them for unrelated entries. Counted from the
+  // full tableData (not the currently-filtered/searched view) so the count stays accurate
+  // regardless of what's on screen right now.
+  const pjsRefNoCounts = {}
+  tableData.forEach(item => {
+    if (!item.pjsRefNo) return
+    pjsRefNoCounts[item.pjsRefNo] = (pjsRefNoCounts[item.pjsRefNo] || 0) + 1
+  })
+
   // Only used when every currently-loaded row is NEW-flow (see allRowsNewFlow above) —
   // otherwise a mixed legacy+NEW list falls back to legacyColumns with legacyCostCell blanking.
   const newFlowColumns = [
@@ -935,7 +947,23 @@ const BudgetExcessSheet = () => {
       filters: indentcode3,
       filteredValue: filtersInfo.indentCode,
       onFilter: (value, record) => record?.indentCode === value,
-      render: renderPlainCell,
+      render: (text, record) => {
+        const siblingCount = record.pjsRefNo ? pjsRefNoCounts[record.pjsRefNo] || 1 : 1
+        return {
+          props: { style: rowHighlightStyle(record) },
+          children:
+            siblingCount > 1 ? (
+              <span>
+                {text}
+                <div style={{ fontSize: 11, color: '#888' }}>
+                  split across {siblingCount} indents on this PJS
+                </div>
+              </span>
+            ) : (
+              text
+            ),
+        }
+      },
     },
     {
       title: 'Station',

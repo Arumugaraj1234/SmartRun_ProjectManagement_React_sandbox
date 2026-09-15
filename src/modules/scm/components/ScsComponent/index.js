@@ -2950,7 +2950,9 @@ const SupCompState = ({
               }
               type="text"
               value={
-                record.l1UnitPriceFx ? parseFloat(record.l1UnitPriceFx).toLocaleString('en-IN') : ''
+                record.l1ExtendedPriceFx
+                  ? parseFloat(record.l1ExtendedPriceFx).toLocaleString('en-IN')
+                  : ''
               }
               maxLength={12}
             />
@@ -3079,8 +3081,8 @@ const SupCompState = ({
               }
               type="text"
               value={
-                record.finalL1UnitPriceFx
-                  ? parseFloat(record.finalL1UnitPriceFx).toLocaleString('en-IN')
+                record.finalL1ExtendedPriceFx
+                  ? parseFloat(record.finalL1ExtendedPriceFx).toLocaleString('en-IN')
                   : ''
               }
               maxLength={12}
@@ -3209,7 +3211,9 @@ const SupCompState = ({
               }
               type="text"
               value={
-                record.l2UnitPriceFx ? parseFloat(record.l2UnitPriceFx).toLocaleString('en-IN') : ''
+                record.l2ExtendedPriceFx
+                  ? parseFloat(record.l2ExtendedPriceFx).toLocaleString('en-IN')
+                  : ''
               }
               maxLength={12}
             />
@@ -3338,8 +3342,8 @@ const SupCompState = ({
               }
               type="text"
               value={
-                record.finalL2UnitPriceFx
-                  ? parseFloat(record.finalL2UnitPriceFx).toLocaleString('en-IN')
+                record.finalL2ExtendedPriceFx
+                  ? parseFloat(record.finalL2ExtendedPriceFx).toLocaleString('en-IN')
                   : ''
               }
               maxLength={12}
@@ -3464,7 +3468,9 @@ const SupCompState = ({
               }
               type="text"
               value={
-                record.l3UnitPriceFx ? parseFloat(record.l3UnitPriceFx).toLocaleString('en-IN') : ''
+                record.l3ExtendedPriceFx
+                  ? parseFloat(record.l3ExtendedPriceFx).toLocaleString('en-IN')
+                  : ''
               }
               maxLength={12}
             />
@@ -3593,8 +3599,8 @@ const SupCompState = ({
               }
               type="text"
               value={
-                record.finalL3UnitPriceFx
-                  ? parseFloat(record.finalL3UnitPriceFx).toLocaleString('en-IN')
+                record.finalL3ExtendedPriceFx
+                  ? parseFloat(record.finalL3ExtendedPriceFx).toLocaleString('en-IN')
                   : ''
               }
               maxLength={12}

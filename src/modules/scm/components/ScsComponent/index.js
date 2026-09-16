@@ -1285,27 +1285,32 @@ const SupCompState = ({
   }
 
   const handleRaiseBudgetExcess = async () => {
-    const props = {
-      empId: employeeId,
-      tenantId,
-      scsFinalCost: finalcost,
-      hdrId: igscpId,
-      pmId: processCode,
-      processCode: ProcessCode1 === '8' ? ProcessCode1 : '5',
-      pmHdrId,
-      enquiryId,
-      docTypeCode,
-      mstId,
-    }
-    const httpresponse = await IndentGroupgetDetails({
-      requestPath: 'raiseBudgetExcess',
-      requestData: props,
-    })
-    if (httpresponse.responseCode === '200') {
-      message.success(httpresponse.responseMessage)
-      onmodalCancel()
-    } else {
-      message.error(httpresponse.responseMessage)
+    setIsSubmitting(true)
+    try {
+      const props = {
+        empId: employeeId,
+        tenantId,
+        scsFinalCost: finalcost,
+        hdrId: igscpId,
+        pmId: processCode,
+        processCode: ProcessCode1 === '8' ? ProcessCode1 : '5',
+        pmHdrId,
+        enquiryId,
+        docTypeCode,
+        mstId,
+      }
+      const httpresponse = await IndentGroupgetDetails({
+        requestPath: 'raiseBudgetExcess',
+        requestData: props,
+      })
+      if (httpresponse.responseCode === '200') {
+        message.success(httpresponse.responseMessage)
+        onmodalCancel()
+      } else {
+        message.error(httpresponse.responseMessage)
+      }
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -2950,7 +2955,9 @@ const SupCompState = ({
               }
               type="text"
               value={
-                record.l1UnitPriceFx ? parseFloat(record.l1UnitPriceFx).toLocaleString('en-IN') : ''
+                record.l1ExtendedPriceFx
+                  ? parseFloat(record.l1ExtendedPriceFx).toLocaleString('en-IN')
+                  : ''
               }
               maxLength={12}
             />
@@ -3079,8 +3086,8 @@ const SupCompState = ({
               }
               type="text"
               value={
-                record.finalL1UnitPriceFx
-                  ? parseFloat(record.finalL1UnitPriceFx).toLocaleString('en-IN')
+                record.finalL1ExtendedPriceFx
+                  ? parseFloat(record.finalL1ExtendedPriceFx).toLocaleString('en-IN')
                   : ''
               }
               maxLength={12}
@@ -3209,7 +3216,9 @@ const SupCompState = ({
               }
               type="text"
               value={
-                record.l2UnitPriceFx ? parseFloat(record.l2UnitPriceFx).toLocaleString('en-IN') : ''
+                record.l2ExtendedPriceFx
+                  ? parseFloat(record.l2ExtendedPriceFx).toLocaleString('en-IN')
+                  : ''
               }
               maxLength={12}
             />
@@ -3338,8 +3347,8 @@ const SupCompState = ({
               }
               type="text"
               value={
-                record.finalL2UnitPriceFx
-                  ? parseFloat(record.finalL2UnitPriceFx).toLocaleString('en-IN')
+                record.finalL2ExtendedPriceFx
+                  ? parseFloat(record.finalL2ExtendedPriceFx).toLocaleString('en-IN')
                   : ''
               }
               maxLength={12}
@@ -3464,7 +3473,9 @@ const SupCompState = ({
               }
               type="text"
               value={
-                record.l3UnitPriceFx ? parseFloat(record.l3UnitPriceFx).toLocaleString('en-IN') : ''
+                record.l3ExtendedPriceFx
+                  ? parseFloat(record.l3ExtendedPriceFx).toLocaleString('en-IN')
+                  : ''
               }
               maxLength={12}
             />
@@ -3593,8 +3604,8 @@ const SupCompState = ({
               }
               type="text"
               value={
-                record.finalL3UnitPriceFx
-                  ? parseFloat(record.finalL3UnitPriceFx).toLocaleString('en-IN')
+                record.finalL3ExtendedPriceFx
+                  ? parseFloat(record.finalL3ExtendedPriceFx).toLocaleString('en-IN')
                   : ''
               }
               maxLength={12}
@@ -4207,14 +4218,6 @@ const SupCompState = ({
                         )}
                       </p>
                     </div>
-                    {scmHdrdata && scmHdrdata.length > 0 && scmHdrdata[0].pjsRefNo ? (
-                      <div style={{ display: 'flex', alignItems: 'center' }}>
-                        <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
-                          PJS No.:
-                        </p>
-                        <p style={{ marginBottom: '0' }}>{scmHdrdata[0].pjsRefNo}</p>
-                      </div>
-                    ) : null}
                   </div>
                   <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
                     <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -4387,6 +4390,17 @@ const SupCompState = ({
                       </div>
                     </div>
                   ) : null}
+                  <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3" />
+                  {scmHdrdata && scmHdrdata.length > 0 && scmHdrdata[0].pjsRefNo ? (
+                    <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
+                          PJS No.:
+                        </p>
+                        <p style={{ marginBottom: '0' }}>{scmHdrdata[0].pjsRefNo}</p>
+                      </div>
+                    </div>
+                  ) : null}
                   {scmHdrdata?.[0]?.costFlowType === 'NEW' &&
                   docStatus?.[0]?.docStatusDesc === 'Project Approved'
                     ? (() => {
@@ -4439,7 +4453,7 @@ const SupCompState = ({
                           <ButtonComponent
                             type="primary"
                             text="Raise Budget Excess"
-                            disable={false}
+                            disable={isdisablebtn || isSubmitting}
                           />
                         </Popconfirm>
                       </div>

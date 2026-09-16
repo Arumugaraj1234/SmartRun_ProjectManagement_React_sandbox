@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import store from 'store'
-import { Skeleton, Form, Select, message, Input, Card, DatePicker, Row, Col, Button } from 'antd'
+import { Skeleton, Form, Select, message, Input, Card, DatePicker, Row, Col, Button, Popover } from 'antd'
 import moment from 'moment'
 import { useHistory } from 'react-router-dom'
-import { FileExcelOutlined, CommentOutlined } from '@ant-design/icons'
+import { FileExcelOutlined, CommentOutlined, InfoCircleOutlined } from '@ant-design/icons'
 import { Table } from 'ant-table-extensions'
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
@@ -39,6 +39,10 @@ const BudgetExcessSheet = () => {
   const [deptEmp, setDeptEmp] = useState([])
   const [isDtlModal, setDtlModal] = useState(false)
   const [hdrId, setHdrId] = useState(null)
+  // Sibling BE_HDR_IDs when the opened row is a merged multi-indent PJS (see
+  // project_multi_indent_pjs_grouping memory) - Save/Approve apply to every id in this list.
+  // A single-indent row's list is just [beHdrId].
+  const [hdrIdList, setHdrIdList] = useState([])
   const [singledetail, setSingleDetail] = useState(null)
   const [rejectRemarksCard, setRejectRemarksCard] = useState(false)
   const disable = true
@@ -191,7 +195,12 @@ const BudgetExcessSheet = () => {
       action: rec.action !== 'null' && rec.action !== '' ? rec.action : '',
       rca: rec.rootCause !== 'null' && rec.rootCause !== '' ? rec.rootCause : '',
       reason: rec.reason !== 'null' && rec.reason !== '' ? rec.reason : '',
-      indentcode: rec.indentCode !== 'null' && rec.indentCode !== '' ? rec.indentCode : '',
+      indentcode:
+        rec.siblingRows?.length > 1
+          ? `${rec.siblingRows.length} indents`
+          : rec.indentCode !== 'null' && rec.indentCode !== ''
+          ? rec.indentCode
+          : '',
       projectcode: rec.projectCode !== 'null' && rec.projectCode !== '' ? rec.projectCode : '',
       vendorname: rec.vendorName !== 'null' && rec.vendorName !== '' ? rec.vendorName : '',
       Dept: rec.responsible !== 'null' && rec.responsible !== '' ? rec.responsible : '',
@@ -210,7 +219,11 @@ const BudgetExcessSheet = () => {
           : '',
       station: rec.assemblyValue !== 'null' && rec.assemblyValue !== '' ? rec.assemblyValue : '',
       subAssemblyValue:
-        rec.subAssemblyValue !== 'null' && rec.subAssemblyValue !== null && rec.subAssemblyValue !== ''
+        new Set((rec.siblingRows || []).map(r => r.subAssemblyValue)).size > 1
+          ? 'Multiple'
+          : rec.subAssemblyValue !== 'null' &&
+            rec.subAssemblyValue !== null &&
+            rec.subAssemblyValue !== ''
           ? rec.subAssemblyValue
           : '',
       pjsRefNo: rec.pjsRefNo !== 'null' && rec.pjsRefNo !== null && rec.pjsRefNo !== '' ? rec.pjsRefNo : '',
@@ -222,6 +235,14 @@ const BudgetExcessSheet = () => {
       overallExcessDtl: rec.overallExcessCost ? formatIndianNumber(rec.overallExcessCost) : '',
     })
     setHdrId(rec.beHdrId)
+    // A merged multi-indent row carries every contributing indent's own BE_HDR_ID here so
+    // Save/Approve below apply to all of them in one action - see project_multi_indent_pjs_grouping
+    // memory. A single-indent row's list is just its own beHdrId.
+    setHdrIdList(
+      rec.siblingRows && rec.siblingRows.length > 1
+        ? rec.siblingRows.map(r => r.beHdrId)
+        : [rec.beHdrId],
+    )
 
     setDtlModal(true)
   }
@@ -294,6 +315,10 @@ const BudgetExcessSheet = () => {
       const keyareaobj = {
         tenantId,
         beHdrId: hdrId,
+        // Every sibling BE_HDR_ID for a merged multi-indent row (else just [hdrId]) - applies the
+        // same reason/RCA/action/dept to all of them in one call. See
+        // project_multi_indent_pjs_grouping memory.
+        hdrIds: hdrIdList.length > 0 ? hdrIdList : [hdrId],
         reason: formValues.reason,
         rootCase: formValues.rca,
         action: formValues.action,
@@ -333,6 +358,10 @@ const BudgetExcessSheet = () => {
               : singledetail.documentStatusMstList[0].currSequence,
           tenantId,
           hdrId,
+          // Every sibling BE_HDR_ID for a merged multi-indent row (else just [hdrId]) - advances
+          // all of them together in one Approve/Reject click. See
+          // project_multi_indent_pjs_grouping memory.
+          hdrIds: hdrIdList.length > 0 ? hdrIdList : [hdrId],
           empId: empid,
           remarks: formValues.remarkfield,
           pmId,
@@ -607,6 +636,64 @@ const BudgetExcessSheet = () => {
   })
 
   const allRowsNewFlow = tableData.length > 0 && tableData.every(item => item.costFlowType === 'NEW')
+
+  // A multi-indent (station-grouped) PJS raises one budget_excess_dtl row PER contributing indent
+  // (see project_multi_indent_pjs_grouping memory, Problem 4). Approving those separately means
+  // clicking Approve once per indent for what is really one purchasing event - collapse siblings
+  // sharing the same pjsRefNo into a single row with a single Approve action. Grouped from the full
+  // tableData (not searchedData) so a column filter/search that happens to isolate one sibling still
+  // finds its true siblings and includes every one of them in the merged action.
+  // Group by pjsRefNo + sequenceNo, not pjsRefNo alone - a PJS can be raised, rejected (SEQUENCE_NO
+  // '6', the BUDGET_INDENT_REJECTION_CODE), and re-raised, leaving several historical batches of
+  // rows that all share the same PJS Ref No. Rows in the SAME batch always sit at the same
+  // sequence (Approve/Previous Stage now always move every sibling together in one action), so the
+  // compound key merges a batch's own rows together while keeping separate batches - e.g. an old
+  // rejected pair and a fresh re-raised pair - as their own distinct merged rows.
+  const groupKey = item => `${item.pjsRefNo}|${item.sequenceNo}`
+  const siblingsByGroupKey = {}
+  tableData.forEach(item => {
+    if (!item.pjsRefNo) return
+    const key = groupKey(item)
+    if (!siblingsByGroupKey[key]) siblingsByGroupKey[key] = []
+    siblingsByGroupKey[key].push(item)
+  })
+
+  const buildMergedRow = siblings => {
+    const sum = field =>
+      siblings.reduce((total, row) => total + (parseFloat(row[field]) || 0), 0)
+    return {
+      ...siblings[0],
+      siblingRows: siblings,
+      // Allocated Value / Actual Spent So Far / Overall Excess (Station) are already the same
+      // station-level snapshot on every sibling row (see project_multi_indent_pjs_grouping memory) -
+      // no summing needed there. actualCost (PJS Value) and actualExcess are each indent's own share
+      // of this PJS, so the merged row shows the PJS's real total across every contributing indent.
+      actualCost: sum('actualCost'),
+      actualExcess: sum('actualExcess'),
+      verCheck: siblings.some(row => row.verCheck === '1') ? '1' : siblings[0].verCheck,
+    }
+  }
+
+  const mergeMultiIndentRows = data => {
+    const seenGroupKey = new Set()
+    const merged = []
+    data.forEach(row => {
+      const key = row.pjsRefNo ? groupKey(row) : null
+      const siblings = key ? siblingsByGroupKey[key] : null
+      if (!siblings || siblings.length <= 1) {
+        merged.push(row)
+        return
+      }
+      if (seenGroupKey.has(key)) return
+      seenGroupKey.add(key)
+      merged.push(buildMergedRow(siblings))
+    })
+    return merged
+  }
+
+  // Legacy rows are never split per-indent (that's a NEW-flow-only mechanism), so only merge when
+  // every row on screen is NEW-flow - degrades to the exact pre-merge list otherwise.
+  const displayData = allRowsNewFlow ? mergeMultiIndentRows(searchedData) : searchedData
 
   const legacyCostCell = (text, record) => {
     if (record.costFlowType === 'NEW') {
@@ -909,17 +996,34 @@ const BudgetExcessSheet = () => {
     children: text !== 'null' && text !== null && text !== 'NA' ? text : '-',
   })
 
-  // A multi-indent (station-grouped) PJS now raises one budget_excess_dtl row PER contributing
-  // indent instead of one row total (see project_multi_indent_pjs_grouping memory, Problem 4) —
-  // so 2 rows sharing the same pjsRefNo are a real, correct split, not a duplicate. Without a
-  // visual cue an approver could easily mistake them for unrelated entries. Counted from the
-  // full tableData (not the currently-filtered/searched view) so the count stays accurate
-  // regardless of what's on screen right now.
-  const pjsRefNoCounts = {}
-  tableData.forEach(item => {
-    if (!item.pjsRefNo) return
-    pjsRefNoCounts[item.pjsRefNo] = (pjsRefNoCounts[item.pjsRefNo] || 0) + 1
-  })
+  const breakdownCellStyle = { padding: '3px 12px 3px 0', whiteSpace: 'nowrap' }
+
+  const renderIndentBreakdown = siblings => (
+    <table style={{ borderCollapse: 'collapse', fontSize: 12 }}>
+      <thead>
+        <tr style={{ borderBottom: '1px solid #e8e8e8', color: '#888' }}>
+          <th style={{ ...breakdownCellStyle, textAlign: 'left' }}>Indent No.</th>
+          <th style={{ ...breakdownCellStyle, textAlign: 'right' }}>PJS Value</th>
+          <th style={{ ...breakdownCellStyle, textAlign: 'right', paddingRight: 0 }}>
+            Actual Excess
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {siblings.map(r => (
+          <tr key={r.beHdrId}>
+            <td style={breakdownCellStyle}>{r.indentCode}</td>
+            <td style={{ ...breakdownCellStyle, textAlign: 'right' }}>
+              {parseFloat(r.actualCost || 0).toLocaleString('en-IN')}
+            </td>
+            <td style={{ ...breakdownCellStyle, textAlign: 'right', paddingRight: 0 }}>
+              {parseFloat(r.actualExcess || 0).toLocaleString('en-IN')}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
 
   // Only used when every currently-loaded row is NEW-flow (see allRowsNewFlow above) —
   // otherwise a mixed legacy+NEW list falls back to legacyColumns with legacyCostCell blanking.
@@ -948,16 +1052,16 @@ const BudgetExcessSheet = () => {
       filteredValue: filtersInfo.indentCode,
       onFilter: (value, record) => record?.indentCode === value,
       render: (text, record) => {
-        const siblingCount = record.pjsRefNo ? pjsRefNoCounts[record.pjsRefNo] || 1 : 1
+        const siblings = record.siblingRows || []
         return {
           props: { style: rowHighlightStyle(record) },
           children:
-            siblingCount > 1 ? (
+            siblings.length > 1 ? (
               <span>
-                {text}
-                <div style={{ fontSize: 11, color: '#888' }}>
-                  split across {siblingCount} indents on this PJS
-                </div>
+                {siblings.length} indents{' '}
+                <Popover content={renderIndentBreakdown(siblings)} trigger="click">
+                  <InfoCircleOutlined style={{ color: '#1890ff', cursor: 'pointer' }} />
+                </Popover>
               </span>
             ) : (
               text
@@ -982,7 +1086,14 @@ const BudgetExcessSheet = () => {
       filters: subAssyValue3,
       filteredValue: filtersInfo.subAssemblyValue,
       onFilter: (value, record) => record?.subAssemblyValue === value,
-      render: renderPlainCell,
+      render: (text, record) => {
+        const siblings = record.siblingRows || []
+        const distinctSubAssembly = new Set(siblings.map(r => r.subAssemblyValue)).size
+        return {
+          props: { style: rowHighlightStyle(record) },
+          children: distinctSubAssembly > 1 ? 'Multiple' : text,
+        }
+      },
     },
     {
       title: 'PJS Ref No.',
@@ -1355,6 +1466,17 @@ const BudgetExcessSheet = () => {
                         <InputComponent type="text" disabled={disable} />
                       </Form.Item>
                     </div>
+                    {singledetail?.siblingRows?.length > 1 ? (
+                      <div className="col-md-12" style={{ marginBottom: 12 }}>
+                        <span style={{ fontWeight: 'bold' }}>
+                          PJS Value / Actual Excess above are totals across{' '}
+                          {singledetail.siblingRows.length} indents on this PJS:
+                        </span>
+                        <div style={{ marginTop: 4 }}>
+                          {renderIndentBreakdown(singledetail.siblingRows)}
+                        </div>
+                      </div>
+                    ) : null}
                   </>
                 ) : (
                   <div className="col-md-3">
@@ -1709,7 +1831,7 @@ const BudgetExcessSheet = () => {
                 />
               </div>
               <Table
-                dataSource={searchedData}
+                dataSource={displayData}
                 columns={columns}
                 exportableProps={{
                   fileName: `Budget_Excess_Sheet${currentDateTime}`,

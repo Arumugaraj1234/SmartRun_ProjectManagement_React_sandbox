@@ -4369,6 +4369,17 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
                           </div>
                         </div>
                       )}
+                      <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3" />
+                      {scmHdrdata && scmHdrdata.length > 0 && scmHdrdata[0].pjsRefNo ? (
+                        <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                          <div style={{ display: 'flex', alignItems: 'center' }}>
+                            <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
+                              PJS No.:
+                            </p>
+                            <p style={{ marginBottom: '0' }}>{scmHdrdata[0].pjsRefNo}</p>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
 
                     <Divider orientation="left" style={{ margin: '0px' }}>

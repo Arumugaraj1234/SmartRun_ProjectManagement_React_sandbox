@@ -1285,27 +1285,32 @@ const SupCompState = ({
   }
 
   const handleRaiseBudgetExcess = async () => {
-    const props = {
-      empId: employeeId,
-      tenantId,
-      scsFinalCost: finalcost,
-      hdrId: igscpId,
-      pmId: processCode,
-      processCode: ProcessCode1 === '8' ? ProcessCode1 : '5',
-      pmHdrId,
-      enquiryId,
-      docTypeCode,
-      mstId,
-    }
-    const httpresponse = await IndentGroupgetDetails({
-      requestPath: 'raiseBudgetExcess',
-      requestData: props,
-    })
-    if (httpresponse.responseCode === '200') {
-      message.success(httpresponse.responseMessage)
-      onmodalCancel()
-    } else {
-      message.error(httpresponse.responseMessage)
+    setIsSubmitting(true)
+    try {
+      const props = {
+        empId: employeeId,
+        tenantId,
+        scsFinalCost: finalcost,
+        hdrId: igscpId,
+        pmId: processCode,
+        processCode: ProcessCode1 === '8' ? ProcessCode1 : '5',
+        pmHdrId,
+        enquiryId,
+        docTypeCode,
+        mstId,
+      }
+      const httpresponse = await IndentGroupgetDetails({
+        requestPath: 'raiseBudgetExcess',
+        requestData: props,
+      })
+      if (httpresponse.responseCode === '200') {
+        message.success(httpresponse.responseMessage)
+        onmodalCancel()
+      } else {
+        message.error(httpresponse.responseMessage)
+      }
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -4213,14 +4218,6 @@ const SupCompState = ({
                         )}
                       </p>
                     </div>
-                    {scmHdrdata && scmHdrdata.length > 0 && scmHdrdata[0].pjsRefNo ? (
-                      <div style={{ display: 'flex', alignItems: 'center' }}>
-                        <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
-                          PJS No.:
-                        </p>
-                        <p style={{ marginBottom: '0' }}>{scmHdrdata[0].pjsRefNo}</p>
-                      </div>
-                    ) : null}
                   </div>
                   <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
                     <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -4393,6 +4390,17 @@ const SupCompState = ({
                       </div>
                     </div>
                   ) : null}
+                  <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3" />
+                  {scmHdrdata && scmHdrdata.length > 0 && scmHdrdata[0].pjsRefNo ? (
+                    <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
+                          PJS No.:
+                        </p>
+                        <p style={{ marginBottom: '0' }}>{scmHdrdata[0].pjsRefNo}</p>
+                      </div>
+                    </div>
+                  ) : null}
                   {scmHdrdata?.[0]?.costFlowType === 'NEW' &&
                   docStatus?.[0]?.docStatusDesc === 'Project Approved'
                     ? (() => {
@@ -4445,7 +4453,7 @@ const SupCompState = ({
                           <ButtonComponent
                             type="primary"
                             text="Raise Budget Excess"
-                            disable={false}
+                            disable={isdisablebtn || isSubmitting}
                           />
                         </Popconfirm>
                       </div>

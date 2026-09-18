@@ -2693,6 +2693,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
             }
           >
             <Input
+              title={allFormValues[`l1UnitPriceFx${record.sno}`] || ''}
               disabled={countryL1 || formdisable}
               onChange={e =>
                 handleRateChangeFx(
@@ -2745,6 +2746,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
             }
           >
             <Input
+              title={allFormValues[extFieldName(record, 'l1ExtendedPriceFx')] || ''}
               readOnly
               disabled={countryL1 || formdisable}
               onChange={e =>
@@ -2790,6 +2792,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
             }
           >
             <Input
+              title={allFormValues[`l1UnitPrice${record.sno}`] || ''}
               onChange={e => handleRateChange(record, 'l1UnitPrice', 'l1ExtendedPrice', e.target.value)}
               // onFocus={()=>handleSetCurrency()}
               type="text"
@@ -2821,6 +2824,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
             }
           >
             <Input
+              title={allFormValues[extFieldName(record, 'l1ExtendedPrice')] || ''}
               disabled
               type="text"
               // value={
@@ -2852,6 +2856,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
             }
           >
             <Input
+              title={allFormValues[`finalL1UnitPriceFx${record.sno}`] || ''}
               onChange={e =>
                 handleRateChangeFx(
                   record,
@@ -2895,6 +2900,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
             }
           >
             <Input
+              title={allFormValues[extFieldName(record, 'finalL1ExtendedPriceFx')] || ''}
               readOnly
               onChange={e =>
                 handleChangeInputForOtherCountry(
@@ -2937,6 +2943,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
             }
           >
             <Input
+              title={allFormValues[`finalL1UnitPrice${record.sno}`] || ''}
               onChange={e => handleRateChange(record, 'finalL1UnitPrice', 'finalL1ExtendedPrice', e.target.value)}
               type="text"
               readOnly={!countryL1}
@@ -2969,6 +2976,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
             }
           >
             <Input
+              title={allFormValues[extFieldName(record, 'finalL1ExtendedPrice')] || ''}
               disabled
               type="text"
               // value={
@@ -2998,6 +3006,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
             }
           >
             <Input
+              title={allFormValues[`l2UnitPriceFx${record.sno}`] || ''}
               onChange={e =>
                 handleRateChangeFx(
                   record,
@@ -3039,6 +3048,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
             }
           >
             <Input
+              title={allFormValues[extFieldName(record, 'l2ExtendedPriceFx')] || ''}
               readOnly
               onChange={e =>
                 handleChangeInputForOtherCountry(
@@ -3078,6 +3088,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
             }
           >
             <Input
+              title={allFormValues[`l2UnitPrice${record.sno}`] || ''}
               onChange={e => handleRateChange(record, 'l2UnitPrice', 'l2ExtendedPrice', e.target.value)}
               type="text"
               readOnly={!countryL2}
@@ -3108,6 +3119,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
             }
           >
             <Input
+              title={allFormValues[extFieldName(record, 'l2ExtendedPrice')] || ''}
               disabled
               type="text"
               // value={
@@ -3139,6 +3151,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
             }
           >
             <Input
+              title={allFormValues[`finalL2UnitPriceFx${record.sno}`] || ''}
               onChange={e =>
                 handleRateChangeFx(
                   record,
@@ -3182,6 +3195,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
             }
           >
             <Input
+              title={allFormValues[extFieldName(record, 'finalL2ExtendedPriceFx')] || ''}
               readOnly
               onChange={e =>
                 handleChangeInputForOtherCountry(
@@ -3224,6 +3238,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
             }
           >
             <Input
+              title={allFormValues[`finalL2UnitPrice${record.sno}`] || ''}
               onChange={e => handleRateChange(record, 'finalL2UnitPrice', 'finalL2ExtendedPrice', e.target.value)}
               type="text"
               // value={
@@ -3255,6 +3270,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
             }
           >
             <Input
+              title={allFormValues[extFieldName(record, 'finalL2ExtendedPrice')] || ''}
               disabled
               type="text"
               // value={
@@ -3284,6 +3300,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
             }
           >
             <Input
+              title={allFormValues[`l3UnitPriceFx${record.sno}`] || ''}
               onChange={e =>
                 handleRateChangeFx(
                   record,
@@ -3325,6 +3342,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
             }
           >
             <Input
+              title={allFormValues[extFieldName(record, 'l3ExtendedPriceFx')] || ''}
               readOnly
               onChange={e =>
                 handleChangeInputForOtherCountry(
@@ -3364,6 +3382,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
             }
           >
             <Input
+              title={allFormValues[`l3UnitPrice${record.sno}`] || ''}
               onChange={e => handleRateChange(record, 'l3UnitPrice', 'l3ExtendedPrice', e.target.value)}
               type="text"
               readOnly={!countryL3}
@@ -3394,6 +3413,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
             }
           >
             <Input
+              title={allFormValues[extFieldName(record, 'l3ExtendedPrice')] || ''}
               disabled
               type="text"
               // value={
@@ -3425,6 +3445,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
             }
           >
             <Input
+              title={allFormValues[`finalL3UnitPriceFx${record.sno}`] || ''}
               onChange={e =>
                 handleRateChangeFx(
                   record,
@@ -3468,6 +3489,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
             }
           >
             <Input
+              title={allFormValues[extFieldName(record, 'finalL3ExtendedPriceFx')] || ''}
               readOnly
               onChange={e =>
                 handleChangeInputForOtherCountry(
@@ -3510,6 +3532,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
             }
           >
             <Input
+              title={allFormValues[`finalL3UnitPrice${record.sno}`] || ''}
               onChange={e => handleRateChange(record, 'finalL3UnitPrice', 'finalL3ExtendedPrice', e.target.value)}
               type="text"
               // value={
@@ -3541,6 +3564,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
             }
           >
             <Input
+              title={allFormValues[extFieldName(record, 'finalL3ExtendedPrice')] || ''}
               disabled
               type="text"
               // value={

@@ -395,6 +395,12 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
   })
 
   const insertcolumns = [
+    {
+      title: 'S.No',
+      key: 'slno',
+      width: 50,
+      render: (text, record, index) => index + 1,
+    },
     // Station grouping pulls parts from several indents at once, so show which indent each row came from.
     ...(isNewFlow
       ? [

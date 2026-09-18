@@ -205,39 +205,27 @@ const Poimport = ({ rowData, onClose, calldetailapi, isView }) => {
         POTC: response?.responseData[0]?.poTC,
         GTC: formatValue2(response?.responseData[0]?.gtc),
         subtotal: formatValue2(response?.responseData[0]?.basicTotal),
-        subtotalFx:
-          response?.responseData[0]?.basicTotalFx !== null &&
-          response?.responseData[0]?.basicTotalFx !== '' &&
-          response?.responseData[0]?.basicTotalFx !== '0.000'
-            ? formatValue2(response?.responseData[0]?.basicTotalFx)
-            : formatValue2(response?.responseData[0]?.basicTotal),
+        subtotalFx: hasRealFxValue(response?.responseData[0]?.basicTotalFx)
+          ? formatValue2(response?.responseData[0]?.basicTotalFx)
+          : formatValue2(response?.responseData[0]?.basicTotal),
         lessdiscounts: formatValue2(response?.responseData[0]?.discount),
         documentcharges: formatValue2(response?.responseData[0]?.docCharges),
         inspectioncharges: formatValue2(response?.responseData[0]?.inspectionCharges),
         // pf: formatValue2(response?.responseData[0]?.pf),
-        pf:
-          response?.responseData[0]?.pffx !== null &&
-          response?.responseData[0]?.pffx !== '' &&
-          response?.responseData[0]?.pffx !== '0.000'
-            ? formatValue2(response?.responseData[0]?.pffx)
-            : formatValue2(response?.responseData[0]?.pf || 0),
+        pf: hasRealFxValue(response?.responseData[0]?.pffx)
+          ? formatValue2(response?.responseData[0]?.pffx)
+          : formatValue2(response?.responseData[0]?.pf || 0),
         freight: formatValue2(response?.responseData[0]?.frieght),
         // transportCharges: formatValue2(response?.responseData[0]?.transportCharges || 0),
-        transportCharges:
-          response?.responseData[0]?.transportChargesFx !== null &&
-          response?.responseData[0]?.transportChargesFx !== '' &&
-          response?.responseData[0]?.transportChargesFx !== '0.000'
-            ? formatValue2(response?.responseData[0]?.transportChargesFx)
-            : formatValue2(response?.responseData[0]?.transportCharges || 0),
+        transportCharges: hasRealFxValue(response?.responseData[0]?.transportChargesFx)
+          ? formatValue2(response?.responseData[0]?.transportChargesFx)
+          : formatValue2(response?.responseData[0]?.transportCharges || 0),
         insurancevalue: formatValue2(response?.responseData[0]?.insuranceValue),
         testingcharges: formatValue2(response?.responseData[0]?.testingCharges),
         Total: formatValue2(response?.responseData[0]?.totalValue),
-        TotalFx:
-          response?.responseData[0]?.totalValueFx !== null &&
-          response?.responseData[0]?.totalValueFx !== '' &&
-          response?.responseData[0]?.totalValueFx !== '0.000'
-            ? formatValue2(response?.responseData[0]?.totalValueFx)
-            : formatValue2(response?.responseData[0]?.totalValue),
+        TotalFx: hasRealFxValue(response?.responseData[0]?.totalValueFx)
+          ? formatValue2(response?.responseData[0]?.totalValueFx)
+          : formatValue2(response?.responseData[0]?.totalValue),
         Shippingmarks: response?.responseData[0]?.remarks,
       })
     }
@@ -524,6 +512,11 @@ const Poimport = ({ rowData, onClose, calldetailapi, isView }) => {
   const formatValue2 = value => {
     return value !== '' ? parseFloat(value).toLocaleString('en-IN') : '0'
   }
+  // Fx charge columns are decimal(12,2) or decimal(12,3) depending on the column
+  // (e.g. TRANSPORT_CHARGES_FX/P_F_FX vs BASIC_TOTAL_FX/TOTAL_VALUE_FX), so a zero
+  // Fx value can come back as '0.00' or '0.000' - compare numerically, not by string.
+  const hasRealFxValue = value =>
+    value !== null && value !== undefined && value !== '' && parseFloat(value) !== 0
   const handleHSNCode = async e => {
     const response = await indentFileUpload({
       requestPath: 'getHsnCodeByPartNo',
@@ -844,8 +837,7 @@ const Poimport = ({ rowData, onClose, calldetailapi, isView }) => {
       key: 'unitRateFx',
       className: 'right-align-cell',
       render: (text, record) => {
-        const value =
-          text && text !== '' && text !== '0.000' && text !== null ? text : record.unitRate
+        const value = hasRealFxValue(text) ? text : record.unitRate
         const numericValue = parseFloat(value)
         return !Number.isNaN(numericValue) ? numericValue.toLocaleString('en-IN') : value
       },
@@ -870,8 +862,7 @@ const Poimport = ({ rowData, onClose, calldetailapi, isView }) => {
       key: 'totalValueFx',
       className: 'right-align-cell',
       render: (text, record) => {
-        const value =
-          text && text !== '' && text !== '0.000' && text !== null ? text : record.totalValue
+        const value = hasRealFxValue(text) ? text : record.totalValue
         const numericValue = parseFloat(value)
         return !Number.isNaN(numericValue) ? numericValue.toLocaleString('en-IN') : value
       },

@@ -178,16 +178,20 @@ const PRASearchCardComp = () => {
           requestPath: 'InsertPRA',
           requestData: {
             invoiceDate: popupresp?.[0]?.invoiceDate,
-            transportValue: formData.transportValue,
-            pfValue: formData.pfValue,
-            insuranceValue: formData.insuranceValue,
-            otherValue: formData.otherValue,
+            // These 5 charges have no live Form.Item in this view (shown as read-only <p>s
+            // below), so fieldForm never holds them — pull from the already-loaded PRA record
+            // instead of formData.xxx, which is always undefined here and used to silently
+            // zero these charges out in pra_hdr on every Save/Approve.
+            transportValue: popupresp?.[0]?.transportValue,
+            pfValue: popupresp?.[0]?.pfValue,
+            insuranceValue: popupresp?.[0]?.insuranceValue,
+            otherValue: popupresp?.[0]?.otherValue,
             tds: formData.tds,
             amountPayable: Number(removeCommas(formData.amountPayable)),
             remarks: formData.remarks,
             retention: formData.retention,
             ld: formData.ld,
-            others: formData.others,
+            others: popupresp?.[0]?.others,
             praId,
             tenantId,
             empId: employeeId,
@@ -319,12 +323,11 @@ const PRASearchCardComp = () => {
       }
 
       // Setting form fields
+      // transportValue/pfValue/insuranceValue/otherValue are intentionally NOT set here —
+      // this view has no live Form.Item for them (read-only <p>s instead), so saveData() reads
+      // them straight from popupresp[0] rather than from this form.
       fieldForm.setFieldsValue({
         invoiceNumber: data.invoiceNumber,
-        transportValue: data.transportValue,
-        pfValue: data.pfValue,
-        insuranceValue: data.insuranceValue,
-        otherValue: data.otherValue,
         remarks: data.remarks,
         tds: data.tds,
         retention: data.retention,

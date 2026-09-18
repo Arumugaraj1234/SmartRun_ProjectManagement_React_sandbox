@@ -13,6 +13,7 @@ import {
   Spin,
   AutoComplete,
   Tooltip,
+  Checkbox,
 } from 'antd'
 import { UploadOutlined, DeleteOutlined } from '@ant-design/icons'
 import fileDownload from 'js-file-download'
@@ -49,6 +50,7 @@ const Addindent = ({ handleCancel, isModalVisible, componentdata, commonProjectI
   // const [selectedProduct, setSelectedProduct] = useState(null)
   const [isloading, setLoading] = useState(false)
   const [indentForList, setIndentForList] = useState([])
+  const [showPreview, setShowPreview] = useState(false)
 
   const Tab = store.get('Tab')
   const employeeId = store.get('employeeId')
@@ -230,6 +232,7 @@ const Addindent = ({ handleCancel, isModalVisible, componentdata, commonProjectI
     tableform.resetFields()
     setExpectIndentDate(ExpectDefaultDate)
     setIndentDate(moment())
+    setShowPreview(false)
   }
 
   // const handleChange = ({ fileList }) => {
@@ -892,6 +895,100 @@ const Addindent = ({ handleCancel, isModalVisible, componentdata, commonProjectI
     },
   ]
 
+  const previewColumns = [
+    {
+      title: 'S.No',
+      dataIndex: 'id',
+      key: 'sno',
+      width: '3%',
+      render: (text, record, index) => index + 1,
+    },
+    {
+      title: 'Part Number',
+      dataIndex: 'partNumber',
+      key: 'partNumber',
+      width: '10%',
+      render: text => (
+        <span style={{ color: '#1890ff', wordBreak: 'break-word', whiteSpace: 'normal' }}>
+          {text}
+        </span>
+      ),
+    },
+    {
+      title: 'Description',
+      dataIndex: 'desc',
+      key: 'desc',
+      width: '12%',
+      render: text => <span style={{ wordBreak: 'break-word', whiteSpace: 'normal' }}>{text}</span>,
+    },
+    {
+      title: 'Specification',
+      dataIndex: 'specification',
+      key: 'specification',
+      width: '20%',
+      render: text => (
+        <span style={{ wordBreak: 'break-word', whiteSpace: 'pre-line' }}>{text}</span>
+      ),
+    },
+    {
+      title: 'Mass (Kgs)',
+      dataIndex: 'weight',
+      key: 'weight',
+      width: '8%',
+      render: text =>
+        text !== '' && text !== null && text !== undefined && !Number.isNaN(Number(text))
+          ? Number(text).toFixed(2)
+          : '0.00',
+    },
+    {
+      title: 'Material',
+      dataIndex: 'material',
+      key: 'material',
+      width: '10%',
+    },
+    {
+      title: 'Make',
+      dataIndex: 'make',
+      key: 'make',
+      width: '10%',
+    },
+    {
+      title: 'Quantity',
+      dataIndex: 'qty',
+      key: 'qty',
+      width: '8%',
+      render: text =>
+        text !== '' && text !== null && text !== undefined && !Number.isNaN(Number(text))
+          ? Number(text).toFixed(2)
+          : '0.00',
+    },
+    {
+      title: 'Unit',
+      dataIndex: 'unit',
+      key: 'unit',
+      width: '6%',
+    },
+  ]
+
+  // Preview should reflect what's currently typed, not just the last-synced tableData —
+  // getFieldsValue(true) is needed because rows can be filtered/unmounted elsewhere in this
+  // app's tables (see feedback_antd_paginated_form_getfieldsvalue), and here the editable
+  // table itself unmounts while previewing.
+  const getPreviewData = () => {
+    const formValues2 = tableform.getFieldsValue(true)
+    return tableData.map(item => ({
+      ...item,
+      partNumber: formValues2[`partNumber_${item.sno}`] ?? item.partNumber,
+      desc: formValues2[`desc_${item.sno}`] ?? item.desc,
+      specification: formValues2[`specification_${item.sno}`] ?? item.specification,
+      weight: formValues2[`weight_${item.sno}`] ?? item.weight,
+      material: formValues2[`material_${item.sno}`] ?? item.material,
+      make: formValues2[`make_${item.sno}`] ?? item.make,
+      qty: formValues2[`qty_${item.sno}`] ?? item.qty,
+      unit: formValues2[`unit_${item.sno}`] ?? item.unit,
+    }))
+  }
+
   const handleInputChange = (value, option) => {
     if (option?.data) {
       addnewform.setFieldsValue({
@@ -1108,9 +1205,16 @@ const Addindent = ({ handleCancel, isModalVisible, componentdata, commonProjectI
           </Form>
 
           <div className="col-12">
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Buttons text="Download Template" type="primary" onClick={handleDownload} />
-              <div style={{ display: 'flex', gap: '15px' }}>
+              <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+                <Checkbox
+                  checked={showPreview}
+                  onChange={e => setShowPreview(e.target.checked)}
+                  disabled={tableData.length === 0}
+                >
+                  Preview
+                </Checkbox>
                 <Buttons
                   text="Load"
                   type="primary"
@@ -1124,27 +1228,43 @@ const Addindent = ({ handleCancel, isModalVisible, componentdata, commonProjectI
           <div className="custom_antd_Table">
             <Form form={tableform} onFinish={onFinish} initialValues={{ dtlList: tableData }}>
               <div>
-                {tableData && tableData.length > 0 ? (
+                {showPreview ? (
                   <Table
-                    dataSource={tableData}
-                    columns={columns}
+                    dataSource={getPreviewData()}
+                    columns={previewColumns}
                     pagination={false}
                     scroll={{ y: 450 }}
-                    sticky
-                    rowClassName={highlightRow}
                     bordered
                   />
-                ) : null}
-                <Form form={addnewform} onFinish={onFinish} initialValues={{ dtlList: tableData }}>
-                  <Table
-                    columns={columns2}
-                    dataSource={insertdata}
-                    pagination={false}
-                    showHeader={!(tableData.length > 0)}
-                    style={{ marginTop: '-1px' }}
-                    bordered
-                  />
-                </Form>
+                ) : (
+                  <>
+                    {tableData && tableData.length > 0 ? (
+                      <Table
+                        dataSource={tableData}
+                        columns={columns}
+                        pagination={false}
+                        scroll={{ y: 450 }}
+                        sticky
+                        rowClassName={highlightRow}
+                        bordered
+                      />
+                    ) : null}
+                    <Form
+                      form={addnewform}
+                      onFinish={onFinish}
+                      initialValues={{ dtlList: tableData }}
+                    >
+                      <Table
+                        columns={columns2}
+                        dataSource={insertdata}
+                        pagination={false}
+                        showHeader={!(tableData.length > 0)}
+                        style={{ marginTop: '-1px' }}
+                        bordered
+                      />
+                    </Form>
+                  </>
+                )}
               </div>
             </Form>
           </div>

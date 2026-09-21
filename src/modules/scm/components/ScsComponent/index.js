@@ -2292,7 +2292,12 @@ const SupCompState = ({
 
     // setPriceTable(updatedPriceTable)
 
-    const formValues = tableform.getFieldsValue()
+    // Same getFieldsValue(true) requirement as everywhere else in this file - this feeds the
+    // Basic/Sub Total/GST/Landed Cost header rollup (setBasevalues), so without `true` a merged
+    // row's real per-source fields (never mounted to any Form.Item) would be silently dropped from
+    // that total even though the actual submitted line items (priceTable, mutated directly) are
+    // correct - exactly the header-vs-line-items mismatch found on ScsComponent2.
+    const formValues = tableform.getFieldsValue(true)
     let dataWithSum = []
     dataWithSum = calculateSumForRow(formValues, priceTable)
     setBasevalues(dataWithSum)
@@ -2325,7 +2330,19 @@ const SupCompState = ({
       sumfinalL3ExtendedPrice: 0,
       sumfinalL3ExtendedPriceFx: 0,
     }
-    record.forEach(({ sno }) => {
+    // Read each row's value directly off `record` (priceTable) rather than through `formValues`
+    // (the Form's field store) wherever possible. A merged row's real per-source Extended Price
+    // fields (the representative's own, and every hidden sibling's) never have a mounted Form.Item
+    // - only the shadow display field does - so on initial load in particular, before the user has
+    // typed anything, `tableform` never received ANY value for those fields at all (no Form.Item
+    // ever mounted to apply an initialValue), while `record`'s own row objects always carry the
+    // correct loaded/edited value directly. Confirmed live: an already-approved 3-row PJS with 2
+    // merged rows showed this screen's Basic Total as only the one single-source row's own value
+    // (18,000), silently dropping both merged rows' contributions (which brought the true total to
+    // 38,200, matching the SCM screen). `formValues` is kept as a fallback for safety, not as the
+    // primary source.
+    record.forEach(row => {
+      const { sno } = row
       const keys = [
         'l1UnitPrice',
         'l1UnitPriceFx',
@@ -2354,9 +2371,11 @@ const SupCompState = ({
       ]
 
       keys.forEach(key => {
-        const priceValues = formValues[`${key}${sno}`]
-          ? formValues[`${key}${sno}`].replace(/,/g, '')
-          : ''
+        const rawValue =
+          row[key] !== undefined && row[key] !== null && row[key] !== ''
+            ? row[key]
+            : formValues[`${key}${sno}`]
+        const priceValues = rawValue ? String(rawValue).replace(/,/g, '') : ''
 
         sums[`sum${key}`] += parseFloat(priceValues !== '' ? priceValues : 0)
       })
@@ -2599,7 +2618,10 @@ const SupCompState = ({
         ).toLocaleString('en-IN'),
       })
     }
-    const formValues = tableform.getFieldsValue()
+    // getFieldsValue(true) here for the same reason as the central onValuesChange handler -
+    // handleTableChange must see every stored field, not just currently-rendered ones, or it
+    // blanks out merged rows' real per-indent fields right back out again.
+    const formValues = tableform.getFieldsValue(true)
     handleTableChange(formValues)
     let dataWithSum = []
     dataWithSum = calculateSumForRow(formValues, priceTable)
@@ -2610,7 +2632,7 @@ const SupCompState = ({
     tableform.setFieldsValue({
       [name]: parseFloat(data * qty).toLocaleString('en-IN'),
     })
-    const formValues = tableform.getFieldsValue()
+    const formValues = tableform.getFieldsValue(true)
     handleTableChange(formValues)
     let dataWithSum = []
     dataWithSum = calculateSumForRow(formValues, priceTable)
@@ -2685,20 +2707,27 @@ const SupCompState = ({
   // source indent's own real price fields (each computed against ITS OWN qty) - mutating
   // `priceTable` directly (what actually gets submitted) as well as `tableform` (for grand totals
   // and any later handleTableChange resync).
+  // record (the merged row) is a spread COPY of its representative source, not the live priceTable
+  // entry - so mutating only siblings (as before) left the representative's own real priceTable row
+  // (the one actually submitted via `scpDtlList: priceTable`) never updated, only its shadow display
+  // field via handleChangeInput below. Loop all sourceSnos (including record.sno) for the real
+  // Extended Price mutation/sync; keep the rate-field mutation skipped for record.sno since its own
+  // real rate field is already kept fresh by the controlled Input + handleTableChange's Form sync.
   const handleRateChange = (record, rateField, extField) => {
     const rateVal = record[rateField]
     if (record.sourceSnos && record.sourceSnos.length > 1) {
       const rate = parseFloat(String(rateVal || '').replace(/,/g, '')) || 0
       record.sourceSnos.forEach(sno => {
-        if (sno === record.sno) return
         const source = priceTable.find(p => p.sno === sno)
         if (!source) return
         const srcQty = parseFloat(source.qty) || 0
         const extVal = rate ? (rate * srcQty).toLocaleString('en-IN') : ''
-        source[rateField] = rateVal
         source[extField] = extVal
-        tableform.setFieldsValue({ [`${rateField}${sno}`]: rateVal })
         tableform.setFieldsValue({ [`${extField}${sno}`]: extVal })
+        if (sno !== record.sno) {
+          source[rateField] = rateVal
+          tableform.setFieldsValue({ [`${rateField}${sno}`]: rateVal })
+        }
       })
     }
     handleChangeInput(extFieldName(record, extField), rateVal, record.qty)
@@ -2733,22 +2762,26 @@ const SupCompState = ({
     ]
     const exchangeRate = parseFloat(allPropForm.getFieldValue(exchangeRateField)) || 0
     const rate = parseFloat(String(value).replace(/,/g, '')) || 0
+    // Same gap as handleRateChange above: record's own real priceTable row never got its Extended
+    // Price (Fx and Rs.) fields mutated, only the shadow display fields via handleChangeInputForOtherCountry
+    // at the top of this function - so include record.sno in this loop for both extended fields too.
     record.sourceSnos.forEach(sno => {
-      if (sno === record.sno) return
       const source = priceTable.find(p => p.sno === sno)
       if (!source) return
       const qty = parseFloat(source.qty) || 0
       const fxExtVal = rate ? (rate * qty).toLocaleString('en-IN') : ''
       const rsRateVal = (rate * exchangeRate).toLocaleString('en-IN')
       const rsExtVal = (rate * exchangeRate * qty).toLocaleString('en-IN')
-      source[fxRateField] = value
       source[fxExtField] = fxExtVal
-      source[rsRateField] = rsRateVal
       source[rsExtField] = rsExtVal
-      tableform.setFieldsValue({ [`${fxRateField}${sno}`]: value })
       tableform.setFieldsValue({ [`${fxExtField}${sno}`]: fxExtVal })
-      tableform.setFieldsValue({ [`${rsRateField}${sno}`]: rsRateVal })
       tableform.setFieldsValue({ [`${rsExtField}${sno}`]: rsExtVal })
+      if (sno !== record.sno) {
+        source[fxRateField] = value
+        source[rsRateField] = rsRateVal
+        tableform.setFieldsValue({ [`${fxRateField}${sno}`]: value })
+        tableform.setFieldsValue({ [`${rsRateField}${sno}`]: rsRateVal })
+      }
     })
   }
 
@@ -2757,9 +2790,9 @@ const SupCompState = ({
   const pricecolumns = [
     {
       title: 'S.No',
-      dataIndex: 'sno',
       key: 'sno',
       width: 40,
+      render: (text, record, index) => index + 1,
       // render: (text, record) => (
       //   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
       //     <div>{record.sno}</div>
@@ -5307,8 +5340,15 @@ const SupCompState = ({
                 <div className="custom_antd_Table">
                   <Form
                     form={tableform}
-                    onValuesChange={(changedValues, allValues) => {
-                      handleTableChange(allValues)
+                    onValuesChange={() => {
+                      // antd's own `allValues` argument here only includes fields that have a
+                      // mounted Form.Item - a merged row's real per-indent field names never do
+                      // (only their shadow display field is rendered), so handleTableChange would
+                      // see them as missing and blank them back out on every keystroke anywhere in
+                      // this form. getFieldsValue(true) returns every stored field regardless of
+                      // whether it's currently rendered - a strict superset, safe for every
+                      // single-source row too.
+                      handleTableChange(tableform.getFieldsValue(true))
                       // setBaseTabVal(allValues);
                     }}
                     initialValues={{ priceTable }}
@@ -6437,7 +6477,18 @@ const SupCompState = ({
                   disable={isdisablebtn || isSubmitting}
                   loading={isdisablebtn || isSubmitting}
                   type="primary"
-                  onClick={() => safeHandleInsert()}
+                  onClick={async () => {
+                    // Same gap as ScsComponent2: safeHandleInsert only manages isdisablebtn - the
+                    // full-screen Spin overlay is gated on isSubmitting, which nothing set on a
+                    // plain Save click (only the Approve flow, handlescsapproval, manages it for
+                    // its own call). Wire it here too, per the established loading-view recipe.
+                    setIsSubmitting(true)
+                    try {
+                      await safeHandleInsert()
+                    } finally {
+                      setIsSubmitting(false)
+                    }
+                  }}
                 />
               </div>
 

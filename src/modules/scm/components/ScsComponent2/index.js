@@ -1191,6 +1191,17 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
 
     setPriceTable(updatedPriceTable)
     console.log('ffgfdf')
+    // The header's Basic/Sub Total/GST/Landed Cost fields (read from allPropForm just below) are
+    // normally kept in sync by a separate `useEffect([allFormValues])` that recomputes them
+    // asynchronously, a render cycle behind the user's actual edits. On a PJS with many rows
+    // edited in quick succession, that recompute can lag behind what was actually just typed, so
+    // the submitted header total could undercount what the individual priced rows (updatedPriceTable,
+    // fresh right here) truly sum to - confirmed live on IG_SCS_ID 5264 (header saved 1,22,000 vs
+    // the real per-line sum of 1,51,648). Force the same, already-correct calculation pipeline
+    // (calculateSumForRow -> setBasevalues -> updatevalues) to run synchronously against the
+    // just-built fresh data before reading allPropForm below, so the header total is guaranteed to
+    // match what's actually being submitted as scpDtlList, regardless of render timing.
+    setBasevalues(calculateSumForRow(allFormValues, updatedPriceTable))
     const formvalues = allPropForm.getFieldValue()
     const paymenttermsArr = [...paymenttermdatal1, ...paymenttermdatal2, ...paymenttermdatal3]
 
@@ -2169,21 +2180,36 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
   // Wraps handleChangeInput: for a merged row, also propagates the entered rate to every OTHER
   // source indent's own real price fields (each computed against ITS OWN qty), so what actually
   // gets submitted per indent line stays exact. Single-source rows behave exactly as before.
+  //
+  // The representative source (record.sno itself) also needs its own real Extended Price field
+  // written here - handleChangeInput above only fills the shadow display field for it, and its
+  // real Unit Price field is already kept in sync by the Form.Item's own binding, but nothing
+  // else ever writes its real Extended Price field, so it was showing on screen but missing from
+  // submission/validation. Loop all sourceSnos (including record.sno) for the extended-price
+  // write; only skip the rate-field write for record.sno since that one's already handled.
   const handleRateChange = (record, rateField, extField, value) => {
     handleChangeInput(value, extFieldName(record, extField), record)
     if (!record.sourceSnos || record.sourceSnos.length <= 1) return
     const rate = parseFloat(String(value).replace(/,/g, '')) || 0
     record.sourceSnos.forEach(sno => {
-      if (sno === record.sno) return
       const source = priceTable.find(p => p.sno === sno)
       if (!source) return
       const qty = parseFloat(source.qty) || 0
-      tableform.setFieldsValue({ [`${rateField}${sno}`]: value })
       tableform.setFieldsValue({
         [`${extField}${sno}`]: rate ? (rate * qty).toLocaleString('en-IN') : '',
       })
+      if (sno !== record.sno) {
+        tableform.setFieldsValue({ [`${rateField}${sno}`]: value })
+      }
     })
-    const formvalues = tableform.getFieldsValue()
+    // getFieldsValue() (no args) only returns values for fields that have a mounted Form.Item -
+    // a merged row's real per-source field names (rep's own, and every hidden sibling's) never
+    // have one, since the table only renders the merged row bound to the shadow name. Without
+    // `true` here, every setFieldsValue() write above for those real names was silently getting
+    // dropped on the way into allFormValues, no matter how many sourceSnos this loop covered -
+    // this is the same class of gap as [[feedback_antd_paginated_form_getfieldsvalue]] elsewhere
+    // in this codebase.
+    const formvalues = tableform.getFieldsValue(true)
     setAllFormValues(prevValues => ({
       ...prevValues,
       ...formvalues,
@@ -2194,6 +2220,13 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
   // pair from the entered FX rate x exchange rate - see handleChangeInputForOtherCountry. The Rs.
   // rate mirrors the representative's real field either way (it's a rate, identical across every
   // source by design); only the two Extended Price fields need shadowing for a merged row.
+  //
+  // Same gap as handleRateChange: handleChangeInputForOtherCountry only fills the SHADOW fxExtField
+  // and rsExtField for the representative row (record.sno) - its own real Extended Price fields
+  // (both Fx and Rs.) never get written, so include record.sno in the extended-price loop below too.
+  // Rate fields (fxRateField / rsRateField) for record.sno are already handled - fxRateField by the
+  // Form.Item's own binding on the input, rsRateField by handleChangeInputForOtherCountry's name2 -
+  // so those two stay skipped for record.sno.
   const handleRateChangeFx = (record, fxRateField, rsRateField, fxExtField, rsExtField, value, isIndia, level) => {
     handleChangeInputForOtherCountry(
       value,
@@ -2209,22 +2242,26 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
     const exchangeRate = parseFloat(allPropForm.getFieldValue(exchangeRateField)) || 0
     const rate = parseFloat(String(value).replace(/,/g, '')) || 0
     record.sourceSnos.forEach(sno => {
-      if (sno === record.sno) return
       const source = priceTable.find(p => p.sno === sno)
       if (!source) return
       const qty = parseFloat(source.qty) || 0
-      tableform.setFieldsValue({ [`${fxRateField}${sno}`]: value })
       tableform.setFieldsValue({
         [`${fxExtField}${sno}`]: rate ? (rate * qty).toLocaleString('en-IN') : '',
       })
       tableform.setFieldsValue({
-        [`${rsRateField}${sno}`]: (rate * exchangeRate).toLocaleString('en-IN'),
-      })
-      tableform.setFieldsValue({
         [`${rsExtField}${sno}`]: (rate * exchangeRate * qty).toLocaleString('en-IN'),
       })
+      if (sno !== record.sno) {
+        tableform.setFieldsValue({ [`${fxRateField}${sno}`]: value })
+        tableform.setFieldsValue({
+          [`${rsRateField}${sno}`]: (rate * exchangeRate).toLocaleString('en-IN'),
+        })
+      }
     })
-    const formvalues = tableform.getFieldsValue()
+    // Same getFieldsValue(true) requirement as handleRateChange above - the real fxExtField/rsExtField
+    // writes just above have no mounted Form.Item for a merged row, so without `true` they never
+    // reach allFormValues.
+    const formvalues = tableform.getFieldsValue(true)
     setAllFormValues(prevValues => ({
       ...prevValues,
       ...formvalues,
@@ -2560,9 +2597,9 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
   const pricecolumns = [
     {
       title: 'S.No',
-      dataIndex: 'sno',
       key: 'sno',
       width: 40,
+      render: (text, record, index) => index + 1,
     },
     {
       title: 'Indent No.',
@@ -6405,7 +6442,19 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
                         disable={isdisablebtn || isSubmitting}
                         loading={isdisablebtn || isSubmitting}
                         type="primary"
-                        onClick={() => safeHandleInsert()}
+                        onClick={async () => {
+                          // safeHandleInsert only ever managed isdisablebtn (the button's own
+                          // loading state) - the full-screen Spin overlay is gated on isSubmitting,
+                          // which nothing set on a plain Save click (only the separate Approve flow,
+                          // handlescsapproval, manages it - for its own call). Wire it here too, per
+                          // the established loading-view recipe.
+                          setIsSubmitting(true)
+                          try {
+                            await safeHandleInsert()
+                          } finally {
+                            setIsSubmitting(false)
+                          }
+                        }}
                       />
                     </div>
 

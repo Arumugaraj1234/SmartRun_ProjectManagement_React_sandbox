@@ -653,6 +653,12 @@ const Podetail = ({ isTailview }) => {
       onFilter: (value, record) => record?.indentCode === value,
     },
     {
+      title: 'PJS No.',
+      dataIndex: 'pjsRefNo',
+      key: 'pjsRefNo',
+      render: (text, record) => record.pjsRefNo || '-',
+    },
+    {
       title: 'PO Number',
       dataIndex: 'poCode',
       key: 'poCode',

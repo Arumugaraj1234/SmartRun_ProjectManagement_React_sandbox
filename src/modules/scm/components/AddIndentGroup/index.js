@@ -156,43 +156,13 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
       }
     }
   }
-  // Station-scoped fetches return one row per source indent; for NEW-flow, group them here by
-  // Part Number so the same part pulled from multiple indents shows/allocates as a single row
-  // instead of one row per indent. LEGACY is single-indent already, so it passes through 1:1.
-  // The underlying `indentTable` (and its per-source indentDtlId/allocateQty fields used by
-  // handleinsertSubmit) is never restructured - this only builds a display/allocation view over it.
-  const buildMergedRows = rows => {
-    if (!isNewFlow) {
-      return rows.map(item => ({ ...item, sourceSnos: [item.sno], breakdown: [] }))
-    }
-    const byProduct = new Map()
-    rows.forEach(item => {
-      const key = item.productCode
-      if (!byProduct.has(key)) byProduct.set(key, [])
-      byProduct.get(key).push(item)
-    })
-    return Array.from(byProduct.values()).map(group => {
-      const ordered = [...group].sort((a, b) => (a.indentCode || '').localeCompare(b.indentCode || ''))
-      const sumField = f => ordered.reduce((sum, g) => sum + (parseFloat(g[f]) || 0), 0)
-      return {
-        ...ordered[0],
-        sno: Math.min(...ordered.map(g => g.sno)),
-        sourceSnos: ordered.map(g => g.sno),
-        indentCode: ordered.length === 1 ? ordered[0].indentCode : null,
-        breakdown: ordered.map(g => ({
-          indentCode: g.indentCode,
-          indentType: g.indentType,
-          subAssembly: g.subAssembly,
-          indentQty: g.indentQty,
-        })),
-        indentQty: sumField('indentQty'),
-        indentGrpQty: sumField('indentGrpQty'),
-        allocateQty: sumField('allocateQty').toString(),
-      }
-    })
-  }
+  // Per client request, same-part-across-different-indents is no longer merged into one row here -
+  // every source row (one per indent) stays its own row/allocation, for both NEW-flow and LEGACY.
+  // sourceSnos/breakdown are kept (always degenerate: 1 source, empty breakdown) so the rest of the
+  // screen (handleQtyChange, selected-count helpers, the Indent column's popover) needs no other change.
+  const buildMergedRows = rows => rows.map(item => ({ ...item, sourceSnos: [item.sno], breakdown: [] }))
 
-  const mergedRows = useMemo(() => buildMergedRows(indentTable), [indentTable, isNewFlow])
+  const mergedRows = useMemo(() => buildMergedRows(indentTable), [indentTable])
 
   // record is a merged row (see buildMergedRows) - for a part sourced from >1 indent, the entered
   // total is split across its source rows, filling each up to its own remaining capacity

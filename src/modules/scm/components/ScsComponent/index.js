@@ -2665,23 +2665,42 @@ const SupCompState = ({
       if (!byProduct.has(key)) byProduct.set(key, [])
       byProduct.get(key).push(item)
     })
-    return Array.from(byProduct.values()).map(group => {
+    const result = []
+    byProduct.forEach(group => {
+      // Only genuinely different indents get merged - two lines for the same part within the SAME
+      // indent (a legitimate split-line pattern) must stay separate rows, not collapse into one
+      // mislabeled as "N indents".
+      const distinctIndentCodes = new Set(group.map(g => g.indentCode))
+      if (distinctIndentCodes.size <= 1) {
+        group.forEach(item => result.push({ ...item, sourceSnos: [item.sno], breakdown: [] }))
+        return
+      }
       const ordered = [...group].sort((a, b) =>
         (a.indentCode || '').localeCompare(b.indentCode || ''),
       )
       const rep = ordered[0]
       const totalQty = ordered.reduce((sum, g) => sum + (parseFloat(g.qty) || 0), 0)
+      // Breakdown is one row per distinct indent - an indent contributing more than one line for
+      // this part has its lines summed into that single breakdown row (keeps the popover's table
+      // keys, and its "N indents" count, accurate).
+      const byIndent = new Map()
+      ordered.forEach(g => {
+        if (!byIndent.has(g.indentCode)) {
+          byIndent.set(g.indentCode, {
+            indentCode: g.indentCode,
+            indentType: g.indentType,
+            subAssembly: g.subAssembly,
+            indentQty: 0,
+          })
+        }
+        byIndent.get(g.indentCode).indentQty += parseFloat(g.indentQty) || 0
+      })
       const merged = {
         ...rep,
         sourceSnos: ordered.map(g => g.sno),
         qty: totalQty,
-        indentCode: ordered.length === 1 ? rep.indentCode : null,
-        breakdown: ordered.map(g => ({
-          indentCode: g.indentCode,
-          indentType: g.indentType,
-          subAssembly: g.subAssembly,
-          indentQty: g.indentQty,
-        })),
+        indentCode: null,
+        breakdown: Array.from(byIndent.values()),
       }
       // Every source shares the same rate by design (see handleRateChange/handleRateChangeFx),
       // so the merged row's own Extended Price is simply rate x total qty.
@@ -2689,8 +2708,9 @@ const SupCompState = ({
         const rate = parseFloat(String(rep[rateField] || '').replace(/,/g, ''))
         merged[extField] = rate ? (rate * totalQty).toString() : rep[extField]
       })
-      return merged
+      result.push(merged)
     })
+    return result
   }
 
   // A merged (multi-indent) row's Extended Price display is a derived (rate x total qty) value

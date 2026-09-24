@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import {
   Card,
   Table,
@@ -35,6 +35,10 @@ import {
 } from '../../../../services/common/AppeovedDocumentService/adddocumentservice'
 import '../../style.scss'
 import '../../../style.scss'
+import buildMergedPoRows from '../PoMergeRows'
+
+// PO lines merge on Part Number + these rate fields (see PoMergeRows)
+const RATE_FIELDS = ['unitRate']
 
 const Poservice = ({ rowData, onClose, calldetailapi, isView }) => {
   const { Option } = Select
@@ -529,15 +533,18 @@ const Poservice = ({ rowData, onClose, calldetailapi, isView }) => {
     if (!potabel[index][fieldname] && !prevpoTable[index][fieldname]) return false
     return potabel[index][fieldname] !== prevpoTable[index][fieldname]
   }
-  const gstOnChangeValue = (value, index) => {
-    const updatedItems = [...potabel]
+  const gstOnChangeValue = (value, record) => {
+    let updatedItems = [...potabel]
     // if (index === 0) {
     //   updatedItems = updatedItems.map(item => ({
     //     ...item,
     //     poGst: value,
     //   }))
     // } else {
-    updatedItems[index] = { ...updatedItems[index], poGst: value }
+    // a merged row's GST applies to every line in it
+    updatedItems = updatedItems.map(item =>
+      mergedPo.repIdOf(item.poDtlId) === record.poDtlId ? { ...item, poGst: value } : item,
+    )
     // }
     setPoTable(updatedItems)
     //  After the poTable changes the useEffect handles the GST calculation
@@ -569,6 +576,17 @@ const Poservice = ({ rowData, onClose, calldetailapi, isView }) => {
     }
   }
 
+  // NEW-flow POs: same Part Number + Unit Rate lines shown as one row (display only, see
+  // PoMergeRows). Debit Note selection always works on the individual lines.
+  const mergedPo = useMemo(
+    () =>
+      buildMergedPoRows(
+        potabel,
+        mainEntity?.mergeSamePartRows === '1' && !isDebitClicked,
+        RATE_FIELDS,
+      ),
+    [potabel, mainEntity, isDebitClicked],
+  )
   const columns = [
     {
       title: 'S.No.',
@@ -585,11 +603,11 @@ const Poservice = ({ rowData, onClose, calldetailapi, isView }) => {
       ),
       dataIndex: 'serviceNo',
       key: 'serviceNo',
-      render: (text, record, index) => (
+      render: (text, record) => (
         <Form.Item name={`serviceno_${record.poDtlId}`} initialValue={record.serviceNo}>
           <Input
             placeholder="Type here"
-            style={Potablechanged('serviceNo', index) ? HighlightStyle : {}}
+            style={Potablechanged('serviceNo', mergedPo.rawIndexOf(record)) ? HighlightStyle : {}}
           />
         </Form.Item>
       ),
@@ -623,11 +641,11 @@ const Poservice = ({ rowData, onClose, calldetailapi, isView }) => {
       ),
       dataIndex: 'materialDesc',
       key: 'materialDesc',
-      render: (text, record, index) => (
+      render: (text, record) => (
         <Form.Item name={`materialdesc_${record.poDtlId}`} initialValue={record.materialDesc}>
           <Input
             placeholder="Type here"
-            style={Potablechanged('materialDesc', index) ? HighlightStyle : {}}
+            style={Potablechanged('materialDesc', mergedPo.rawIndexOf(record)) ? HighlightStyle : {}}
           />
         </Form.Item>
       ),
@@ -647,7 +665,7 @@ const Poservice = ({ rowData, onClose, calldetailapi, isView }) => {
       ),
       dataIndex: 'hsnCode',
       key: 'hsnCode',
-      render: (text, record, index) => (
+      render: (text, record) => (
         <Form.Item name={`hsnCode_${record.poDtlId}`} initialValue={record.hsnCode}>
           <AutoComplete
             style={{ width: '150px' }}
@@ -670,7 +688,7 @@ const Poservice = ({ rowData, onClose, calldetailapi, isView }) => {
           >
             <Input
               placeholder="Select here"
-              style={Potablechanged('hsnCode', index) ? HighlightStyle : {}}
+              style={Potablechanged('hsnCode', mergedPo.rawIndexOf(record)) ? HighlightStyle : {}}
             />
           </AutoComplete>
         </Form.Item>
@@ -680,7 +698,7 @@ const Poservice = ({ rowData, onClose, calldetailapi, isView }) => {
       title: 'GST',
       dataIndex: 'poGst',
       key: 'poGst',
-      render: (text, record, index) => (
+      render: (text, record) => (
         <Form.Item name={`gst_${record.poDtlId}`} initialValue={Number(record.poGst)}>
           <Select
             style={{ width: '150px' }}
@@ -692,7 +710,7 @@ const Poservice = ({ rowData, onClose, calldetailapi, isView }) => {
               { value: 18, label: '18' },
               { value: 28, label: '28' },
             ]}
-            onChange={value => gstOnChangeValue(value, index)}
+            onChange={value => gstOnChangeValue(value, record)}
             // onChange={value => {
             //   let updatedItems = [...potabel]
 
@@ -744,7 +762,7 @@ const Poservice = ({ rowData, onClose, calldetailapi, isView }) => {
       title: 'Delivery Date',
       dataIndex: 'deliveryDate',
       key: 'deliveryDate',
-      render: (text, record, index) => (
+      render: (text, record) => (
         <Form.Item
           name={`deliverydate_${record.poDtlId}`}
           initialValue={
@@ -756,7 +774,7 @@ const Poservice = ({ rowData, onClose, calldetailapi, isView }) => {
           <DatePicker
             format="DD-MMM-YYYY"
             disabledDate={current => current >= moment(poform.getFieldValue('deliveryDate'))}
-            style={Potablechanged('deliveryDate', index) ? HighlightStyle : {}}
+            style={Potablechanged('deliveryDate', mergedPo.rawIndexOf(record)) ? HighlightStyle : {}}
           />
         </Form.Item>
       ),
@@ -1315,11 +1333,11 @@ const Poservice = ({ rowData, onClose, calldetailapi, isView }) => {
       const updatedTableData = potabel.map(item => {
         return {
           ...item,
-          materialDesc: formvalues[`materialdesc_${item.poDtlId}`] || '',
-          serviceNo: formvalues[`serviceno_${item.poDtlId}`] || '',
-          hsnCode: formvalues[`hsnCode_${item.poDtlId}`] || '',
-          poGst: formvalues[`gst_${item.poDtlId}`] || '0',
-          deliveryDate: moment(formvalues[`deliverydate_${item.poDtlId}`]).format('YYYY-MM-DD'),
+          materialDesc: formvalues[`materialdesc_${mergedPo.repIdOf(item.poDtlId)}`] || '',
+          serviceNo: formvalues[`serviceno_${mergedPo.repIdOf(item.poDtlId)}`] || '',
+          hsnCode: formvalues[`hsnCode_${mergedPo.repIdOf(item.poDtlId)}`] || '',
+          poGst: formvalues[`gst_${mergedPo.repIdOf(item.poDtlId)}`] || '0',
+          deliveryDate: moment(formvalues[`deliverydate_${mergedPo.repIdOf(item.poDtlId)}`]).format('YYYY-MM-DD'),
         }
       })
       // const valuse = formvalues.gst.replace(/,/g, '')
@@ -2118,7 +2136,7 @@ const Poservice = ({ rowData, onClose, calldetailapi, isView }) => {
                 <Table
                   rowSelection={isDebitClicked ? rowSelection : null}
                   columns={columns}
-                  dataSource={potabel}
+                  dataSource={mergedPo.rows}
                   rowKey="poDtlId"
                   bordered
                 />

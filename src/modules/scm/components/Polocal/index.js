@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import {
   Card,
   Table,
@@ -35,6 +35,10 @@ import {
 import PaymentTermsPopUp from '../PoPaymentTermsPopUp'
 import '../../style.scss'
 import '../../../style.scss'
+import buildMergedPoRows from '../PoMergeRows'
+
+// PO lines merge on Part Number + these rate fields (see PoMergeRows)
+const RATE_FIELDS = ['unitRate']
 
 const Polocal = ({ rowData, onClose, calldetailapi, isView }) => {
   const { Option } = Select
@@ -505,7 +509,7 @@ const Polocal = ({ rowData, onClose, calldetailapi, isView }) => {
     console.log(selectedRows)
     console.log('GstOnChangeValue')
     const updatedItems = potabel.map(item =>
-      item.poDtlId === record.poDtlId ? { ...item, poGst: value } : item,
+      mergedPo.repIdOf(item.poDtlId) === record.poDtlId ? { ...item, poGst: value } : item,
     )
     setPoTable(updatedItems)
     //  After the poTable changes the useEffect handles the GST calculation
@@ -514,6 +518,17 @@ const Polocal = ({ rowData, onClose, calldetailapi, isView }) => {
       poform.setFieldsValue({ [`gst_${item.poDtlId}`]: item.poGst })
     })
   }
+  // NEW-flow POs: same Part Number + Unit Rate lines shown as one row (display only, see
+  // PoMergeRows). Debit Note selection always works on the individual lines.
+  const mergedPo = useMemo(
+    () =>
+      buildMergedPoRows(
+        potabel,
+        mainEntity?.mergeSamePartRows === '1' && !isDebitClicked,
+        RATE_FIELDS,
+      ),
+    [potabel, mainEntity, isDebitClicked],
+  )
   const columns = [
     {
       title: 'S.No.',
@@ -562,7 +577,7 @@ const Polocal = ({ rowData, onClose, calldetailapi, isView }) => {
       ),
       dataIndex: 'hsnCode',
       key: 'hsnCode',
-      render: (text, record, index) => (
+      render: (text, record) => (
         <Form.Item name={`hsnCode_${record.poDtlId}`} initialValue={record.hsnCode}>
           <AutoComplete
             style={{ width: '150px' }}
@@ -585,7 +600,7 @@ const Polocal = ({ rowData, onClose, calldetailapi, isView }) => {
           >
             <Input
               placeholder="Select here"
-              style={Potablechanged('hsnCode', index) ? HighlightStyle : {}}
+              style={Potablechanged('hsnCode', mergedPo.rawIndexOf(record)) ? HighlightStyle : {}}
             />
           </AutoComplete>
         </Form.Item>
@@ -668,7 +683,7 @@ const Polocal = ({ rowData, onClose, calldetailapi, isView }) => {
       title: 'Delivery Date',
       dataIndex: 'deliveryDate',
       key: 'deliveryDate',
-      render: (text, record, index) => (
+      render: (text, record) => (
         <Form.Item
           name={`deliverydate_${record.poDtlId}`}
           initialValue={
@@ -680,7 +695,7 @@ const Polocal = ({ rowData, onClose, calldetailapi, isView }) => {
           <DatePicker
             format="DD-MMM-YYYY"
             disabledDate={current => current >= moment(poform.getFieldValue('deliveryDate'))}
-            style={Potablechanged('deliveryDate', index) ? HighlightStyle : {}}
+            style={Potablechanged('deliveryDate', mergedPo.rawIndexOf(record)) ? HighlightStyle : {}}
           />
         </Form.Item>
       ),
@@ -1313,9 +1328,9 @@ const Polocal = ({ rowData, onClose, calldetailapi, isView }) => {
       const updatedTableData = potabel.map(item => {
         return {
           ...item,
-          hsnCode: formvalues[`hsnCode_${item.poDtlId}`] || '',
-          poGst: formvalues[`gst_${item.poDtlId}`] || '0',
-          deliveryDate: moment(formvalues[`deliverydate_${item.poDtlId}`]).format('YYYY-MM-DD'),
+          hsnCode: formvalues[`hsnCode_${mergedPo.repIdOf(item.poDtlId)}`] || '',
+          poGst: formvalues[`gst_${mergedPo.repIdOf(item.poDtlId)}`] || '0',
+          deliveryDate: moment(formvalues[`deliverydate_${mergedPo.repIdOf(item.poDtlId)}`]).format('YYYY-MM-DD'),
         }
       })
       // const valuse = formvalues.gst.replace(/,/g, '')
@@ -2104,7 +2119,7 @@ const Polocal = ({ rowData, onClose, calldetailapi, isView }) => {
                 <Table
                   rowSelection={isDebitClicked ? rowSelection : null}
                   columns={columns}
-                  dataSource={potabel}
+                  dataSource={mergedPo.rows}
                   rowKey="poDtlId"
                   bordered
                 />

@@ -54,6 +54,9 @@ const IndentGroupComponent = ({ isTailview }) => {
   const [indentHdrid, setIndentHdrid] = useState('')
   const [indentDtlIds, setIndentDtlIds] = useState('')
   const [scsStatus, setScsStatus] = useState('')
+  // Group items can only be added/removed until the PJS is first saved - once a PJS exists the
+  // item list is frozen (backend insertTempGrup / delIndentGrpDtl enforce the same).
+  const groupLocked = !['', 'NA', 'PJS Not Created'].includes(scsStatus)
   const [inventoryBased, setInventoryBased] = useState('')
   const [singleRecord, setSingleRecord] = useState(null)
   const [searchText, setSearchText] = useState('')
@@ -625,7 +628,7 @@ const IndentGroupComponent = ({ isTailview }) => {
         title: 'Action',
         key: 'action',
         render: record =>
-          record.key === 'new' ? (
+          groupLocked ? null : record.key === 'new' ? (
             <Button
               type="secondary"
               size="small"
@@ -699,6 +702,12 @@ const IndentGroupComponent = ({ isTailview }) => {
             </>
           )}
         </div>
+        {groupLocked && (
+          <div style={{ color: '#d46b08', marginBottom: '10px' }}>
+            PJS is {scsStatus} - items can&apos;t be added to or removed from this group once
+            the PJS is saved.
+          </div>
+        )}
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <div style={{ textDecoration: 'underline' }}>
             {inventoryBased === 'True' && <h4>Stock Available</h4>}
@@ -708,6 +717,7 @@ const IndentGroupComponent = ({ isTailview }) => {
             text="Delete Group"
             type="primary"
             disabled={!dtlretrievedata.some(row => row.isNew)}
+            disable={groupLocked}
             onClick={() => handleDtlRemoveRow('', true)}
           />
         </div>
@@ -715,7 +725,7 @@ const IndentGroupComponent = ({ isTailview }) => {
         <div>
           <Table
             columns={detailcolumn}
-            dataSource={[...dtlretrievedata, newRow]}
+            dataSource={groupLocked ? dtlretrievedata : [...dtlretrievedata, newRow]}
             rowKey={record => record.key || record.indentGrpDtlId}
             bordered
             pagination={{
@@ -729,7 +739,7 @@ const IndentGroupComponent = ({ isTailview }) => {
           <ButtonComponent
             type="primary"
             text="Save"
-            disable={employeeId !== empId}
+            disable={employeeId !== empId || groupLocked}
             onClick={() => {
               saveAddedIndntGrp()
             }}

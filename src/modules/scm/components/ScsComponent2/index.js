@@ -4147,6 +4147,10 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
       .split(', ')
       .map(v => v.trim())
       .filter(Boolean)
+  // Indent Type / Sub Assy only read "Multiple" when the grouped indents actually differ -
+  // if every indent in the PJS shares one value, show that value directly.
+  const multiIndentType = splitList(indentType).length > 1
+  const multiSubAssy = splitList(subAssy).length > 1
   const renderListPopoverContent = value => {
     const values = splitList(value)
     if (!values.length) return <div style={{ padding: 4 }}>No detail available</div>
@@ -4275,7 +4279,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
                             Indent Type:
                           </p>
                           <p style={{ marginBottom: '0' }}>
-                            {multiIndent ? (
+                            {multiIndentType ? (
                               <span>
                                 Multiple{' '}
                                 <Popover
@@ -4358,7 +4362,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
                             Sub Assy. :
                           </p>
                           <p style={{ marginBottom: '0' }}>
-                            {multiIndent ? (
+                            {multiSubAssy ? (
                               <span>
                                 Multiple{' '}
                                 <Popover

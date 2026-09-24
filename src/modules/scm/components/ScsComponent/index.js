@@ -84,6 +84,10 @@ const SupCompState = ({
       .filter(Boolean)
   const indentCodes = splitList(indentcode)
   const multiIndent = indentCodes.length > 1
+  // Indent Type / Sub Assy only read "Multiple" when the grouped indents actually differ -
+  // if every indent in the PJS shares one value, show that value directly.
+  const multiIndentType = splitList(indentType).length > 1
+  const multiSubAssy = splitList(subAssy).length > 1
   const [pjsBreakdownRows, setPjsBreakdownRows] = useState([])
   const [pjsBreakdownLoaded, setPjsBreakdownLoaded] = useState(false)
   const [pjsBreakdownLoading, setPjsBreakdownLoading] = useState(false)
@@ -4224,7 +4228,7 @@ const SupCompState = ({
                         Indent Type:
                       </p>
                       <p style={{ marginBottom: '0' }}>
-                        {multiIndent ? (
+                        {multiIndentType ? (
                           <span>
                             Multiple{' '}
                             <Popover
@@ -4310,7 +4314,7 @@ const SupCompState = ({
                         Sub Assy. :
                       </p>
                       <p style={{ marginBottom: '0' }}>
-                        {multiIndent ? (
+                        {multiSubAssy ? (
                           <span>
                             Multiple{' '}
                             <Popover

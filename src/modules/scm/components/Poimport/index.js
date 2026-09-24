@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import {
   Card,
   Table,
@@ -34,6 +34,10 @@ import {
 } from '../../../../services/common/AppeovedDocumentService/adddocumentservice'
 import '../../style.scss'
 import '../../../style.scss'
+import buildMergedPoRows from '../PoMergeRows'
+
+// PO lines merge on Part Number + these rate fields (see PoMergeRows)
+const RATE_FIELDS = ['unitRateFx', 'unitRate', 'currencyType']
 
 const Poimport = ({ rowData, onClose, calldetailapi, isView }) => {
   const { Option } = Select
@@ -635,6 +639,17 @@ const Poimport = ({ rowData, onClose, calldetailapi, isView }) => {
     setPoCostType(response?.responseData || [])
   }
 
+  // NEW-flow POs: same Part Number + Unit Rate lines shown as one row (display only, see
+  // PoMergeRows). Debit Note selection always works on the individual lines.
+  const mergedPo = useMemo(
+    () =>
+      buildMergedPoRows(
+        potabel,
+        mainEntity?.mergeSamePartRows === '1' && !isDebitClicked,
+        RATE_FIELDS,
+      ),
+    [potabel, mainEntity, isDebitClicked],
+  )
   const columns = [
     {
       title: 'S.No.',
@@ -684,7 +699,7 @@ const Poimport = ({ rowData, onClose, calldetailapi, isView }) => {
       ),
       dataIndex: 'hsnCode',
       key: 'hsnCode',
-      render: (text, record, index) => (
+      render: (text, record) => (
         <Form.Item name={`hsnCode_${record.poDtlId}`} initialValue={record.hsnCode}>
           <AutoComplete
             style={{ width: '150px' }}
@@ -707,7 +722,7 @@ const Poimport = ({ rowData, onClose, calldetailapi, isView }) => {
           >
             <Input
               placeholder="Select here"
-              style={Potablechanged('hsnCode', index) ? HighlightStyle : {}}
+              style={Potablechanged('hsnCode', mergedPo.rawIndexOf(record)) ? HighlightStyle : {}}
             />
           </AutoComplete>
         </Form.Item>
@@ -800,7 +815,7 @@ const Poimport = ({ rowData, onClose, calldetailapi, isView }) => {
       key: 'deliveryDate',
       width: 150,
 
-      render: (text, record, index) => (
+      render: (text, record) => (
         <Form.Item
           name={`deliverydate_${record.poDtlId}`}
           initialValue={
@@ -812,7 +827,7 @@ const Poimport = ({ rowData, onClose, calldetailapi, isView }) => {
           <DatePicker
             format="DD-MMM-YYYY"
             disabledDate={current => current >= moment(poform.getFieldValue('deliveryDate'))}
-            style={Potablechanged('deliveryDate', index) ? HighlightStyle : {}}
+            style={Potablechanged('deliveryDate', mergedPo.rawIndexOf(record)) ? HighlightStyle : {}}
           />
         </Form.Item>
       ),
@@ -1295,9 +1310,9 @@ const Poimport = ({ rowData, onClose, calldetailapi, isView }) => {
       const updatedTableData = potabel.map(item => {
         return {
           ...item,
-          hsnCode: formvalues[`hsnCode_${item.poDtlId}`] || '',
-          poGst: formvalues[`gst_${item.poDtlId}`] || '0',
-          deliveryDate: moment(formvalues[`deliverydate_${item.poDtlId}`] || newDate).format(
+          hsnCode: formvalues[`hsnCode_${mergedPo.repIdOf(item.poDtlId)}`] || '',
+          poGst: formvalues[`gst_${mergedPo.repIdOf(item.poDtlId)}`] || '0',
+          deliveryDate: moment(formvalues[`deliverydate_${mergedPo.repIdOf(item.poDtlId)}`] || newDate).format(
             'YYYY-MM-DD',
           ),
         }
@@ -2134,7 +2149,7 @@ const Poimport = ({ rowData, onClose, calldetailapi, isView }) => {
                 <Table
                   rowSelection={isDebitClicked ? rowSelection : null}
                   columns={columns}
-                  dataSource={potabel}
+                  dataSource={mergedPo.rows}
                   rowKey="poDtlId"
                   bordered
                 />

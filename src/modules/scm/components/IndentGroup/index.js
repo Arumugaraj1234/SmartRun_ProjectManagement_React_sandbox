@@ -4,7 +4,13 @@ import store from 'store'
 import moment from 'moment'
 import { useHistory } from 'react-router-dom'
 import { Card, Row, Divider, message, Form, Select, Button, Input, Skeleton, Popover, Spin } from 'antd'
-import { PlusOutlined, FileExcelOutlined, InfoCircleOutlined } from '@ant-design/icons'
+import {
+  PlusOutlined,
+  FileExcelOutlined,
+  InfoCircleOutlined,
+  RightOutlined,
+  DownOutlined,
+} from '@ant-design/icons'
 
 import ButtonComponent from 'components/shared/ButtonComponent'
 import { Table } from 'ant-table-extensions'
@@ -465,11 +471,49 @@ const IndentGroupComponent = ({ isTailview }) => {
       setNewRowIndentId('')
     }
 
+    // NEW-flow (station) groups: every line of the same Part Number becomes ONE row, same as the
+    // Create Indent Group screen; its lines are expandable child rows (ordered by Indent No.), each
+    // keeping its own Remove button. Display only - dtlretrievedata stays one entry per line.
+    const mergeDetailRows = rows => {
+      if (!detailIsNewFlow) return rows
+      const byProduct = new Map()
+      rows.forEach(r => {
+        if (!byProduct.has(r.productCode)) byProduct.set(r.productCode, [])
+        byProduct.get(r.productCode).push(r)
+      })
+      return Array.from(byProduct.values()).map(group => {
+        if (group.length === 1) return group[0]
+        const ordered = [...group].sort((a, b) =>
+          (a.indentCode || '').localeCompare(b.indentCode || '', undefined, { numeric: true }),
+        )
+        const distinct = f => [...new Set(ordered.map(g => g[f]).filter(Boolean))]
+        const codes = distinct('indentCode')
+        const types = distinct('indentType')
+        const subs = distinct('subAssembly')
+        const sum = f => ordered.reduce((acc, g) => acc + (parseFloat(g[f]) || 0), 0).toFixed(2)
+        return {
+          ...ordered[0],
+          key: `g-${ordered[0].productCode}`,
+          isGroup: true,
+          indentCode: codes.length > 1 ? `${codes.length} indents` : codes[0],
+          indentType: types.length > 1 ? 'Multiple' : types[0],
+          subAssembly: subs.length > 1 ? 'Multiple' : subs[0],
+          indentQty: sum('indentQty'),
+          indentGrpQty: sum('indentGrpQty'),
+          children: ordered.map(g => ({ ...g, isChild: true })),
+        }
+      })
+    }
+    const displayRows = mergeDetailRows(dtlretrievedata)
+
     const perPartIndentCol = (title, dataIndex, newRowRender) => ({
       title,
       dataIndex,
       render: (text, record) => {
         if (record.key === 'new') return newRowRender ? newRowRender() : ''
+        if (record.isGroup && dataIndex === 'indentCode' && /indents$/.test(text || '')) {
+          return <span style={{ color: '#1890ff' }}>{text}</span>
+        }
         return text || '-'
       },
     })
@@ -546,7 +590,7 @@ const IndentGroupComponent = ({ isTailview }) => {
               />
             )
           }
-          return text
+          return record.isChild ? null : text
         },
       },
       {
@@ -558,7 +602,7 @@ const IndentGroupComponent = ({ isTailview }) => {
               value={newRow.description || ''}
               onChange={e => setNewRow({ ...newRow, description: e.target.value })}
             />
-          ) : (
+          ) : record.isChild ? null : (
             text
           ),
       },
@@ -571,7 +615,7 @@ const IndentGroupComponent = ({ isTailview }) => {
               value={newRow.specification || ''}
               onChange={e => setNewRow({ ...newRow, specification: e.target.value })}
             />
-          ) : (
+          ) : record.isChild ? null : (
             text
           ),
       },
@@ -584,7 +628,7 @@ const IndentGroupComponent = ({ isTailview }) => {
               value={newRow.uom || ''}
               onChange={e => setNewRow({ ...newRow, uom: e.target.value })}
             />
-          ) : (
+          ) : record.isChild ? null : (
             text
           ),
       },
@@ -628,7 +672,7 @@ const IndentGroupComponent = ({ isTailview }) => {
         title: 'Action',
         key: 'action',
         render: record =>
-          groupLocked ? null : record.key === 'new' ? (
+          groupLocked || record.isGroup ? null : record.key === 'new' ? (
             <Button
               type="secondary"
               size="small"
@@ -725,8 +769,36 @@ const IndentGroupComponent = ({ isTailview }) => {
         <div>
           <Table
             columns={detailcolumn}
-            dataSource={groupLocked ? dtlretrievedata : [...dtlretrievedata, newRow]}
+            dataSource={groupLocked ? displayRows : [...displayRows, newRow]}
             rowKey={record => record.key || record.indentGrpDtlId}
+            // Same small arrow as Create Indent Group instead of antd's boxed +/- button; it sits
+            // in the first column (Indent Code) beside the "N indents" label. Rows without children
+            // get a same-width spacer so indent codes stay aligned. NEW-flow only - LEGACY groups
+            // never merge, so their table stays exactly as before.
+            expandable={
+              detailIsNewFlow && {
+                expandIcon: ({ expanded, onExpand, record }) =>
+                  record.children ? (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={e => onExpand(record, e)}
+                      onKeyDown={e => e.key === 'Enter' && onExpand(record, e)}
+                      style={{
+                        display: 'inline-block',
+                        width: 18,
+                        color: '#1890ff',
+                        cursor: 'pointer',
+                        fontSize: 11,
+                      }}
+                    >
+                      {expanded ? <DownOutlined /> : <RightOutlined />}
+                    </span>
+                  ) : (
+                    <span style={{ display: 'inline-block', width: 18 }} />
+                  ),
+              }
+            }
             bordered
             pagination={{
               pageSizeOptions: ['10', '20', '30', '50', [dtlretrievedata.length]],

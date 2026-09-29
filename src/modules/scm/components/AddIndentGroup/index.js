@@ -1,7 +1,7 @@
 /* eslint-disable eqeqeq */
 import React, { useState, useEffect, useRef, useMemo } from 'react'
-import { Form, DatePicker, message, Input, Select, Spin, Checkbox, Popover } from 'antd'
-import { InfoCircleOutlined } from '@ant-design/icons'
+import { Form, DatePicker, message, Input, Select, Spin, Checkbox } from 'antd'
+import { RightOutlined, DownOutlined } from '@ant-design/icons'
 import { debounce } from 'lodash'
 import store from 'store'
 import moment from 'moment'
@@ -156,18 +156,65 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
       }
     }
   }
-  // Per client request, same-part-across-different-indents is no longer merged into one row here -
-  // every source row (one per indent) stays its own row/allocation, for both NEW-flow and LEGACY.
-  // sourceSnos/breakdown are kept (always degenerate: 1 source, empty breakdown) so the rest of the
-  // screen (handleQtyChange, selected-count helpers, the Indent column's popover) needs no other change.
-  const buildMergedRows = rows => rows.map(item => ({ ...item, sourceSnos: [item.sno], breakdown: [] }))
+  // Auto-split order for a part shared by several indent lines: earliest indent due date first
+  // (no due date last), then Indent No., then original line order.
+  const splitOrder = (a, b) => {
+    const da = a.indentDueDate || '9999-12-31'
+    const db = b.indentDueDate || '9999-12-31'
+    if (da !== db) return da.localeCompare(db)
+    // numeric-aware so ...-A-9 comes before ...-A-11
+    const byCode = (a.indentCode || '').localeCompare(b.indentCode || '', undefined, { numeric: true })
+    return byCode !== 0 ? byCode : a.sno - b.sno
+  }
 
-  const mergedRows = useMemo(() => buildMergedRows(indentTable), [indentTable])
+  // NEW-flow: every line of the same Part Number (across the station's indents, or repeated
+  // within one indent) becomes ONE row. Its source lines are shown as expandable child rows, each
+  // with its own Allocate Qty, so the user can take qty from whichever indent they want. Storage
+  // is unchanged - submit still sends one indent_grp_dtl row per real indent line (indentTable).
+  // LEGACY (single indent) stays one row per line.
+  const buildMergedRows = rows => {
+    const single = item => ({ ...item, rowKey: `r-${item.sno}`, sourceSnos: [item.sno] })
+    if (!isNewFlow) return rows.map(single)
+    const byProduct = new Map()
+    rows.forEach(item => {
+      if (!byProduct.has(item.productCode)) byProduct.set(item.productCode, [])
+      byProduct.get(item.productCode).push(item)
+    })
+    return Array.from(byProduct.values()).map(group => {
+      if (group.length === 1) return single(group[0])
+      const ordered = [...group].sort(splitOrder)
+      const sourceSnos = ordered.map(g => g.sno)
+      const groupSno = Math.min(...sourceSnos)
+      const sumField = f => ordered.reduce((sum, g) => sum + (parseFloat(g[f]) || 0), 0)
+      const indentCodes = new Set(ordered.map(g => g.indentCode))
+      return {
+        ...ordered[0],
+        sno: groupSno,
+        rowKey: `g-${groupSno}`,
+        isGroup: true,
+        sourceSnos,
+        indentCount: indentCodes.size,
+        indentCode: indentCodes.size === 1 ? ordered[0].indentCode : null,
+        indentQty: sumField('indentQty'),
+        indentGrpQty: sumField('indentGrpQty'),
+        allocateQty: sumField('allocateQty').toString(),
+        children: ordered.map(g => ({
+          ...g,
+          rowKey: `c-${g.sno}`,
+          isChild: true,
+          groupSno,
+          groupSnos: sourceSnos,
+        })),
+      }
+    })
+  }
 
-  // record is a merged row (see buildMergedRows) - for a part sourced from >1 indent, the entered
-  // total is split across its source rows, filling each up to its own remaining capacity
-  // (indentQty - indentGrpQty) in ascending Indent No. order, so the split is deterministic and
-  // reviewable via the "N indents" breakdown popover. A single-source row splits trivially to itself.
+  const mergedRows = useMemo(() => buildMergedRows(indentTable), [indentTable, isNewFlow])
+
+  // Merged-row total: split across its source lines in splitOrder (earliest due date first),
+  // filling each up to its own remaining capacity (indentQty - indentGrpQty). The user can then
+  // expand the row and override any single line (handleLineQtyChange). A single-source row splits
+  // trivially to itself.
   const handleQtyChange = (record, e) => {
     const { value } = e.target
     const totalAvailable = record.sourceSnos.reduce((sum, sno) => {
@@ -189,10 +236,8 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
 
     let remaining = finalValue === '' ? 0 : parseFloat(finalValue) || 0
     const newData = [...indentTable]
-    const orderedSnos = [...record.sourceSnos].sort((a, b) =>
-      (indentTable[a].indentCode || '').localeCompare(indentTable[b].indentCode || ''),
-    )
-    orderedSnos.forEach(sno => {
+    // sourceSnos is already in splitOrder (see buildMergedRows).
+    record.sourceSnos.forEach(sno => {
       const capacity = parseFloat(newData[sno].indentQty) - parseFloat(newData[sno].indentGrpQty)
       const take = Math.min(Math.max(remaining, 0), capacity)
       newData[sno] = { ...newData[sno], allocateQty: take.toString() }
@@ -201,6 +246,36 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
     })
     setIndentTable(newData)
     updateSelected(record.sno, finalValue)
+  }
+
+  // Child (single indent line) of a merged row: set just this line, clamped to its own remaining
+  // capacity; the merged row's total follows automatically (it is derived from indentTable).
+  const handleLineQtyChange = (record, e) => {
+    const { value } = e.target
+    const { sno } = record
+    const capacity = parseFloat(indentTable[sno].indentQty) - parseFloat(indentTable[sno].indentGrpQty)
+    let finalValue = value
+
+    if (value !== '') {
+      const numValue = parseFloat(value)
+      if (!Number.isNaN(numValue) && numValue < 0) {
+        message.warning('Allocate Qty cannot be negative. Auto-corrected.')
+        finalValue = '0'
+      } else if (!Number.isNaN(numValue) && numValue > capacity) {
+        message.warning(`Allocate Qty cannot exceed ${capacity} for this indent. Auto-corrected.`)
+        finalValue = capacity.toString()
+      }
+    }
+
+    const newData = [...indentTable]
+    newData[sno] = { ...newData[sno], allocateQty: finalValue }
+    allqtyForm.setFieldsValue({ [`allocateqty${sno}`]: finalValue })
+    setIndentTable(newData)
+    const groupTotal = record.groupSnos.reduce(
+      (sum, s) => sum + (parseFloat(newData[s].allocateQty) || 0),
+      0,
+    )
+    updateSelected(record.groupSno, groupTotal)
   }
 
   const fromdateChange = () => {
@@ -364,12 +439,16 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
     })
   })
 
+  // Child (per-indent line) rows only show Indent + quantities; the part details live on the
+  // merged row above them.
+  const parentOnly = (text, record) => (record.isChild ? null : text)
+
   const insertcolumns = [
     {
       title: 'S.No',
       key: 'slno',
       width: 50,
-      render: (text, record, index) => index + 1,
+      render: (text, record, index) => (record.isChild ? null : index + 1),
     },
     // Station grouping pulls parts from several indents at once, so show which indent each row came from.
     ...(isNewFlow
@@ -379,42 +458,12 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
             dataIndex: 'indentCode',
             width: '12%',
             key: 'indentCode',
-            render: (text, record) =>
-              record.breakdown.length > 1 ? (
-                <Popover
-                  trigger="click"
-                  placement="right"
-                  title="Indents for this part"
-                  content={
-                    <table style={{ borderCollapse: 'collapse', fontSize: 12 }}>
-                      <thead>
-                        <tr style={{ borderBottom: '1px solid #e8e8e8', color: '#888' }}>
-                          <th style={{ textAlign: 'left', padding: '2px 8px' }}>Indent No.</th>
-                          <th style={{ textAlign: 'left', padding: '2px 8px' }}>Type</th>
-                          <th style={{ textAlign: 'left', padding: '2px 8px' }}>Sub Assembly</th>
-                          <th style={{ textAlign: 'right', padding: '2px 8px' }}>Qty</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {record.breakdown.map(b => (
-                          <tr key={b.indentCode}>
-                            <td style={{ padding: '2px 8px' }}>{b.indentCode}</td>
-                            <td style={{ padding: '2px 8px' }}>{b.indentType}</td>
-                            <td style={{ padding: '2px 8px' }}>{b.subAssembly}</td>
-                            <td style={{ padding: '2px 8px', textAlign: 'right' }}>{b.indentQty}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  }
-                >
-                  <span style={{ cursor: 'pointer', color: '#1890ff' }}>
-                    {record.breakdown.length} indents <InfoCircleOutlined />
-                  </span>
-                </Popover>
-              ) : (
-                text
-              ),
+            render: (text, record) => {
+              if (record.isGroup && record.indentCount > 1) {
+                return <span style={{ color: '#1890ff' }}>{record.indentCount} indents</span>
+              }
+              return text
+            },
           },
         ]
       : []),
@@ -426,6 +475,7 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
       filters: productCode3,
       filteredValue: filtersinfo.productCode,
       onFilter: (value, record) => record?.productCode === value,
+      render: parentOnly,
     },
     {
       title: 'Description',
@@ -435,6 +485,7 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
       filteredValue: filtersinfo.description,
       onFilter: (value, record) => record?.description === value,
       key: 'description',
+      render: parentOnly,
     },
     {
       title: 'Specification',
@@ -444,6 +495,7 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
       filters: specification3,
       filteredValue: filtersinfo.specification,
       onFilter: (value, record) => record?.specification === value,
+      render: parentOnly,
     },
     {
       title: 'Make',
@@ -453,6 +505,7 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
       filters: make3,
       filteredValue: filtersinfo.make,
       onFilter: (value, record) => record?.make === value,
+      render: parentOnly,
     },
     {
       title: 'Material',
@@ -462,18 +515,21 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
       filters: Material3,
       filteredValue: filtersinfo.material,
       onFilter: (value, record) => record?.material === value,
+      render: parentOnly,
     },
     {
       title: 'Mass (kgs)',
       dataIndex: 'weight',
       width: '7%',
       key: 'weight',
+      render: parentOnly,
     },
     {
       title: 'UOM',
       dataIndex: 'uom',
       width: '5%',
       key: 'uom',
+      render: parentOnly,
     },
     {
       title: 'Indent Qty.',
@@ -498,7 +554,9 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
           min={0}
           placeholder="Allocate Qty.."
           value={record.allocateQty}
-          onChange={e => handleQtyChange(record, e)}
+          onChange={e =>
+            record.isChild ? handleLineQtyChange(record, e) : handleQtyChange(record, e)
+          }
         />
       ),
     },
@@ -628,16 +686,21 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
   }
 
   // Non-destructive filter over the parts table: free-text search across all columns +
-  // optional "show only rows with an allocated qty".
+  // optional "show only rows with an allocated qty". A merged row also matches on any of its
+  // per-indent child lines (e.g. searching an indent no. that only one child carries).
+  const matchesSearch = item =>
+    Object.keys(item).some(
+      key =>
+        key !== 'children' &&
+        item[key]
+          ?.toString()
+          .toLowerCase()
+          .includes(searchText.toLowerCase()),
+    )
   const displayedData = mergedRows.filter(item => {
     if (showSelectedOnly && !selectedSnos.has(item.sno)) return false
     if (!searchText) return true
-    return Object.keys(item).some(key =>
-      item[key]
-        ?.toString()
-        .toLowerCase()
-        .includes(searchText.toLowerCase()),
-    )
+    return matchesSearch(item) || (item.children || []).some(matchesSearch)
   })
 
   const FieldsComponent = useRef(() => {
@@ -888,7 +951,35 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
                     scroll={fs.displayedData.length > 15 ? { y: 700 } : undefined}
                     onChange={fs.handleChange}
                     pagination={false}
-                    rowKey="sno"
+                    rowKey="rowKey"
+                    // Expand/collapse icon sits in the Indent column, beside the "N indents" label
+                    // (antd defaults it to the first column, S.No). Index 1 = Indent (NEW-flow only;
+                    // LEGACY rows never have children, so no icon shows there).
+                    expandable={{
+                      expandIconColumnIndex: fs.isNewFlow ? 1 : 0,
+                      // Small arrow in the label's colour instead of antd's boxed +/- button; rows
+                      // without children get a same-width spacer so indent numbers stay aligned.
+                      expandIcon: ({ expanded, onExpand, record }) =>
+                        record.children ? (
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            onClick={e => onExpand(record, e)}
+                            onKeyDown={e => e.key === 'Enter' && onExpand(record, e)}
+                            style={{
+                              display: 'inline-block',
+                              width: 18,
+                              color: '#1890ff',
+                              cursor: 'pointer',
+                              fontSize: 11,
+                            }}
+                          >
+                            {expanded ? <DownOutlined /> : <RightOutlined />}
+                          </span>
+                        ) : (
+                          <span style={{ display: 'inline-block', width: 18 }} />
+                        ),
+                    }}
                   />
                 </Form>
               </>

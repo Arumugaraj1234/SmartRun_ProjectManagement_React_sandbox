@@ -2671,11 +2671,10 @@ const SupCompState = ({
     })
     const result = []
     byProduct.forEach(group => {
-      // Only genuinely different indents get merged - two lines for the same part within the SAME
-      // indent (a legitimate split-line pattern) must stay separate rows, not collapse into one
-      // mislabeled as "N indents".
-      const distinctIndentCodes = new Set(group.map(g => g.indentCode))
-      if (distinctIndentCodes.size <= 1) {
+      // Any part repeated on 2+ lines is merged into one row - whether the lines come from
+      // different indents or from the same indent. Only a cross-indent merge is labelled
+      // "N indents"; a same-indent merge keeps showing its plain indent code.
+      if (group.length <= 1) {
         group.forEach(item => result.push({ ...item, sourceSnos: [item.sno], breakdown: [] }))
         return
       }
@@ -2699,12 +2698,14 @@ const SupCompState = ({
         }
         byIndent.get(g.indentCode).indentQty += parseFloat(g.indentQty) || 0
       })
+      const breakdown = Array.from(byIndent.values())
       const merged = {
         ...rep,
         sourceSnos: ordered.map(g => g.sno),
         qty: totalQty,
-        indentCode: null,
-        breakdown: Array.from(byIndent.values()),
+        indentCode: breakdown.length > 1 ? null : rep.indentCode,
+        indentQty: breakdown.length > 1 ? rep.indentQty : breakdown[0].indentQty,
+        breakdown,
       }
       // Every source shares the same rate by design (see handleRateChange/handleRateChangeFx),
       // so the merged row's own Extended Price is simply rate x total qty.
@@ -2835,7 +2836,7 @@ const SupCompState = ({
       dataIndex: 'indentCode',
       key: 'indentCode',
       render: (text, record) =>
-        record.sourceSnos && record.sourceSnos.length > 1 ? (
+        record.breakdown && record.breakdown.length > 1 ? (
           <Popover
             trigger="click"
             placement="right"

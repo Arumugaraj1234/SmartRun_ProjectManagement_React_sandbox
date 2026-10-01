@@ -60,9 +60,7 @@ const IndentGroupComponent = ({ isTailview }) => {
   const [indentHdrid, setIndentHdrid] = useState('')
   const [indentDtlIds, setIndentDtlIds] = useState('')
   const [scsStatus, setScsStatus] = useState('')
-  // Group items can only be added/removed until the PJS is first saved - once a PJS exists the
-  // item list is frozen (backend insertTempGrup / delIndentGrpDtl enforce the same).
-  const groupLocked = !['', 'NA', 'PJS Not Created'].includes(scsStatus)
+  const groupHasPjs = !['', 'NA', 'PJS Not Created'].includes(scsStatus)
   const [inventoryBased, setInventoryBased] = useState('')
   const [singleRecord, setSingleRecord] = useState(null)
   const [searchText, setSearchText] = useState('')
@@ -71,6 +69,11 @@ const IndentGroupComponent = ({ isTailview }) => {
   // Whether the group open in the Details popup belongs to a NEW-flow project - gates the
   // station-scoped "Indent" picker on the add-item row (LEGACY groups stay single-indent).
   const [detailIsNewFlow, setDetailIsNewFlow] = useState(false)
+  // NEW-flow: group items can be added/removed until the PJS is created and while it is still
+  // Prepared, frozen from SCM Verified on (backend isGrpItemsLocked enforces the same). LEGACY keeps
+  // the original main-project popup: add/remove controls always shown, backend blocks deletes.
+  const pjsPreparedEditable = detailIsNewFlow && scsStatus === 'Prepared'
+  const groupLocked = detailIsNewFlow && groupHasPjs && !pjsPreparedEditable
   // "ⓘ" popover on the PJS list: per-indent breakdown for a group that spans multiple indents.
   const [breakdownRows, setBreakdownRows] = useState([])
   const [breakdownForHdr, setBreakdownForHdr] = useState('')
@@ -302,6 +305,7 @@ const IndentGroupComponent = ({ isTailview }) => {
       igHdrId: indentHdrid,
       insrtGrpDtl: newArray,
       empId: employeeId,
+      createdBy: employeeId,
       tenantId,
       // newRowlist: newRows,
     }
@@ -428,8 +432,16 @@ const IndentGroupComponent = ({ isTailview }) => {
     const selectedIndent = groupIndentOptions.find(opt => opt.indentId === newRowIndentId)
     // Items belonging to the picked indent only - getIndentGrpNewProdByStation already excludes
     // fully-consumed lines (HAVING remaining qty > 0), so anything listed here is addable.
+    // Lines already in this group (saved or just added) are left out, so the same indent line
+    // can't be added twice and over-allocated past its remaining qty.
+    const usedDtlIds = new Set(
+      dtlretrievedata.map(r => r.indentDtlId).filter(Boolean).map(String),
+    )
+    // (NEW-flow only - LEGACY keeps the original list.)
     const availableProducts = detailIsNewFlow
-      ? productCodes.filter(p => p.indentId === newRowIndentId)
+      ? productCodes
+          .filter(p => p.indentId === newRowIndentId)
+          .filter(p => !usedDtlIds.has(String(p.indentDtlId)))
       : productCodes
     // Show the Indent-context columns whenever the group already spans indents, or it's a
     // NEW-flow group that could gain another indent via the add-item row below.
@@ -447,6 +459,11 @@ const IndentGroupComponent = ({ isTailview }) => {
       }
       if (!newRow.productCode || !newRow.description) {
         message.error('Please fill required fields')
+        return
+      }
+      const addQty = Number(newRow.indentGrpQty)
+      if (detailIsNewFlow && (newRow.indentGrpQty === '' || Number.isNaN(addQty) || addQty <= 0)) {
+        message.error('Available Qty must be greater than 0')
         return
       }
 
@@ -575,8 +592,14 @@ const IndentGroupComponent = ({ isTailview }) => {
                       material: selectedProduct.material || '',
                       make: selectedProduct.make || '',
                       uom: selectedProduct.uom || '',
+                      // NEW-flow: Indent Qty shows what's still ungrouped on this line (read-only);
+                      // Available Qty (the qty saved) starts at that and can only go down.
+                      // LEGACY keeps the original prefill.
                       indentQty: selectedProduct.differenceQty || '',
-                      indentGrpQty: selectedProduct.indentGrpQty || '',
+                      indentGrpQty:
+                        (detailIsNewFlow
+                          ? selectedProduct.differenceQty
+                          : selectedProduct.indentGrpQty) || '',
                       indentDtlId: selectedProduct.indentDtlId || '',
                     })
                   } else {
@@ -639,6 +662,7 @@ const IndentGroupComponent = ({ isTailview }) => {
           record.key === 'new' ? (
             <Input
               value={newRow.indentQty || ''}
+              disabled={detailIsNewFlow}
               onChange={e => setNewRow({ ...newRow, indentQty: e.target.value })}
             />
           ) : (
@@ -657,10 +681,19 @@ const IndentGroupComponent = ({ isTailview }) => {
                 const numValue = Number(value)
                 const maxQty = Number(newRow.indentQty || 0)
 
-                if (!Number.isNaN(numValue) && numValue <= maxQty) {
-                  setNewRow({ ...newRow, indentGrpQty: value })
+                if (!detailIsNewFlow) {
+                  // LEGACY: original rule.
+                  if (!Number.isNaN(numValue) && numValue <= maxQty) {
+                    setNewRow({ ...newRow, indentGrpQty: value })
+                  } else {
+                    message.warning('Available Qty cannot be greater than Indent Qty')
+                  }
+                } else if (Number.isNaN(numValue) || numValue < 0) {
+                  message.warning('Available Qty cannot be negative')
+                } else if (numValue > maxQty) {
+                  message.warning(`Available Qty cannot be greater than ${maxQty}`)
                 } else {
-                  message.warning('Available Qty cannot be greater than Indent Qty')
+                  setNewRow({ ...newRow, indentGrpQty: value })
                 }
               }}
             />
@@ -749,7 +782,13 @@ const IndentGroupComponent = ({ isTailview }) => {
         {groupLocked && (
           <div style={{ color: '#d46b08', marginBottom: '10px' }}>
             PJS is {scsStatus} - items can&apos;t be added to or removed from this group once
-            the PJS is saved.
+            the PJS is SCM Verified.
+          </div>
+        )}
+        {pjsPreparedEditable && (
+          <div style={{ color: '#d46b08', marginBottom: '10px' }}>
+            PJS is Prepared - after adding or removing items, open the PJS, price any new items
+            and Save it before SCM verification.
           </div>
         )}
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -761,7 +800,9 @@ const IndentGroupComponent = ({ isTailview }) => {
             text="Delete Group"
             type="primary"
             disabled={!dtlretrievedata.some(row => row.isNew)}
-            disable={groupLocked}
+            // NEW-flow: whole-group delete blocked once any PJS exists (it would empty the PJS).
+            // LEGACY: original button (backend still refuses while a PJS exists).
+            disable={detailIsNewFlow && groupHasPjs}
             onClick={() => handleDtlRemoveRow('', true)}
           />
         </div>

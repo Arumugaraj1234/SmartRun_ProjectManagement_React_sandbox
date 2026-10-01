@@ -50,6 +50,13 @@ import './style.scss'
 const { TextArea } = Input
 // const { Link } = Typography
 const IndentManagement = ({ componentdata }) => {
+  // Light orange (NEW-flow, screens that opt in via componentdata.highlightPjsGrpDeleted - PM for
+  // now): indent sent back by a PJS group delete and not grouped again yet. Takes priority over the
+  // existing yellow (any reversal) so the two cases can be told apart.
+  const rowBackground = record => {
+    if (componentdata?.highlightPjsGrpDeleted && record.pjsGrpDeleted === '1') return '#FFD591'
+    return record.verCheck === 1 ? '#FFFF00' : 'transparent'
+  }
   const { Option } = Select
   const history = useHistory()
   const prevPath = history.location.state?.from
@@ -885,7 +892,7 @@ const IndentManagement = ({ componentdata }) => {
       render: (text, record) => ({
         props: {
           style: {
-            backgroundColor: record.verCheck === 1 ? '#FFFF00' : 'transparent',
+            backgroundColor: rowBackground(record),
           },
         },
         children: text != null ? text : '-',
@@ -898,7 +905,7 @@ const IndentManagement = ({ componentdata }) => {
       render: (text, record) => ({
         props: {
           style: {
-            backgroundColor: record.verCheck === 1 ? '#FFFF00' : 'transparent',
+            backgroundColor: rowBackground(record),
           },
         },
         children: text != null ? text : '-',
@@ -914,7 +921,7 @@ const IndentManagement = ({ componentdata }) => {
       render: (text, record) => ({
         props: {
           style: {
-            backgroundColor: record.verCheck === 1 ? '#FFFF00' : 'transparent',
+            backgroundColor: rowBackground(record),
           },
         },
         children: text != null ? text : '-',
@@ -938,7 +945,7 @@ const IndentManagement = ({ componentdata }) => {
       render: (text, record) => ({
         props: {
           style: {
-            backgroundColor: record.verCheck === 1 ? '#FFFF00' : 'transparent',
+            backgroundColor: rowBackground(record),
           },
         },
         children: text != null ? text : '-',
@@ -954,7 +961,7 @@ const IndentManagement = ({ componentdata }) => {
       render: (text, record) => ({
         props: {
           style: {
-            backgroundColor: record.verCheck === 1 ? '#FFFF00' : 'transparent',
+            backgroundColor: rowBackground(record),
           },
         },
         children: text != null ? text : '-',
@@ -971,7 +978,7 @@ const IndentManagement = ({ componentdata }) => {
       render: (text, record) => ({
         props: {
           style: {
-            backgroundColor: record.verCheck === 1 ? '#FFFF00' : 'transparent',
+            backgroundColor: rowBackground(record),
           },
         },
         children: text != null ? text : '-',
@@ -996,7 +1003,7 @@ const IndentManagement = ({ componentdata }) => {
         return {
           props: {
             style: {
-              backgroundColor: record.verCheck === 1 ? '#FFFF00' : 'transparent',
+              backgroundColor: rowBackground(record),
             },
           },
           children:
@@ -1027,7 +1034,7 @@ const IndentManagement = ({ componentdata }) => {
         return {
           props: {
             style: {
-              backgroundColor: record.verCheck === 1 ? '#FFFF00' : 'transparent',
+              backgroundColor: rowBackground(record),
             },
           },
           children: formattedText,
@@ -1050,7 +1057,7 @@ const IndentManagement = ({ componentdata }) => {
         return {
           props: {
             style: {
-              backgroundColor: record.verCheck === 1 ? '#FFFF00' : 'transparent',
+              backgroundColor: rowBackground(record),
             },
           },
           children: formattedDate,
@@ -1064,7 +1071,7 @@ const IndentManagement = ({ componentdata }) => {
       render: (text, record) => ({
         props: {
           style: {
-            backgroundColor: record.verCheck === 1 ? '#FFFF00' : 'transparent',
+            backgroundColor: rowBackground(record),
           },
         },
         children: text != null ? text : '-',
@@ -1081,7 +1088,7 @@ const IndentManagement = ({ componentdata }) => {
       render: (text, record) => ({
         props: {
           style: {
-            backgroundColor: record.verCheck === 1 ? '#FFFF00' : 'transparent',
+            backgroundColor: rowBackground(record),
           },
         },
         children: text != null ? text : '-',
@@ -1102,7 +1109,7 @@ const IndentManagement = ({ componentdata }) => {
         return {
           props: {
             style: {
-              backgroundColor: record.verCheck === 1 ? '#FFFF00' : 'transparent',
+              backgroundColor: rowBackground(record),
             },
           },
           children: formattedDate,
@@ -1117,7 +1124,7 @@ const IndentManagement = ({ componentdata }) => {
       render: (text, record) => ({
         props: {
           style: {
-            backgroundColor: record.verCheck === 1 ? '#FFFF00' : 'transparent',
+            backgroundColor: rowBackground(record),
           },
         },
         children: text != null ? text : '-',
@@ -1143,7 +1150,7 @@ const IndentManagement = ({ componentdata }) => {
         return {
           props: {
             style: {
-              backgroundColor: record.verCheck === 1 ? '#FFFF00' : 'transparent',
+              backgroundColor: rowBackground(record),
             },
           },
           children: displayText,
@@ -1166,7 +1173,7 @@ const IndentManagement = ({ componentdata }) => {
         return {
           props: {
             style: {
-              backgroundColor: record.verCheck === 1 ? '#FFFF00' : 'transparent',
+              backgroundColor: rowBackground(record),
             },
           },
           children: displayText,

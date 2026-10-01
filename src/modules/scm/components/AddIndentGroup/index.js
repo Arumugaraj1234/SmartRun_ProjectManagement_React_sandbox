@@ -460,7 +460,15 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
             key: 'indentCode',
             render: (text, record) => {
               if (record.isGroup && record.indentCount > 1) {
-                return <span style={{ color: '#1890ff' }}>{record.indentCount} indents</span>
+                const shown = record.visibleIndentCount
+                return (
+                  <span style={{ color: '#1890ff' }}>
+                    {shown !== undefined && shown < record.indentCount
+                      ? `${shown} of ${record.indentCount}`
+                      : record.indentCount}{' '}
+                    indents
+                  </span>
+                )
               }
               return text
             },
@@ -697,11 +705,24 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
           .toLowerCase()
           .includes(searchText.toLowerCase()),
     )
-  const displayedData = mergedRows.filter(item => {
-    if (showSelectedOnly && !selectedSnos.has(item.sno)) return false
-    if (!searchText) return true
-    return matchesSearch(item) || (item.children || []).some(matchesSearch)
-  })
+  // With "show selected only", a merged row also hides its 0-qty child lines; visibleIndentCount
+  // drives the "2 of 3 indents" label. Safe for submit - qty lives in indentTable and submit reads
+  // getFieldsValue(true), and the hidden lines are 0 anyway.
+  const displayedData = mergedRows
+    .filter(item => {
+      if (showSelectedOnly && !selectedSnos.has(item.sno)) return false
+      if (!searchText) return true
+      return matchesSearch(item) || (item.children || []).some(matchesSearch)
+    })
+    .map(item => {
+      if (!showSelectedOnly || !item.children) return item
+      const children = item.children.filter(c => Number(c.allocateQty) > 0)
+      return {
+        ...item,
+        children,
+        visibleIndentCount: new Set(children.map(c => c.indentCode)).size,
+      }
+    })
 
   const FieldsComponent = useRef(() => {
     const fs = fieldsStateRef.current

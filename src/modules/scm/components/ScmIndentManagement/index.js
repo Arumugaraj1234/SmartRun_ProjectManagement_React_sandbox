@@ -1803,6 +1803,11 @@ const ScmIndentManagement = ({ isTailview }) => {
                 scroll={{ y: 400 }}
                 onChange={handleChange}
                 bordered
+                // Light orange: NEW-flow indent sent back by a PJS group delete and not grouped
+                // again yet (same colour as the PM Indent Management list).
+                onRow={record =>
+                  record.pjsGrpDeleted === '1' ? { style: { backgroundColor: '#FFD591' } } : {}
+                }
               />
             </div>
           </div>

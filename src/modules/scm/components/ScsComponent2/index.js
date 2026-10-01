@@ -736,64 +736,84 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
       })
 
       setFinalVal(httpgetdetails.responseData[0].vendorQualified)
+      // Unpriced row for a group item - every item of a new PJS, plus (NEW-flow) items added to the
+      // group while its PJS is still Prepared, which have no saved price line yet. Saved with an empty
+      // igScpDItld, so insertScpDtlsByIgHdrId inserts it.
+      const toBlankPriceRow = (item, sno) => ({
+        sno,
+        igScpDItld: '',
+        igScpId: '',
+        igDtlId: item.indentGrpDtlId,
+        indentDtlId: item.indentDtlId,
+        l1UnitPrice: '',
+        l1UnitPriceFx: '',
+        l1ExtendedPrice: '',
+        l1ExtendedPriceFx: '',
+        l2UnitPrice: '',
+        l2UnitPriceFx: '',
+        l2ExtendedPrice: '',
+        l2ExtendedPriceFx: '',
+        l3UnitPrice: '',
+        l3UnitPriceFx: '',
+        l3ExtendedPrice: '',
+        l3ExtendedPriceFx: '',
+        finalL1UnitPrice: '',
+        finalL1UnitPriceFx: '',
+        finalL1ExtendedPrice: '',
+        finalL1ExtendedPriceFx: '',
+        finalL2UnitPrice: '',
+        finalL2UnitPriceFx: '',
+        finalL2ExtendedPrice: '',
+        finalL2ExtendedPriceFx: '',
+        finalL3UnitPrice: '',
+        finalL3UnitPriceFx: '',
+        finalL3ExtendedPrice: '',
+        finalL3ExtendedPriceFx: '',
+        tenantId: '',
+        prodCode: item.productCode,
+        prodDesc: item.description,
+        prodSpec: item.specification,
+        uom: item.uom,
+        qty: item.indentGrpQty,
+        dmId: item.dmId,
+        indentCode: item.indentCode,
+        indentType: item.indentType,
+        subAssembly: item.subAssembly,
+        indentQty: item.indentQty,
+      })
+      const prop = {
+        delAll: 0,
+        igDtlId: hdrId,
+        tenantId,
+      }
       const priceDtlArr = httpgetdetails.responseData[0].scpDtlList
       if (priceDtlArr && priceDtlArr.length > 0) {
-        setPriceTable(httpgetdetails.responseData[0].scpDtlList)
-        setInitialBasevalues(httpgetdetails.responseData[0].scpDtlList)
-      } else {
-        const prop = {
-          delAll: 0,
-          igDtlId: hdrId,
-          tenantId,
+        // Only when the group's items were added/removed after this PJS was last saved
+        // (grpChangedAfterSave - backend sets it for NEW-flow Prepared PJSs only). LEGACY sheets
+        // stay exactly as before (some old approved LEGACY PJSs have group items that were never
+        // priced - they must not suddenly appear as blank rows), and an unchanged PJS skips the fetch.
+        const pjs = httpgetdetails.responseData[0]
+        let unpricedRows = []
+        if (pjs.grpChangedAfterSave) {
+          const httpget = await IndentGroupgetDetails({
+            requestPath: 'getIndentGroupHdrAndDtl',
+            requestData: prop,
+          })
+          const pricedDtlIds = new Set(priceDtlArr.map(r => String(r.igDtlId)))
+          unpricedRows = (httpget?.responseCode === '200' ? httpget.responseData || [] : [])
+            .filter(item => !pricedDtlIds.has(String(item.indentGrpDtlId)))
+            .map((item, i) => toBlankPriceRow(item, priceDtlArr.length + i + 1))
         }
-
+        const fullPriceTable = [...priceDtlArr, ...unpricedRows]
+        setPriceTable(fullPriceTable)
+        setInitialBasevalues(fullPriceTable)
+      } else {
         const httpget = await IndentGroupgetDetails({
           requestPath: 'getIndentGroupHdrAndDtl',
           requestData: prop,
         })
         if (httpget.responseCode === '200') {
-          const newData = httpget?.responseData?.map((item, index) => ({
-            sno: index + 1,
-            igScpDItld: '',
-            igScpId: '',
-            igDtlId: item.indentGrpDtlId,
-            indentDtlId: item.indentDtlId,
-            l1UnitPrice: '',
-            l1UnitPriceFx: '',
-            l1ExtendedPrice: '',
-            l1ExtendedPriceFx: '',
-            l2UnitPrice: '',
-            l2UnitPriceFx: '',
-            l2ExtendedPrice: '',
-            l2ExtendedPriceFx: '',
-            l3UnitPrice: '',
-            l3UnitPriceFx: '',
-            l3ExtendedPrice: '',
-            l3ExtendedPriceFx: '',
-            finalL1UnitPrice: '',
-            finalL1UnitPriceFx: '',
-            finalL1ExtendedPrice: '',
-            finalL1ExtendedPriceFx: '',
-            finalL2UnitPrice: '',
-            finalL2UnitPriceFx: '',
-            finalL2ExtendedPrice: '',
-            finalL2ExtendedPriceFx: '',
-            finalL3UnitPrice: '',
-            finalL3UnitPriceFx: '',
-            finalL3ExtendedPrice: '',
-            finalL3ExtendedPriceFx: '',
-            tenantId: '',
-            prodCode: item.productCode,
-            prodDesc: item.description,
-            prodSpec: item.specification,
-            uom: item.uom,
-            qty: item.indentGrpQty,
-            dmId: item.dmId,
-            indentCode: item.indentCode,
-            indentType: item.indentType,
-            subAssembly: item.subAssembly,
-            indentQty: item.indentQty,
-          }))
+          const newData = httpget?.responseData?.map((item, index) => toBlankPriceRow(item, index + 1))
           setPriceTable(newData)
           setPaymenttermdatal1([emptyPaymentTerms])
           setPaymenttermdatal2([emptyPaymentTerms])

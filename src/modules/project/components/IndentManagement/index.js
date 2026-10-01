@@ -5,6 +5,7 @@ const ProjectIndentManagement = () => {
   const data = {
     createindent: false,
     module: 'project',
+    highlightPjsGrpDeleted: true,
   }
   return (
     <div>

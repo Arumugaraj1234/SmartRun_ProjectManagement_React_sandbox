@@ -1,5 +1,5 @@
 /* eslint-disable eqeqeq */
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import store from 'store'
 import moment from 'moment'
 import { useHistory } from 'react-router-dom'
@@ -23,6 +23,11 @@ import SupCompState from '../ScsComponent2'
 import currentDateTime from '../../../../currentDateTime'
 import ViewPoModal from './ViewPoModal'
 // import Tailviewfields from '../Tailviewfields'
+
+// Key of a row's unsaved Available Qty edit: saved lines by IG_DTL_ID, lines added but not yet
+// saved by their temporary row key.
+const qtyEditKey = record =>
+  record.isNew ? `new-${record.key}` : String(record.indentGrpDtlId)
 
 const IndentGroupComponent = ({ isTailview }) => {
   let defaultfilterData = {}
@@ -74,6 +79,13 @@ const IndentGroupComponent = ({ isTailview }) => {
   // the original main-project popup: add/remove controls always shown, backend blocks deletes.
   const pjsPreparedEditable = detailIsNewFlow && scsStatus === 'Prepared'
   const groupLocked = detailIsNewFlow && groupHasPjs && !pjsPreparedEditable
+  // NEW-flow: unsaved Available Qty edits on lines already in the group, keyed by IG_DTL_ID. Kept
+  // in a ref (not FieldsComponent state) because FieldsComponent remounts on every parent render
+  // (e.g. after adding or removing a row) and would otherwise drop what was typed.
+  const qtyEditsRef = useRef({})
+  // Group row the Details popup was opened for - lets the add-row's station item list (and its
+  // remaining qtys) be re-fetched after each save/remove so its limits stay current.
+  const detailRecordRef = useRef(null)
   // "ⓘ" popover on the PJS list: per-indent breakdown for a group that spans multiple indents.
   const [breakdownRows, setBreakdownRows] = useState([])
   const [breakdownForHdr, setBreakdownForHdr] = useState('')
@@ -140,6 +152,7 @@ const IndentGroupComponent = ({ isTailview }) => {
 
   const OpenDetailCard = (hdrid, gname, st, it, sub, id, ind, sts, inv) => {
     setDetailCard(true)
+    qtyEditsRef.current = {}
     gethdrDtldetails(hdrid)
     setIndentHdrid(hdrid)
     setGroupName(gname)
@@ -239,6 +252,8 @@ const IndentGroupComponent = ({ isTailview }) => {
         handleGetIndentDetails()
       } else {
         gethdrDtldetails(indentHdrid)
+        // The removed qty is available again - refresh the add-row limits.
+        if (detailIsNewFlow && detailRecordRef.current) addRowInDetail(detailRecordRef.current)
       }
     } else {
       message.error(httpgetdetails.responseMessage)
@@ -289,15 +304,73 @@ const IndentGroupComponent = ({ isTailview }) => {
 
   const saveAddedIndntGrp = async () => {
     const newRows = dtlretrievedata.filter(item => item.isNew)
+    const isBadQty = v => String(v ?? '').trim() === '' || Number.isNaN(Number(v)) || Number(v) <= 0
 
-    if (newRows.length === 0) {
-      message.info('No new rows to save')
+    // NEW-flow qty edits on saved lines - only the ones that actually differ from the saved qty.
+    const qtyChanges = detailIsNewFlow
+      ? Object.entries(qtyEditsRef.current)
+          .map(([key, value]) => ({
+            igDtlId: key,
+            value,
+            row: dtlretrievedata.find(r => !r.isNew && String(r.indentGrpDtlId) === key),
+          }))
+          .filter(c => c.row && Number(c.value) !== Number(c.row.indentGrpQty))
+      : []
+    // An unsaved row's qty may have been edited in the table after Add (NEW flow).
+    const newRowQty = item => {
+      const edited = detailIsNewFlow ? qtyEditsRef.current[qtyEditKey(item)] : undefined
+      return edited !== undefined ? edited : item.indentGrpQty
+    }
+
+    if (newRows.length === 0 && qtyChanges.length === 0) {
+      message.info(detailIsNewFlow ? 'No changes to save' : 'No new rows to save')
       return
     }
+
+    // Validate everything before sending anything, so a bad row doesn't leave a half-saved popup.
+    const badChange = qtyChanges.find(c => isBadQty(c.value))
+    if (badChange) {
+      message.error(
+        `Available Qty for ${badChange.row.productCode} on ${badChange.row.indentCode} must be greater than 0 - use Remove to take it out of the group`,
+      )
+      return
+    }
+    const badNew = detailIsNewFlow ? newRows.find(item => isBadQty(newRowQty(item))) : null
+    if (badNew) {
+      message.error(
+        `Available Qty for ${badNew.productCode} on ${badNew.indentCode} must be greater than 0`,
+      )
+      return
+    }
+
+    if (qtyChanges.length > 0) {
+      const httpupd = await IndentGroupgetDetails({
+        requestPath: 'updateIndentGrpDtlQty',
+        requestData: {
+          igHdrId: indentHdrid,
+          empId: employeeId,
+          tenantId,
+          updGrpDtl: qtyChanges.map(c => ({ igDtlId: c.igDtlId, qty: String(c.value) })),
+        },
+      })
+      if (httpupd?.responseCode !== '200') {
+        // The backend message names the line and its real max - unsaved rows/edits are kept.
+        message.error(httpupd?.responseMessage || 'Failed to update qty')
+        return
+      }
+      if (newRows.length === 0) {
+        qtyEditsRef.current = {}
+        message.success(httpupd.responseMessage)
+        gethdrDtldetails(indentHdrid)
+        if (detailRecordRef.current) addRowInDetail(detailRecordRef.current)
+        return
+      }
+    }
+
     const newArray = newRows.map(item => ({
       indentDtlId: item.indentDtlId || indentDtlIds,
-      inventory: item.indentGrpQty,
-      qty: item.indentGrpQty,
+      inventory: newRowQty(item),
+      qty: newRowQty(item),
       tenantId: item.tenantId || tenantId,
     }))
 
@@ -319,9 +392,31 @@ const IndentGroupComponent = ({ isTailview }) => {
 
       if (httpinsert?.responseCode === '200') {
         message.success(httpinsert.responseMessage)
-        setDtlretrievedata(prev => prev.map(row => (row.isNew ? { ...row, isNew: false } : row)))
+        if (detailIsNewFlow) {
+          // Reload so the new lines get their IG_DTL_ID (Remove / qty edit need it).
+          qtyEditsRef.current = {}
+          gethdrDtldetails(indentHdrid)
+          if (detailRecordRef.current) addRowInDetail(detailRecordRef.current)
+        } else {
+          setDtlretrievedata(prev => prev.map(row => (row.isNew ? { ...row, isNew: false } : row)))
+        }
       } else {
         message.error(httpinsert?.responseMessage || 'Failed to save')
+        if (detailIsNewFlow && detailRecordRef.current) addRowInDetail(detailRecordRef.current)
+        if (qtyChanges.length > 0) {
+          // The qty edits went through just before - show them as saved, keep the unsaved new rows.
+          const saved = new Map(qtyChanges.map(c => [c.igDtlId, c.value]))
+          const remaining = { ...qtyEditsRef.current }
+          saved.forEach((v, k) => delete remaining[k])
+          qtyEditsRef.current = remaining
+          setDtlretrievedata(prev =>
+            prev.map(r =>
+              !r.isNew && saved.has(String(r.indentGrpDtlId))
+                ? { ...r, indentGrpQty: saved.get(String(r.indentGrpDtlId)) }
+                : r,
+            ),
+          )
+        }
       }
     }
   }
@@ -330,6 +425,7 @@ const IndentGroupComponent = ({ isTailview }) => {
   // can offer items from any indent in the station, not just the group's representative indent.
   // LEGACY: unchanged, single-indent lookup.
   const addRowInDetail = async record => {
+    detailRecordRef.current = record
     const isNewFlow = record.costFlowType === 'NEW'
     setDetailIsNewFlow(isNewFlow)
     const props = isNewFlow
@@ -417,6 +513,28 @@ const IndentGroupComponent = ({ isTailview }) => {
     })
     const [newRow, setNewRow] = useState(emptyRow())
     const [newRowIndentId, setNewRowIndentId] = useState('')
+    const [qtyEdits, setQtyEdits] = useState(() => ({ ...qtyEditsRef.current }))
+    const setQtyEdit = (igDtlId, value) => {
+      qtyEditsRef.current = { ...qtyEditsRef.current, [igDtlId]: value }
+      setQtyEdits(qtyEditsRef.current)
+    }
+    // NEW-flow: a line in the group can have its Available Qty changed while the group is editable -
+    // a saved line up to what it holds now + what is still ungrouped on its indent line, a line
+    // added but not yet saved up to its remaining qty (shown as its Indent Qty).
+    const canEditQty = record =>
+      detailIsNewFlow &&
+      !groupLocked &&
+      !record.isGroup &&
+      record.key !== 'new' &&
+      (record.isNew || !!record.indentGrpDtlId)
+    const editedGrpQty = record => {
+      const edited = qtyEdits[qtyEditKey(record)]
+      return edited !== undefined && canEditQty(record) ? edited : record.indentGrpQty
+    }
+    const maxGrpQty = record =>
+      record.isNew
+        ? parseFloat(record.indentQty) || 0
+        : (parseFloat(record.indentGrpQty) || 0) + (parseFloat(record.differenceQty) || 0)
 
     // When the group draws from more than one indent, show each part's own indent context.
     const groupIndentCodes = [
@@ -471,7 +589,9 @@ const IndentGroupComponent = ({ isTailview }) => {
         ...prev,
         {
           ...newRow,
-          key: prev.length + 1,
+          // NEW-flow: unsaved rows can be removed again, so prev.length + 1 could repeat a key
+          // still in use - give each one its own.
+          key: detailIsNewFlow ? `added-${Date.now()}` : prev.length + 1,
           isNew: true,
           ...(detailIsNewFlow
             ? {
@@ -507,7 +627,15 @@ const IndentGroupComponent = ({ isTailview }) => {
         const codes = distinct('indentCode')
         const types = distinct('indentType')
         const subs = distinct('subAssembly')
-        const sum = f => ordered.reduce((acc, g) => acc + (parseFloat(g[f]) || 0), 0).toFixed(2)
+        // Available Qty total follows any unsaved per-indent edits below it.
+        const sum = f =>
+          ordered
+            .reduce(
+              (acc, g) =>
+                acc + (parseFloat(f === 'indentGrpQty' ? editedGrpQty(g) : g[f]) || 0),
+              0,
+            )
+            .toFixed(2)
         return {
           ...ordered[0],
           key: `g-${ordered[0].productCode}`,
@@ -697,6 +825,24 @@ const IndentGroupComponent = ({ isTailview }) => {
                 }
               }}
             />
+          ) : canEditQty(record) ? (
+            <Input
+              style={{ width: '110px' }}
+              value={editedGrpQty(record) ?? ''}
+              title={`Max ${maxGrpQty(record)}`}
+              onChange={e => {
+                const { value } = e.target
+                const numValue = Number(value)
+                const maxQty = maxGrpQty(record)
+                if (value.trim() !== '' && (Number.isNaN(numValue) || numValue < 0)) {
+                  message.warning('Available Qty cannot be negative')
+                } else if (numValue > maxQty) {
+                  message.warning(`Available Qty cannot be greater than ${maxQty}`)
+                } else {
+                  setQtyEdit(qtyEditKey(record), value)
+                }
+              }}
+            />
           ) : (
             text
           ),
@@ -726,7 +872,19 @@ const IndentGroupComponent = ({ isTailview }) => {
               <PlusOutlined />
             </Button>
           ) : (
-            <RemoveIconButton onClick={() => handleDtlRemoveRow(record.indentGrpDtlId, false)} />
+            <RemoveIconButton
+              onClick={() => {
+                // NEW-flow: a row added but not saved yet has no IG_DTL_ID - just drop it from the
+                // table (and any qty typed into it) instead of calling the backend delete.
+                if (detailIsNewFlow && record.isNew) {
+                  const { [qtyEditKey(record)]: dropped, ...rest } = qtyEditsRef.current
+                  qtyEditsRef.current = rest
+                  setDtlretrievedata(prev => prev.filter(r => !(r.isNew && r.key === record.key)))
+                  return
+                }
+                handleDtlRemoveRow(record.indentGrpDtlId, false)
+              }}
+            />
           ),
       },
     ]
@@ -787,8 +945,8 @@ const IndentGroupComponent = ({ isTailview }) => {
         )}
         {pjsPreparedEditable && (
           <div style={{ color: '#d46b08', marginBottom: '10px' }}>
-            PJS is Prepared - after adding or removing items, open the PJS, price any new items
-            and Save it before SCM verification.
+            PJS is Prepared - after adding or removing items or changing a qty, open the PJS,
+            price any new items and Save it before SCM verification.
           </div>
         )}
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>

@@ -18,6 +18,7 @@ import {
   Modal,
   Table,
   Spin,
+  Checkbox,
 } from 'antd'
 // import { CommentOutlined, DownloadOutlined } from '@ant-design/icons'
 import { CommentOutlined, InfoCircleOutlined } from '@ant-design/icons'
@@ -86,6 +87,9 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
   const [vendorQuafylst, setVendorQuafylst] = useState(null)
   const [scmHdrdata, setScmHdrdata] = useState([])
   const [priceTable, setPriceTable] = useState([])
+  // "Show unpriced only": the row snos captured when the box was ticked (null = showing all). A
+  // snapshot, not a live filter, so a row doesn't vanish while its price is still being typed.
+  const [unpricedOnlySnos, setUnpricedOnlySnos] = useState(null)
   const [vendorlist, setVendorlist] = useState([])
   const [paymttermvisible1, setPaymttermvisible1] = useState(false)
   const [paymttermvisible2, setPaymttermvisible2] = useState(false)
@@ -800,9 +804,54 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
             requestData: prop,
           })
           const pricedDtlIds = new Set(priceDtlArr.map(r => String(r.igDtlId)))
+          // A part already priced in this PJS (e.g. the same part from another indent) has one rate
+          // by design - the merged row shows it and a rate typed there is copied to every line. So
+          // an added line of that part takes the existing line's unit prices (every L1/L2/L3,
+          // Initial/Final, Rs/FX column), with extended prices scaled to its own qty. Brand-new
+          // parts stay blank. The PJS still has to be re-saved before SCM Verified.
+          const pricedByPart = new Map()
+          ;[...priceDtlArr]
+            .sort((a, b) => (a.indentCode || '').localeCompare(b.indentCode || ''))
+            .forEach(r => {
+              if (!pricedByPart.has(r.prodCode)) pricedByPart.set(r.prodCode, r)
+            })
+          const unitPriceFields = rateExtendedFieldPairs.map(([rateField]) => rateField)
+          const copyPrices = (row, source) => {
+            const srcQty = parseFloat(source.qty) || 0
+            const rowQty = parseFloat(row.qty) || 0
+            const filled = { ...row, pricesCopiedFrom: source.indentCode }
+            unitPriceFields.forEach(f => {
+              filled[f] = source[f] ?? ''
+            })
+            rateExtendedFieldPairs.forEach(([rateField, extField]) => {
+              const srcExt = parseFloat(String(source[extField] ?? '').replace(/,/g, ''))
+              const rate = parseFloat(String(source[rateField] ?? '').replace(/,/g, ''))
+              let ext = ''
+              if (srcExt && srcQty) ext = (srcExt * rowQty) / srcQty
+              else if (rate) ext = rate * rowQty
+              filled[extField] = ext === '' ? '' : (Math.round(ext * 100) / 100).toString()
+            })
+            return filled
+          }
           unpricedRows = (httpget?.responseCode === '200' ? httpget.responseData || [] : [])
             .filter(item => !pricedDtlIds.has(String(item.indentGrpDtlId)))
-            .map((item, i) => toBlankPriceRow(item, priceDtlArr.length + i + 1))
+            .map((item, i) => {
+              const blank = {
+                ...toBlankPriceRow(item, priceDtlArr.length + i + 1),
+                // Added to the group after this PJS was saved - drives "Show unpriced only".
+                addedAfterPjs: true,
+              }
+              const source = pricedByPart.get(blank.prodCode)
+              return source ? copyPrices(blank, source) : blank
+            })
+          const copiedCount = unpricedRows.filter(r => r.pricesCopiedFrom).length
+          if (copiedCount > 0) {
+            message.info(
+              `${copiedCount} added item${
+                copiedCount > 1 ? 's were' : ' was'
+              } priced from the same part already in this PJS - check and Save the PJS`,
+            )
+          }
         }
         const fullPriceTable = [...priceDtlArr, ...unpricedRows]
         setPriceTable(fullPriceTable)
@@ -4109,6 +4158,29 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
 
   const mergedPriceRows = useMemo(() => buildMergedPriceRows(priceTable), [priceTable])
 
+  // Items added to the group after this PJS was saved come in as blank rows (addedAfterPjs). A row
+  // counts as unpriced while any of its added lines lacks the qualified vendor's Initial or Final
+  // Unit Price - the same two fields Save insists on. A merged row's other indent lines get their
+  // price only when its rate is (re-)entered, so it stays unpriced until then.
+  const addedAfterPjsSnos = useMemo(
+    () => new Set(priceTable.filter(r => r.addedAfterPjs).map(r => r.sno)),
+    [priceTable],
+  )
+  const qualifiedLevel = finalVal === 'L2' ? '2' : finalVal === 'L3' ? '3' : '1'
+  const isSnoPriced = sno =>
+    String(allFormValues[`l${qualifiedLevel}UnitPrice${sno}`] ?? '').trim() !== '' &&
+    String(allFormValues[`finalL${qualifiedLevel}UnitPrice${sno}`] ?? '').trim() !== ''
+  const isRowUnpriced = record =>
+    (record.sourceSnos || [record.sno]).some(
+      sno => addedAfterPjsSnos.has(sno) && !isSnoPriced(sno),
+    )
+  const unpricedCount = addedAfterPjsSnos.size
+    ? mergedPriceRows.filter(isRowUnpriced).length
+    : 0
+  const tableRows = unpricedOnlySnos
+    ? mergedPriceRows.filter(r => unpricedOnlySnos.includes(r.sno))
+    : mergedPriceRows
+
   const MemoizedTable = useMemo(() => {
     return (
       <Form
@@ -4118,7 +4190,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
       >
         <Table
           columns={pricecolumns}
-          dataSource={mergedPriceRows}
+          dataSource={tableRows}
           form={tableform}
           pagination={{
             pageSizeOptions: ['1', '20', '30', '50', [mergedPriceRows.length]],
@@ -4132,6 +4204,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
     )
   }, [
     mergedPriceRows,
+    tableRows,
     finalVal,
     allFormValues,
     country1,
@@ -5356,6 +5429,32 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
                         </tr>
                       </tbody>
                     </table>
+                    {addedAfterPjsSnos.size > 0 && (
+                      <div
+                        style={{ display: 'flex', alignItems: 'center', gap: 16, margin: '8px 0' }}
+                      >
+                        <Checkbox
+                          checked={!!unpricedOnlySnos}
+                          disabled={!unpricedOnlySnos && unpricedCount === 0}
+                          onChange={e =>
+                            setUnpricedOnlySnos(
+                              e.target.checked
+                                ? mergedPriceRows.filter(isRowUnpriced).map(r => r.sno)
+                                : null,
+                            )
+                          }
+                        >
+                          Show unpriced only
+                        </Checkbox>
+                        <span style={{ color: unpricedCount ? '#d46b08' : '#389e0d' }}>
+                          {unpricedCount
+                            ? `${unpricedCount} item${
+                                unpricedCount > 1 ? 's' : ''
+                              } added after the PJS was created still need prices`
+                            : 'All items added after the PJS was created are priced'}
+                        </span>
+                      </div>
+                    )}
                     <div className="custom_antd_Table">{MemoizedTable}</div>
                     <div>
                       <table className="custom-form-container" style={{ width: '100%' }}>

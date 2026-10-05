@@ -22,3 +22,9 @@
     margin-bottom: 1px;
   }
 }
+
+// PJS sheet: group lines added / qty-edited after the PJS was last saved (light orange #ffdbbb until re-saved)
+.custom_antd_Table .pjs-row-changed > td,
+.custom_antd_Table .pjs-row-changed:hover > td {
+  background: #ffdbbb !important;
+}

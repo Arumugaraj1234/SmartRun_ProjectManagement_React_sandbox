@@ -2234,9 +2234,13 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
             indentType: g.indentType,
             subAssembly: g.subAssembly,
             indentQty: 0,
+            qty: 0,
           })
         }
         byIndent.get(g.indentCode).indentQty += parseFloat(g.indentQty) || 0
+        // Qty selected into the group from this indent - what the popover shows, so its rows add
+        // up to the merged row's Qty (the indent's own total qty doesn't).
+        byIndent.get(g.indentCode).qty += parseFloat(g.qty) || 0
       })
       const breakdown = Array.from(byIndent.values())
       const merged = {
@@ -2717,7 +2721,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
                       <td style={{ padding: '2px 8px' }}>{b.indentCode}</td>
                       <td style={{ padding: '2px 8px' }}>{b.indentType}</td>
                       <td style={{ padding: '2px 8px' }}>{b.subAssembly}</td>
-                      <td style={{ padding: '2px 8px', textAlign: 'right' }}>{b.indentQty}</td>
+                      <td style={{ padding: '2px 8px', textAlign: 'right' }}>{b.qty}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -4177,6 +4181,16 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
   const unpricedCount = addedAfterPjsSnos.size
     ? mergedPriceRows.filter(isRowUnpriced).length
     : 0
+  // Lines added (addedAfterPjs) or qty-edited (qtyChangedAfterPjs, from the backend) in the group
+  // Details popup after this PJS was last saved. Their row - the whole merged "N indents" row when
+  // any of its lines changed - is highlighted (#ffdbbb) until the PJS is saved again (Save closes
+  // the sheet, and the next load no longer flags them).
+  const changedAfterPjsSnos = useMemo(
+    () => new Set(priceTable.filter(r => r.addedAfterPjs || r.qtyChangedAfterPjs).map(r => r.sno)),
+    [priceTable],
+  )
+  const isRowChangedAfterPjs = record =>
+    (record.sourceSnos || [record.sno]).some(sno => changedAfterPjsSnos.has(sno))
   const tableRows = unpricedOnlySnos
     ? mergedPriceRows.filter(r => unpricedOnlySnos.includes(r.sno))
     : mergedPriceRows
@@ -4192,6 +4206,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
           columns={pricecolumns}
           dataSource={tableRows}
           form={tableform}
+          rowClassName={record => (isRowChangedAfterPjs(record) ? 'pjs-row-changed' : '')}
           pagination={{
             pageSizeOptions: ['1', '20', '30', '50', [mergedPriceRows.length]],
             showSizeChanger: true,
@@ -4205,6 +4220,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
   }, [
     mergedPriceRows,
     tableRows,
+    changedAfterPjsSnos,
     finalVal,
     allFormValues,
     country1,

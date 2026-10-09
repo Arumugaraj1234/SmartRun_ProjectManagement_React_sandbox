@@ -156,6 +156,8 @@ const CommonSupCompState = ({ componentData, visibling, onmodalCancel, ProcessCo
     const props = {
       indentId,
       tenantId,
+      // this sheet's own PJS group - the indent can have more than one PJS
+      igHdrId: hdrId,
       processCode: ProcessCode1 === '8' ? ProcessCode1 : '5',
     }
 

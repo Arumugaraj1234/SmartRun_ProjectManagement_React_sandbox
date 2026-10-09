@@ -541,20 +541,28 @@ const IndentGroupComponent = ({ isTailview }) => {
       ...new Set(dtlretrievedata.map(r => r.indentCode).filter(Boolean)),
     ]
     const multiIndent = groupIndentCodes.length > 1
+    // Lines already in this group (saved or just added) - left out of both dropdowns below, so
+    // the same indent line can't be added twice and over-allocated past its remaining qty.
+    const usedDtlIds = new Set(
+      dtlretrievedata.map(r => r.indentDtlId).filter(Boolean).map(String),
+    )
     // NEW-flow only: distinct indents available in this group's station (from the station-scoped
     // productCodes fetch), so the "add item" row can pull from any indent in the station, not
-    // just the ones that already happen to be in this group.
+    // just the ones that already happen to be in this group. Only indents with at least one
+    // addable line are listed - an indent whose remaining lines are all already in this group
+    // would otherwise show up with an empty Part Number list.
     const groupIndentOptions = detailIsNewFlow
-      ? [...new Map(productCodes.filter(p => p.indentId).map(p => [p.indentId, p])).values()]
+      ? [
+          ...new Map(
+            productCodes
+              .filter(p => p.indentId && !usedDtlIds.has(String(p.indentDtlId)))
+              .map(p => [p.indentId, p]),
+          ).values(),
+        ]
       : []
     const selectedIndent = groupIndentOptions.find(opt => opt.indentId === newRowIndentId)
     // Items belonging to the picked indent only - getIndentGrpNewProdByStation already excludes
     // fully-consumed lines (HAVING remaining qty > 0), so anything listed here is addable.
-    // Lines already in this group (saved or just added) are left out, so the same indent line
-    // can't be added twice and over-allocated past its remaining qty.
-    const usedDtlIds = new Set(
-      dtlretrievedata.map(r => r.indentDtlId).filter(Boolean).map(String),
-    )
     // (NEW-flow only - LEGACY keeps the original list.)
     const availableProducts = detailIsNewFlow
       ? productCodes

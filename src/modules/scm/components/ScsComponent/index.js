@@ -69,6 +69,10 @@ const SupCompState = ({
   const Menulistdata = store.get('MenuListData')
   const { docTypeCode, mstId, processCode } = Tab
   const depCode = store.get('depCode')
+  // NEW-flow station-budget step: PM at "Project Approved" for regular projects; CAPEX/OPEX
+  // (process 8) has no PM step, so Finance gets the same options at its "Finance Approved" step.
+  const budgetGateStatus = ProcessCode1 === '8' ? 'Finance Approved' : 'Project Approved'
+  const budgetGateDepCode = ProcessCode1 === '8' ? 'D10' : 'D03'
 
   const [allocateModalVisible, setAllocateModalVisible] = useState(false)
   const [scmretrievaldata, setScmretrievaldata] = useState([])
@@ -193,6 +197,8 @@ const SupCompState = ({
     const props = {
       indentId,
       tenantId,
+      // this sheet's own PJS group - the indent can have more than one PJS
+      igHdrId: hdrId,
       processCode: ProcessCode1 === '8' ? ProcessCode1 : '5',
     }
 
@@ -1252,7 +1258,7 @@ const SupCompState = ({
           message.success(httpapprovals.responseMessage)
           if (
             scmHdrdata?.[0]?.costFlowType === 'NEW' &&
-            docStatus?.[0]?.docStatusDesc === 'Project Approved'
+            docStatus?.[0]?.docStatusDesc === budgetGateStatus
           ) {
             // This PJS just crossed the "committed" threshold - add its own value to the
             // project header's Actual Spent/Balance Available immediately, client-side,
@@ -4362,8 +4368,8 @@ const SupCompState = ({
                               ).toLocaleString('en-IN')
                             : '0'}
                         </p>
-                        {depCode === 'D03' &&
-                        docStatus?.[0]?.docStatusDesc === 'Project Approved' &&
+                        {depCode === budgetGateDepCode &&
+                        docStatus?.[0]?.docStatusDesc === budgetGateStatus &&
                         scmHdrdata?.[0]?.canAllocateFromSalesBudget === 'true' &&
                         scmHdrdata?.[0]?.hasBudgetExcess !== 'true' ? (
                           <Tooltip title="Allocate budget from Sales Value">
@@ -4392,7 +4398,7 @@ const SupCompState = ({
                         </p>
                       </div>
                     </div>
-                  ) : docStatus?.[0]?.docStatusDesc === 'Project Approved' ? (
+                  ) : docStatus?.[0]?.docStatusDesc === budgetGateStatus ? (
                     <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">
                       <div style={{ display: 'flex', alignItems: 'center' }}>
                         <p style={{ marginRight: '10px', fontWeight: 'bold', marginBottom: '0' }}>
@@ -4415,7 +4421,7 @@ const SupCompState = ({
                                 {[
                                   ['PO Approved (Rs.)', scmHdrdata[0].approvedPoAmount],
                                   [
-                                    'Project Approved, Pending PO (Rs.)',
+                                    `${budgetGateStatus}, Pending PO (Rs.)`,
                                     scmHdrdata[0].committedPjsAmount,
                                   ],
                                   [
@@ -4460,7 +4466,7 @@ const SupCompState = ({
                     </div>
                   ) : null}
                   {scmHdrdata?.[0]?.costFlowType === 'NEW' &&
-                  docStatus?.[0]?.docStatusDesc === 'Project Approved'
+                  docStatus?.[0]?.docStatusDesc === budgetGateStatus
                     ? (() => {
                         const allocated = parseFloat(scmHdrdata?.[0]?.allocatedValue) || 0
                         const consumed = parseFloat(scmHdrdata?.[0]?.actualConsumedValue) || 0
@@ -4494,8 +4500,8 @@ const SupCompState = ({
                       })()
                     : null}
                   {scmHdrdata?.[0]?.costFlowType === 'NEW' &&
-                  depCode === 'D03' &&
-                  docStatus?.[0]?.docStatusDesc === 'Project Approved' &&
+                  depCode === budgetGateDepCode &&
+                  docStatus?.[0]?.docStatusDesc === budgetGateStatus &&
                   scmHdrdata?.[0]?.isShortfall === 'true' &&
                   scmHdrdata?.[0]?.hasBudgetExcess !== 'true' ? (
                     <div className="col-12 col-sm-12 col-md-3 col-lg-3 col-xl-3 col-xxl-3">

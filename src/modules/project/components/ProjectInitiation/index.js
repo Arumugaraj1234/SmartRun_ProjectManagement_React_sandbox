@@ -1349,7 +1349,7 @@ const ProjectInitiation = () => {
             key: 'consumedSoFar',
             className: 'right-align-cell',
             render: (text, record) => {
-              const consumedSoFar = record.consumedSoFar
+              const { consumedSoFar } = record
               return consumedSoFar !== '' && consumedSoFar !== undefined ? (
                 <span>{parseFloat(consumedSoFar).toLocaleString('en-IN')}</span>
               ) : (

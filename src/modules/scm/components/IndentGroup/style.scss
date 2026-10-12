@@ -1,0 +1,7 @@
+/* PJS list: half the default side padding (16px -> 8px) so all columns, including the
+   Action buttons, fit on screen without horizontal scrolling. */
+.pjs-list-table .ant-table-thead > tr > th,
+.pjs-list-table .ant-table-tbody > tr > td {
+  padding-left: 8px;
+  padding-right: 8px;
+}

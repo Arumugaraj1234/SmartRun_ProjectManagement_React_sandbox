@@ -63,11 +63,21 @@ const GridVIIComponent = ({
                             data.customerName
                           )}
                         </p>
-                        <div style={{ marginTop: '-20px', color: 'black' }}>
+                        {/* Scoped per card so a NEW-flow card's white text doesn't leak onto other ribbons */}
+                        <div
+                          className={`scm-badge-${(title || '').replace(
+                            /[^a-zA-Z0-9]/g,
+                            '',
+                          )}-${data.scmHdrId || index}`}
+                          style={{ marginTop: '-20px', color: 'black' }}
+                        >
                           <style>
                             {`
-                             .ant-ribbon-text {
-                             color: black !important;
+                             .scm-badge-${(title || '').replace(
+                               /[^a-zA-Z0-9]/g,
+                               '',
+                             )}-${data.scmHdrId || index} .ant-ribbon-text {
+                             color: ${data.costFlowType === 'NEW' ? '#ffffff' : 'black'} !important;
                             }
                           `}
                           </style>
@@ -90,7 +100,7 @@ const GridVIIComponent = ({
                             //       ? '#50C878'
                             //       : '#FFED5F'
                             // }
-                            BadgeColor="#FFED5F"
+                            BadgeColor={data.costFlowType === 'NEW' ? '#1D3557' : '#FFED5F'}
                           />
                         </div>
                       </div>

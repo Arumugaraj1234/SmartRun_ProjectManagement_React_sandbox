@@ -22,6 +22,7 @@ import AddIndentGroup from '../AddIndentGroup'
 import SupCompState from '../ScsComponent2'
 import currentDateTime from '../../../../currentDateTime'
 import ViewPoModal from './ViewPoModal'
+import './style.scss'
 // import Tailviewfields from '../Tailviewfields'
 
 // Key of a row's unsaved Available Qty edit: saved lines by IG_DTL_ID, lines added but not yet
@@ -1301,6 +1302,30 @@ const IndentGroupComponent = ({ isTailview }) => {
     // permanently 0 there) - blank it at the data level so it's also correct in any CSV export.
     .map(item => (item.costFlowType === 'NEW' ? { ...item, targetCost: '-' } : item))
 
+  // Column widths (px) for the PJS list - sized to the widest cell value, with headers wrapping
+  // onto two lines. Columns with a filter icon need ~25px extra in the header.
+  const pjsListColWidths = {
+    sno: 45,
+    indentCode: 95,
+    pjsRefNo: 95,
+    sbcDesc: 90,
+    pkDesc: 95,
+    pskDesc: 105,
+    groupName: 85,
+    type: 100,
+    partCount: 55,
+    expectedDeliveryDate: 95,
+    targetCost: 75,
+    finalCost: 75,
+    finalCostFx: 60,
+    isInventory: 100,
+    pjsCreatedPerson: 95,
+    scsStatus: 95,
+    nextStatus: 90,
+    poStatus: 90,
+    action: 150,
+  }
+
   const columns = [
     {
       title: 'S.No',
@@ -1397,7 +1422,6 @@ const IndentGroupComponent = ({ isTailview }) => {
       title: 'Sub Assembly',
       dataIndex: 'pskDesc',
       key: 'pskDesc',
-      width: '7%',
       render: (text, record) => {
         const style = {
           backgroundColor: record.versionCheck === '1' ? '#FFFF00' : 'transparent',
@@ -1459,7 +1483,6 @@ const IndentGroupComponent = ({ isTailview }) => {
       title: 'Delivery Date',
       dataIndex: 'expectedDeliveryDate',
       key: 'expectedDeliveryDate',
-      width: '8%',
       filters: expectedDeliveryDate3,
       filteredValue: filtersinfo.expectedDeliveryDate,
       onFilter: (value, record) => record?.expectedDeliveryDate === value,
@@ -1477,7 +1500,6 @@ const IndentGroupComponent = ({ isTailview }) => {
       key: 'targetCost',
       dataIndex: 'targetCost',
       align: 'right',
-      width: '7%',
       render: (text, record) => ({
         props: {
           style: {
@@ -1498,7 +1520,6 @@ const IndentGroupComponent = ({ isTailview }) => {
       key: 'finalCost',
       dataIndex: 'finalCost',
       align: 'right',
-      width: '7%',
       render: (text, record) => ({
         props: {
           style: {
@@ -1515,7 +1536,6 @@ const IndentGroupComponent = ({ isTailview }) => {
       key: 'finalCostFx',
       dataIndex: 'finalCostFx',
       align: 'right',
-      width: '7%',
       render: (text, record) => ({
         props: {
           style: {
@@ -1533,7 +1553,6 @@ const IndentGroupComponent = ({ isTailview }) => {
       title: 'Stock Availability',
       dataIndex: 'isInventory',
       key: 'isInventory',
-      width: '7%',
       filters: isInventory3,
       filteredValue: filtersinfo.isInventory,
       onFilter: (value, record) => record?.isInventory === value,
@@ -1551,7 +1570,6 @@ const IndentGroupComponent = ({ isTailview }) => {
       key: 'pjsCreatedPerson',
       dataIndex: 'pjsCreatedPerson',
       className: 'right-align-cell',
-      width: '7%',
       filters: pjsCreatedPerson3,
       filteredValue: filtersinfo.pjsCreatedPerson,
       onFilter: (value, record) => record?.pjsCreatedPerson === value,
@@ -1655,7 +1673,6 @@ const IndentGroupComponent = ({ isTailview }) => {
         },
       }),
 
-      // width:'12%',
       render: (text, record, index) => {
         return (
           <div style={{ display: 'flex', justifyContent: 'left' }}>
@@ -1708,11 +1725,15 @@ const IndentGroupComponent = ({ isTailview }) => {
     // This list can span multiple projects at once (portfolio-wide view), so only drop the whole
     // column when every currently-loaded row is NEW-flow; a mixed legacy+NEW list keeps the column
     // and falls back to per-row blanking (see searchedData above).
-  ].filter(
-    col =>
-      col.key !== 'targetCost' ||
-      !(searchedData.length > 0 && searchedData.every(row => row.costFlowType === 'NEW')),
-  )
+  ]
+    .filter(
+      col =>
+        col.key !== 'targetCost' ||
+        !(searchedData.length > 0 && searchedData.every(row => row.costFlowType === 'NEW')),
+    )
+    // Fixed widths so long titles wrap instead of widening the table - keeps the Action
+    // (Details / PJS) column on screen without horizontal scrolling.
+    .map(col => ({ ...col, width: pjsListColWidths[col.key] }))
 
   const handleRefreshdetails = async (indentid, fromdate, todate, projectcode) => {
     const props = {
@@ -1970,6 +1991,7 @@ const IndentGroupComponent = ({ isTailview }) => {
                 </div>
                 <div>
                   <Table
+                    className="pjs-list-table"
                     columns={columns}
                     dataSource={searchedData}
                     scroll={{ y: 500, x: 800 }}

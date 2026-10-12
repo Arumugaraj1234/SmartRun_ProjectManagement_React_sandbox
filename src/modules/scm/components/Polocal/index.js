@@ -832,15 +832,13 @@ const Polocal = ({ rowData, onClose, calldetailapi, isView }) => {
     getPoCostTypeDetail()
   }
 
+  // GRNs for the PRA popup: one entry per GRN, leaving out GRNs already used on a live PRA
   const getMaterials = async param => {
     const response = await indentFileUpload({
-      requestPath: 'getGrnHdrDetails',
+      requestPath: 'getAvailableGrnForPra',
       requestData: {
         tenantId,
-        projectId,
         poId: param.poId,
-
-        // projectId,
       },
     })
     setGrnData(response?.responseData || [])

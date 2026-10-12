@@ -9,6 +9,7 @@ import {
   Select,
   message,
   Spin,
+  Table,
 } from 'antd'
 import moment from 'moment'
 import store from 'store'
@@ -89,6 +90,52 @@ const PaymentTermsPopUp = props => {
     setTransportValue(project.pendingTransportChrg ?? project.transportCharges ?? '0.000')
     setPfValue(project.pendingPfChrg ?? project.pf ?? '0.000')
   }, [projectList])
+
+  // Reference tables under the form: every GRN line and every PRA already raised on this PO
+  // (same layout as the PRA details screen), so users can see what has been billed so far.
+  const [poGrnLines, setPoGrnLines] = useState([])
+  const [poPraHistory, setPoPraHistory] = useState([])
+  const [poHistoryLoading, setPoHistoryLoading] = useState(false)
+
+  const poId = resp?.poId
+  useEffect(() => {
+    if (!poId) return
+    const loadPoHistory = async () => {
+      setPoHistoryLoading(true)
+      try {
+        const requestData = { tenantId: tenantid, poId }
+        const [grnResponse, praResponse] = await Promise.all([
+          indentFileUpload({ requestPath: 'getGrnLinesByPoId', requestData }),
+          indentFileUpload({ requestPath: 'getPraHistoryByPoId', requestData }),
+        ])
+        setPoGrnLines(grnResponse?.responseData || [])
+        setPoPraHistory(praResponse?.responseData || [])
+      } finally {
+        setPoHistoryLoading(false)
+      }
+    }
+    loadPoHistory()
+  }, [poId, tenantid])
+
+  const poGrnColumns = [
+    { title: 'GRN No', dataIndex: 'grnNo', key: 'grnNo' },
+    { title: 'GRN Date', dataIndex: 'grnDate', key: 'grnDate' },
+    { title: 'GRN Qty', dataIndex: 'grnQty', key: 'grnQty' },
+    { title: 'Invoice No', dataIndex: 'invoiceNo', key: 'invoiceNo' },
+    { title: 'Invoice Date', dataIndex: 'invoiceDate', key: 'invoiceDate' },
+  ]
+
+  const poPraColumns = [
+    { title: 'PRA No', dataIndex: 'praNum', key: 'praNum', width: '25%' },
+    { title: 'PRA Status', dataIndex: 'praStatusDesc', key: 'praStatusDesc', width: '40%' },
+    {
+      title: `PRA Amount ${Menulistdata?.[0]?.currency || ''}`,
+      dataIndex: 'praValue',
+      key: 'praValue',
+      align: 'right',
+      render: text => Number(text || 0).toLocaleString('en-IN'),
+    },
+  ]
 
   const calculateTotalPayable = () => {
     const total =
@@ -847,6 +894,34 @@ const PaymentTermsPopUp = props => {
                 </Form.Item>
               </div>
             </div> */}
+
+            {/* GRN / previous PRA reference tables for this PO */}
+            <div className="row" style={{ marginTop: '10px' }}>
+              <div className="col-xs-12 col-sm-12 col-md-6 col-lg-6">
+                <h6>GRN Details</h6>
+                <Table
+                  columns={poGrnColumns}
+                  dataSource={poGrnLines}
+                  rowKey={(record, index) => index}
+                  loading={poHistoryLoading}
+                  pagination={false}
+                  scroll={{ y: 150 }}
+                  size="small"
+                />
+              </div>
+              <div className="col-xs-12 col-sm-12 col-md-6 col-lg-6">
+                <h6>Previous PRA Details - items</h6>
+                <Table
+                  columns={poPraColumns}
+                  dataSource={poPraHistory}
+                  rowKey={(record, index) => index}
+                  loading={poHistoryLoading}
+                  pagination={false}
+                  scroll={{ y: 150 }}
+                  size="small"
+                />
+              </div>
+            </div>
 
             {/* Button Row */}
             <div

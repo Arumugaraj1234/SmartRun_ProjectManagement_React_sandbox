@@ -36,6 +36,7 @@ import PaymentTermsPopUp from '../PoPaymentTermsPopUp'
 import '../../style.scss'
 import '../../../style.scss'
 import buildMergedPoRows from '../PoMergeRows'
+import buildPaymentTermRows, { renderTermValue, PraDetailBlock } from '../PoPaymentTermRows'
 
 // PO lines merge on Part Number + these rate fields (see PoMergeRows)
 const RATE_FIELDS = ['unitRate']
@@ -735,12 +736,26 @@ const Polocal = ({ rowData, onClose, calldetailapi, isView }) => {
   //   </div>
   // ))}
 
+  // Term still has something left to raise a PRA for (shows the PRA button)
+  const showPraButton = record =>
+    (record.isLast === '0' && Math.round(parseFloat(record.pendingAmount)) >= 1) ||
+    (record.isLast === '1' &&
+      (Math.round(parseFloat(pendingGstValue)) !== 0 ||
+        Math.round(parseFloat(transportValue)) !== 0 ||
+        Math.round(parseFloat(otherValue)) !== 0 ||
+        Math.round(parseFloat(pfValue)) !== 0 ||
+        Math.round(parseFloat(insuranceValue)) !== 0)) ||
+    Math.round(parseFloat(record.pendingAmount)) >= 1
+
+  // One row per PRA under each term, plus the PRA-button row while pending (see PoPaymentTermRows)
+  const paymentTermRows = buildPaymentTermRows(paymentterms.slice(0, -1), showPraButton)
+
   const paymentTermColumns = [
     {
       title: 'S.No.',
       dataIndex: 'sno',
       key: 'sno',
-      render: (text, record, index) => index + 1,
+      render: (text, record) => record.termIndex + 1,
     },
     {
       title: 'Term',
@@ -757,13 +772,14 @@ const Polocal = ({ rowData, onClose, calldetailapi, isView }) => {
       title: `Term Value ${Menulistdata[0].currency}`,
       dataIndex: 'paymentAmount',
       key: 'paymentAmount',
-      render: (text, record) => <span>{Math.round(parseFloat(record.paymentAmount))}</span>,
+      render: (text, record) => renderTermValue(record),
     },
     {
       title: `Pending Value ${Menulistdata[0].currency}`,
       dataIndex: 'pendingAmount',
       key: 'pendingAmount',
       render: (text, record) => {
+        if (record.pra) return <span>{Math.round(record.praPendingAfter)}</span>
         let pending = parseFloat(record.pendingAmount) || 0
 
         if (record.isLast === '1' && pending === 0) {
@@ -781,21 +797,15 @@ const Polocal = ({ rowData, onClose, calldetailapi, isView }) => {
       title: 'Action',
       dataIndex: 'action',
       key: 'action',
-      render: (text, record, index) =>
-        (record.isLast === '0' && Math.round(parseFloat(record.pendingAmount)) >= 1) ||
-        (record.isLast === '1' &&
-          (Math.round(parseFloat(pendingGstValue)) !== 0 ||
-            Math.round(parseFloat(transportValue)) !== 0 ||
-            Math.round(parseFloat(otherValue)) !== 0 ||
-            Math.round(parseFloat(pfValue)) !== 0 ||
-            Math.round(parseFloat(insuranceValue)) !== 0)) ||
-        Math.round(parseFloat(record.pendingAmount)) >= 1 ? (
+      render: (text, record) => {
+        if (record.pra) return <PraDetailBlock pra={record.pra} />
+        return showPraButton(record) ? (
           !isView && (
             // eslint-disable-next-line
             <Button
               type="primary"
               disabled={projectList[0].isApproved !== '1'}
-              onClick={() => handleDetail(record, index)}
+              onClick={() => handleDetail(record, record.termIndex)}
             >
               PRA
             </Button>
@@ -815,7 +825,8 @@ const Polocal = ({ rowData, onClose, calldetailapi, isView }) => {
               PRA Status: <b>{record.documentStatus}</b>
             </span>
           </div>
-        ),
+        )
+      },
     },
   ]
 
@@ -2205,8 +2216,9 @@ const Polocal = ({ rowData, onClose, calldetailapi, isView }) => {
                         <div>
                           <div className="custom_antd_Table">
                             <Table
-                              dataSource={paymentterms.slice(0, -1)}
+                              dataSource={paymentTermRows}
                               columns={paymentTermColumns}
+                              rowKey="rowKey"
                             />
                           </div>
                         </div>

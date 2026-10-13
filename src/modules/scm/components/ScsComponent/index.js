@@ -39,6 +39,7 @@ import { useMediaQuery } from 'react-responsive'
 import './style.scss'
 import '../../../style.scss'
 import messageReturn from '_helpers/messageReturn'
+import samePartKey from '../samePartKey'
 
 const SupCompState = ({
   hdrId,
@@ -2671,7 +2672,7 @@ const SupCompState = ({
   const buildMergedPriceRows = rows => {
     const byProduct = new Map()
     rows.forEach(item => {
-      const key = item.prodCode
+      const key = samePartKey(item.prodCode, item.prodDesc, item.prodSpec)
       if (!byProduct.has(key)) byProduct.set(key, [])
       byProduct.get(key).push(item)
     })

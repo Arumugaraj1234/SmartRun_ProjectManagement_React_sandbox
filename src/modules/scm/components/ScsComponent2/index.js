@@ -36,6 +36,7 @@ import './style.scss'
 import '../../../style.scss'
 import messageReturn from '_helpers/messageReturn'
 import DownloadDocuments from 'components/common/FileDownloadComponent/index'
+import samePartKey from '../samePartKey'
 
 const SupCompState = ({ componentData, visibling, isView, onmodalCancel, ProcessCode1 }) => {
   console.log(componentData, 'component data in suscompstate')
@@ -2207,7 +2208,7 @@ const SupCompState = ({ componentData, visibling, isView, onmodalCancel, Process
   const buildMergedPriceRows = rows => {
     const byProduct = new Map()
     rows.forEach(item => {
-      const key = item.prodCode
+      const key = samePartKey(item.prodCode, item.prodDesc, item.prodSpec)
       if (!byProduct.has(key)) byProduct.set(key, [])
       byProduct.get(key).push(item)
     })

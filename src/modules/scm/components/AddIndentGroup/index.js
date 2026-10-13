@@ -12,6 +12,7 @@ import InputComponent from 'components/shared/InputComponent'
 import IndentGroupgetDetails from 'services/common/IndentGroupService'
 import messageReturn from '_helpers/messageReturn'
 import './style.scss'
+import samePartKey from '../samePartKey'
 // import TailviewIndentGroup from '../TailviewIndentGroup'
 
 const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) => {
@@ -167,7 +168,7 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
     return byCode !== 0 ? byCode : a.sno - b.sno
   }
 
-  // NEW-flow: every line of the same Part Number (across the station's indents, or repeated
+  // NEW-flow: every line of the same Part Number + Description + Specification (across the station's indents, or repeated
   // within one indent) becomes ONE row. Its source lines are shown as expandable child rows, each
   // with its own Allocate Qty, so the user can take qty from whichever indent they want. Storage
   // is unchanged - submit still sends one indent_grp_dtl row per real indent line (indentTable).
@@ -177,8 +178,9 @@ const AddIndentGroup = ({ handleCancel, isModalVisible, submit, isTailview }) =>
     if (!isNewFlow) return rows.map(single)
     const byProduct = new Map()
     rows.forEach(item => {
-      if (!byProduct.has(item.productCode)) byProduct.set(item.productCode, [])
-      byProduct.get(item.productCode).push(item)
+      const key = samePartKey(item.productCode, item.description, item.specification)
+      if (!byProduct.has(key)) byProduct.set(key, [])
+      byProduct.get(key).push(item)
     })
     return Array.from(byProduct.values()).map(group => {
       if (group.length === 1) return single(group[0])

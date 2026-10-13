@@ -23,6 +23,7 @@ import SupCompState from '../ScsComponent2'
 import currentDateTime from '../../../../currentDateTime'
 import ViewPoModal from './ViewPoModal'
 import './style.scss'
+import samePartKey from '../samePartKey'
 // import Tailviewfields from '../Tailviewfields'
 
 // Key of a row's unsaved Available Qty edit: saved lines by IG_DTL_ID, lines added but not yet
@@ -617,17 +618,18 @@ const IndentGroupComponent = ({ isTailview }) => {
       setNewRowIndentId('')
     }
 
-    // NEW-flow (station) groups: every line of the same Part Number becomes ONE row, same as the
+    // NEW-flow (station) groups: every line of the same Part Number + Description + Specification becomes ONE row, same as the
     // Create Indent Group screen; its lines are expandable child rows (ordered by Indent No.), each
     // keeping its own Remove button. Display only - dtlretrievedata stays one entry per line.
     const mergeDetailRows = rows => {
       if (!detailIsNewFlow) return rows
       const byProduct = new Map()
       rows.forEach(r => {
-        if (!byProduct.has(r.productCode)) byProduct.set(r.productCode, [])
-        byProduct.get(r.productCode).push(r)
+        const key = samePartKey(r.productCode, r.description, r.specification)
+        if (!byProduct.has(key)) byProduct.set(key, [])
+        byProduct.get(key).push(r)
       })
-      return Array.from(byProduct.values()).map(group => {
+      return Array.from(byProduct.entries()).map(([mergeKey, group]) => {
         if (group.length === 1) return group[0]
         const ordered = [...group].sort((a, b) =>
           (a.indentCode || '').localeCompare(b.indentCode || '', undefined, { numeric: true }),
@@ -647,7 +649,7 @@ const IndentGroupComponent = ({ isTailview }) => {
             .toFixed(2)
         return {
           ...ordered[0],
-          key: `g-${ordered[0].productCode}`,
+          key: `g-${mergeKey}`,
           isGroup: true,
           indentCode: codes.length > 1 ? `${codes.length} indents` : codes[0],
           indentType: types.length > 1 ? 'Multiple' : types[0],

@@ -37,7 +37,7 @@ import '../../../style.scss'
 import buildMergedPoRows from '../PoMergeRows'
 import buildPaymentTermRows, { renderTermValue, PraDetailBlock } from '../PoPaymentTermRows'
 
-// PO lines merge on Part Number + these rate fields (see PoMergeRows)
+// PO lines merge on Part Number + Description + Specification + these rate fields (see PoMergeRows)
 const RATE_FIELDS = ['unitRateFx', 'unitRate', 'currencyType']
 
 const Poimport = ({ rowData, onClose, calldetailapi, isView }) => {

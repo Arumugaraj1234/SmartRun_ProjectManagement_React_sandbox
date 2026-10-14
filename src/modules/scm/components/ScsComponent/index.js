@@ -2823,7 +2823,8 @@ const SupCompState = ({
     {
       title: 'S.No',
       key: 'sno',
-      width: 40,
+      fixed: 'left',
+      width: 50,
       render: (text, record, index) => index + 1,
       // render: (text, record) => (
       //   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -2842,6 +2843,8 @@ const SupCompState = ({
       title: 'Indent No.',
       dataIndex: 'indentCode',
       key: 'indentCode',
+      fixed: 'left',
+      width: 110,
       render: (text, record) =>
         record.breakdown && record.breakdown.length > 1 ? (
           <Popover
@@ -2908,6 +2911,8 @@ const SupCompState = ({
       title: 'Part Number',
       dataIndex: 'prodCode',
       key: 'prodCode',
+      fixed: 'left',
+      width: 100,
       render: (text, record) => (
         <a
           role="button"
@@ -2928,34 +2933,45 @@ const SupCompState = ({
       title: 'Description',
       dataIndex: 'prodDesc',
       key: 'prodDesc',
+      fixed: 'left',
+      width: 140,
     },
     {
       title: 'Specification',
       dataIndex: 'prodSpec',
       key: 'prodSpec',
-      width: '300px',
+      fixed: 'left',
+      width: 220,
     },
     {
       title: 'Mass',
       dataIndex: 'weight',
       key: 'weight',
+      fixed: 'left',
+      width: 70,
       render: text => (text !== null && text !== undefined ? text : '-'),
     },
     {
       title: 'Material',
       dataIndex: 'material',
       key: 'material',
+      fixed: 'left',
+      width: 90,
       render: text => (text !== null && text !== undefined ? text : '-'),
     },
     {
       title: 'Qty',
       dataIndex: 'qty',
       key: 'qty',
+      fixed: 'left',
+      width: 70,
     },
     {
       title: 'UOM',
       dataIndex: 'uom',
       key: 'uom',
+      fixed: 'left',
+      width: 60,
     },
 
     {

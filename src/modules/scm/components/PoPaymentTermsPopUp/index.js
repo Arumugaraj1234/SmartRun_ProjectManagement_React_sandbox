@@ -8,6 +8,7 @@ import {
   Checkbox,
   Select,
   message,
+  Modal,
   Spin,
   Table,
 } from 'antd'
@@ -63,8 +64,23 @@ const PaymentTermsPopUp = props => {
   const IGST = igst ? String(igst).replace(/,/g, '') : '0'
   console.log(tax, igst, '----------------')
   console.log(isFinal)
+  // Submit checks the mandatory fields first; only then a Yes/No confirmation (with the Amount
+  // Payable) is shown, and the PRA is created on Yes. Modal.confirm is used rather than a
+  // Popconfirm because ModalPopup re-mounts this whole form on every state change.
   const onFinish = () => {
-    insertDetails()
+    if (!requiredFieldsFilled()) {
+      messageReturn(405)
+      return
+    }
+    const amountPayable = Number(
+      form.getFieldValue('totalAmountPayable') || calculateTotalPayable(),
+    ).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    Modal.confirm({
+      title: `Create PRA for Amount Payable ${Menulistdata?.[0]?.currency || ''} ${amountPayable}?`,
+      okText: 'Yes',
+      cancelText: 'No',
+      onOk: () => insertDetails(),
+    })
   }
   const calculatePendingAmount = () => {
     // Reset the 'invoiceValue' field
@@ -505,22 +521,23 @@ const PaymentTermsPopUp = props => {
     setPoCostTypeValue(values)
   }
 
+  const requiredFieldsFilled = () =>
+    [
+      'deliveryType',
+      'grn',
+      'poCostType',
+      ...(resp.pendingAmount === '0.000' ? [] : ['invoiceValue']),
+      // ...(isFinal === '1'
+      //   ? ['transportCharge', 'otherCharge', 'pfCharge', 'insuranceCharge', 'gstValue']
+      //   : []),
+    ].every(field => form.getFieldValue(field))
+
   const insertDetails = async () => {
     if (!tenantid) {
       message.error('Session data missing. Please log out and log back in, then try again.')
       return
     }
-    if (
-      [
-        'deliveryType',
-        'grn',
-        'poCostType',
-        ...(resp.pendingAmount === '0.000' ? [] : ['invoiceValue']),
-        // ...(isFinal === '1'
-        //   ? ['transportCharge', 'otherCharge', 'pfCharge', 'insuranceCharge', 'gstValue']
-        //   : []),
-      ].every(field => form.getFieldValue(field))
-    ) {
+    if (requiredFieldsFilled()) {
       const formData = form.getFieldsValue()
       console.log('Insurance value', formData.insuranceNumber)
       setIsdisablebtn(true)

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Form, Select, Card, Button, Input, message, Table, Spin } from 'antd'
+import { Form, Select, Card, Button, Input, message, Table, Spin, Modal } from 'antd'
 import { CommentOutlined, PlusCircleOutlined, DownloadOutlined } from '@ant-design/icons'
 // import { Table } from 'ant-table-extensions'
 import { useHistory } from 'react-router-dom'
@@ -1635,11 +1635,23 @@ const PRASearchCardComp = () => {
                 )}
                 visible={praCancelCard}
               />
-              {docuLifeMst.length > 0 && docuLifeMst?.[0]?.cancelSeq && (
+              {/* Previous Stage goes to the current stage's CANCEL_SEQ (DC077), like Indent. Never
+              offered when that points at PRA Cancel (DS168) — cancelling has its own button. */}
+              {docuLifeMst.length > 0 &&
+                docuLifeMst?.[0]?.cancelSeq &&
+                docuLifeMst[0].cancelStatusCode !== 'DS168' && (
                 <Button
                   type="danger"
                   disabled={actionInProgress || isProcessing}
-                  style={{ display: btnDisplay ? 'none' : 'none' }}
+                  style={{
+                    display:
+                      btnDisplay &&
+                      !isDetailLoading &&
+                      popupresp[0]?.isLatest !== '0' &&
+                      popupresp[0]?.isCompleted !== '1'
+                        ? 'block'
+                        : 'none',
+                  }}
                   htmlType="submit"
                   onClick={() => addprevRemarksSubmit()}
                 >
@@ -1758,14 +1770,29 @@ const PRASearchCardComp = () => {
     )
   }
 
-  const handlePraRev = async cancelSequence => {
+  const handlePraRev = cancelSequence => {
     if (isProcessing) {
       return
     }
-    // const insertCheck = await handleinsert()
-
     const formvalue = inputForm.getFieldValue()
-    console.log(formvalue.remarks, 'remarks')
+    if (!formvalue.remarks || !String(formvalue.remarks).trim()) {
+      message.error('Please enter remarks for sending the PRA to the previous stage')
+      return
+    }
+    const targetDesc = docuLifeMst?.[0]?.cancelStatusDesc || 'the previous stage'
+    Modal.confirm({
+      title: 'Previous Stage',
+      content: `Send ${records?.praCode || 'this PRA'} back to "${targetDesc}"?`,
+      okText: 'Yes',
+      cancelText: 'No',
+      onOk: () => submitPraRev(cancelSequence, formvalue.remarks),
+    })
+  }
+
+  const submitPraRev = async (cancelSequence, remarks) => {
+    if (isProcessing) {
+      return
+    }
     const props = {
       seq: cancelSequence,
       seqDesc: cancelSeqDesc,
@@ -1778,26 +1805,25 @@ const PRASearchCardComp = () => {
       praCode: records.praCode,
       poNo: records.poId,
       empId: employeeId,
-      remarks: formvalue.remarks,
+      remarks,
+      isPrevStage: '1',
     }
     setIsProcessing(true)
     try {
-      // if (insertCheck) {
       const httpapprovals = await indentFileUpload({
         requestPath: 'udpatePraHdrSeq',
         requestData: props,
       })
 
-      if (httpapprovals.responseCode === '200') {
-        // onmodalCancel()
-        // setApproveRemarksCard(false)
+      if (httpapprovals?.responseCode === '200') {
+        message.success(`PRA sent back to "${docuLifeMst?.[0]?.cancelStatusDesc || 'previous stage'}"`)
+        inputForm.resetFields()
         setPrevRemarksCard(false)
         handleCancelDtlsBtnInward()
         getDetailData()
       } else {
-        message.error(httpapprovals.responseMessage)
+        message.error(httpapprovals?.responseMessage || 'Unable to send PRA to previous stage')
       }
-      // }
     } finally {
       setIsProcessing(false)
     }

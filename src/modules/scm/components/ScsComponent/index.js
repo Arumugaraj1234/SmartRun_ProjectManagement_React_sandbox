@@ -39,6 +39,7 @@ import { useMediaQuery } from 'react-responsive'
 import './style.scss'
 import '../../../style.scss'
 import messageReturn from '_helpers/messageReturn'
+import PaymentTermSelect from 'components/shared/PaymentTermSelectComponent'
 import samePartKey from '../samePartKey'
 
 const SupCompState = ({
@@ -2020,7 +2021,7 @@ const SupCompState = ({
       igScpId: '',
     }
 
-    if (percentagevalue !== '' && paytermValue !== '' && level !== '') {
+    if (percentagevalue !== '' && paytermValue && level !== '') {
       const filterPayment = newData.filter(item => item.level === level.charAt(1))
       targetArray([...filterPayment, emptyPaymentTerms])
       paymentformclear()
@@ -2109,15 +2110,7 @@ const SupCompState = ({
         index === data.length - 1 ? (
           <Form form={paytermForm}>
             <Form.Item name={`payterm${level}`}>
-              <Input
-                value={text}
-                maxLength={512}
-                // onBlur={e => handleDataChanges(index, e, level, 'term')}
-                placeholder="Type here..."
-                style={{ width: '200px' }}
-                name={`payterm${level}field`}
-                type="text"
-              />
+              <PaymentTermSelect />
             </Form.Item>
           </Form>
         ) : (

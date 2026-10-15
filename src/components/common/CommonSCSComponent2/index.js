@@ -34,6 +34,7 @@ import './style.scss'
 import '../../../modules/style.scss'
 import messageReturn from '_helpers/messageReturn'
 import DownloadDocuments from 'components/common/FileDownloadComponent/index'
+import PaymentTermSelect from 'components/shared/PaymentTermSelectComponent'
 
 const CommonSupCompState = ({ componentData, visibling, onmodalCancel, ProcessCode1 }) => {
   const hdrId = componentData?.igHdrId
@@ -1702,7 +1703,7 @@ const CommonSupCompState = ({ componentData, visibling, onmodalCancel, ProcessCo
       igScpId: '',
     }
 
-    if (percentagevalue !== '' && paytermValue !== '' && level !== '') {
+    if (percentagevalue !== '' && paytermValue && level !== '') {
       const filterPayment = newData.filter(item => item.level === level.charAt(1))
       targetArray([...filterPayment, emptyPaymentTerms])
       paymentformclear()
@@ -1763,15 +1764,7 @@ const CommonSupCompState = ({ componentData, visibling, onmodalCancel, ProcessCo
         index === data.length - 1 ? (
           <Form form={paytermForm}>
             <Form.Item name={`payterm${level}`}>
-              <Input
-                value={text}
-                maxLength={512}
-                // onBlur={e => handleDataChanges(index, e, level, 'term')}
-                placeholder="Type here..."
-                style={{ width: '200px' }}
-                name={`payterm${level}field`}
-                type="text"
-              />
+              <PaymentTermSelect />
             </Form.Item>
           </Form>
         ) : (

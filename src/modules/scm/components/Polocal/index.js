@@ -27,6 +27,7 @@ import Popuptable from 'components/shared/PopuptableComponent'
 import AddIconButton from 'components/shared/AddIconComponent'
 import RemoveIcon from 'components/shared/RemoveIconComponent'
 import messageReturn from '_helpers/messageReturn'
+import PaymentTermSelect from 'components/shared/PaymentTermSelectComponent'
 import convertNumberToWords from '../../../../_helpers/convertToWords'
 import {
   indentFileUpload,
@@ -880,12 +881,7 @@ const Polocal = ({ rowData, onClose, calldetailapi, isView }) => {
         index === paymentterms.length - 1 ? (
           <Form form={poform}>
             <Form.Item name="addpaymentterm">
-              <Input
-                value={text}
-                placeholder="Type here..."
-                style={{ width: '200px' }}
-                type="text"
-              />
+              <PaymentTermSelect />
             </Form.Item>
           </Form>
         ) : (
@@ -968,7 +964,7 @@ const Polocal = ({ rowData, onClose, calldetailapi, isView }) => {
       return
     }
     if (
-      poform.getFieldValue('addpaymentterm') === (null || undefined || '') ||
+      !poform.getFieldValue('addpaymentterm') ||
       poform.getFieldValue('addpaymentpercentage') === (null || undefined || '') ||
       poform.getFieldValue('addpaymentremarks') === (null || undefined || '')
     ) {

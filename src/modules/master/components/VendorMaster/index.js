@@ -28,7 +28,6 @@ import { useMediaQuery } from 'react-responsive'
 import messageReturn from '_helpers/messageReturn'
 import { indentFileUpload } from '../../../../services/common/AppeovedDocumentService/adddocumentservice'
 import currentDateTime from '../../../../currentDateTime'
-import checkFileSize from '../../../../_helpers/fileUtill'
 
 const VendorMater = () => {
   let defaultfilterData = {}
@@ -630,7 +629,7 @@ const VendorMater = () => {
                               beforeUpload={beforeUpload1}
                               showUploadList={false}
                             >
-                              <Button icon={<UploadOutlined />}>Choose File below 100MB</Button>
+                              <Button icon={<UploadOutlined />}>Choose File below 30MB</Button>
                             </Upload>
                           </Form.Item>
                           {selectedFile && (
@@ -669,9 +668,10 @@ const VendorMater = () => {
     )
   }
   const beforeUpload1 = file => {
-    if (checkFileSize(file)) {
+    if (file.size / (1024 * 1024) <= 30) {
       setSelectedFile(file)
     } else {
+      messageReturn(null, `File ${file.name} size should be less than 30 MB`, 'error')
       setSelectedFile(null)
     }
   }

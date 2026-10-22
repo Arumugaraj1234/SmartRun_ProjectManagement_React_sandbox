@@ -72,8 +72,12 @@ const PaymentTermsPopUp = props => {
       messageReturn(405)
       return
     }
+    // Same rule as insertDetails: GST and charges are only sent on the last term, so a non-last
+    // term's PRA is saved for the Amount alone (the GST pre-filled on open must not be counted)
     const amountPayable = Number(
-      form.getFieldValue('totalAmountPayable') || calculateTotalPayable(),
+      resp?.isLast === '1'
+        ? form.getFieldValue('totalAmountPayable') || calculateTotalPayable()
+        : invoiceValue || 0,
     ).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     Modal.confirm({
       title: `Create PRA for Amount Payable ${Menulistdata?.[0]?.currency || ''} ${amountPayable}?`,

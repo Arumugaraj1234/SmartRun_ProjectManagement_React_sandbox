@@ -282,9 +282,9 @@ const PRASearchCardComp = () => {
 
       // Handling docStatusMst
       console.log('PRA detail', data.statusDesc, data.statusDesc !== 'PRA Closed')
-      if (data.docStatusMst === null && data.statusDesc !== 'PRA Closed') {
-        setPraCancelBtn(true)
-      }
+      // PRA Cancel: backend decides (login designation on the DC077 PRA Cancel row, PRA still at
+      // Created / Purchase approved). Reset per PRA so it never carries over from the last one opened.
+      setPraCancelBtn(data.praCancelEnable === '1' && data.statusDesc !== 'PRA Closed')
       if (data.docStatusMst !== null && data.docStatusMst.length > 0) {
         setBtnDisplay(true)
         // Assuming docStatusMst is an array, setting individual state values
@@ -298,13 +298,6 @@ const PRASearchCardComp = () => {
           data.docStatusMst[0].cancelSeq !== '',
           data.docStatusMst[0].currSequence !== '4',
         )
-        if (
-          data.docStatusMst[0] == null ||
-          (data.docStatusMst[0].cancelSeq !== '' && data.docStatusMst[0].currSequence !== '3')
-        ) {
-          setPraCancelBtn(true)
-          console.log('pra cancel logic button')
-        }
         setCancelSeqDesc(data.docStatusMst[0].cancelStatusCode)
         setDocuLifeMst(data.docStatusMst) // Setting entire array to state
       } else {
@@ -430,6 +423,7 @@ const PRASearchCardComp = () => {
 
   const praCode1 = []
   const statusDesc1 = []
+  const nextStatusDesc1 = []
   const poCode1 = []
   const vendorName1 = []
   const poDate1 = []
@@ -454,6 +448,7 @@ const PRASearchCardComp = () => {
   detailResp.map(h => {
     return statusDesc1.push(h.isLatest === '0' ? 'PRA Cancelled' : h.statusDesc)
   })
+  detailResp.forEach(h => nextStatusDesc1.push(h.nextStatusDesc))
   // detailResp.map(h => {
   //   return vendorName1.push(h.vendorName)
   // })
@@ -463,6 +458,10 @@ const PRASearchCardComp = () => {
   }
   const praCode2 = praCode1.filter(distinct)
   const statusDesc2 = statusDesc1.filter(distinct)
+  const nextStatusDesc3 = nextStatusDesc1
+    .filter(distinct)
+    .sort((a, b) => a.localeCompare(b))
+    .map(element => ({ text: element, value: element }))
   const poCode2 = poCode1.filter(distinct)
   const vendorName2 = vendorName1.filter(distinct)
   const poDate2 = poDate1.filter(distinct)
@@ -557,7 +556,7 @@ const PRASearchCardComp = () => {
       title: 'PRA No.',
       dataIndex: 'praCode',
       key: 'praCode',
-      width: '7%',
+      width: '6%',
       filters: praCode3,
       filteredValue: filtersinfo.praCode,
       onFilter: (value, record) => record?.praCode === value,
@@ -574,7 +573,7 @@ const PRASearchCardComp = () => {
       title: 'Project Number',
       dataIndex: 'projectCode',
       key: 'projectCode',
-      width: '7%',
+      width: '5%',
       render: (text, record) => ({
         props: {
           style: {
@@ -586,6 +585,7 @@ const PRASearchCardComp = () => {
     },
     {
       title: 'PO Number',
+      width: '10%',
       dataIndex: 'poCode',
       key: 'poCode',
       filters: poCode3,
@@ -625,6 +625,7 @@ const PRASearchCardComp = () => {
     },
     {
       title: 'PO Revision',
+      width: '4%',
       dataIndex: 'revision',
       key: 'revision',
       render: (text, record) => ({
@@ -648,7 +649,7 @@ const PRASearchCardComp = () => {
       title: 'Revision Date',
       dataIndex: 'revisionDate',
       key: 'revisionDate',
-      width: '7%',
+      width: '6%',
       render: (text, record) => ({
         props: {
           style: {
@@ -671,7 +672,7 @@ const PRASearchCardComp = () => {
       title: 'Vendor Name',
       dataIndex: 'vendorName',
       key: 'vendorName',
-      width: '7%',
+      width: '8%',
       filters: vendorName3,
       filteredValue: filtersinfo.vendorName,
       onFilter: (value, record) => record?.vendorName === value,
@@ -703,7 +704,7 @@ const PRASearchCardComp = () => {
       dataIndex: 'orderValue',
       key: 'orderValue',
       align: 'right',
-      width: '7%',
+      width: '6%',
       render: (text, record) => ({
         props: {
           style: {
@@ -723,7 +724,7 @@ const PRASearchCardComp = () => {
       title: 'Invoice Date',
       dataIndex: 'invoiceDate',
       key: 'invoiceDate',
-      width: '7%',
+      width: '6%',
       render: (text, record) => ({
         props: {
           style: {
@@ -737,7 +738,7 @@ const PRASearchCardComp = () => {
       title: 'Invoice No.',
       dataIndex: 'invoiceNumber',
       key: 'invoiceNumber',
-      width: '7%',
+      width: '6%',
       render: (text, record) => ({
         props: {
           style: {
@@ -752,7 +753,7 @@ const PRASearchCardComp = () => {
       dataIndex: 'invoiceValue',
       key: 'invoiceValue',
       align: 'right',
-      width: '7%',
+      width: '6%',
       render: (text, record) => ({
         props: {
           style: {
@@ -773,7 +774,7 @@ const PRASearchCardComp = () => {
       dataIndex: 'amountPayable',
       key: 'amountPayable',
       align: 'right',
-      width: '7%',
+      width: '6%',
       render: (text, record) => ({
         props: {
           style: {
@@ -793,7 +794,7 @@ const PRASearchCardComp = () => {
       title: 'Status',
       dataIndex: 'statusDesc',
       key: 'statusDesc',
-      width: '7%',
+      width: '6%',
       filters: statusDesc3,
       filteredValue: filtersinfo.statusDesc,
       onFilter: (value, record) =>
@@ -808,6 +809,17 @@ const PRASearchCardComp = () => {
           <span>{record.isLatest === '0' ? 'PRA Cancelled' : text !== null ? text : ''}</span>
         ),
       }),
+    },
+    {
+      // Next DC077 stage; blank for cancelled / completed / last-stage PRAs (set in retrievePRA)
+      title: 'Next Status',
+      dataIndex: 'nextStatusDesc',
+      key: 'nextStatusDesc',
+      width: '6%',
+      filters: nextStatusDesc3,
+      filteredValue: filtersinfo.nextStatusDesc,
+      onFilter: (value, record) => record?.nextStatusDesc === value,
+      render: text => text || '-',
     },
 
     {

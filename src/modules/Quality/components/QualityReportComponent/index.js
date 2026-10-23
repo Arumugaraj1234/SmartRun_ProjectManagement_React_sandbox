@@ -153,6 +153,11 @@ const QualityReportComponet = ({ hdrId, onmodalCancel, requestDate, poId }) => {
 
   const handleUploadChange = info => {
     const newFileList = info.fileList.slice(-1)
+    const selected = newFileList[0]
+    if (selected && selected.size / (1024 * 1024) > 30) {
+      messageReturn(null, `File ${selected.name} size should be less than 30 MB`, 'error')
+      return
+    }
     setFilesList(newFileList)
   }
   const insrescolumns = [

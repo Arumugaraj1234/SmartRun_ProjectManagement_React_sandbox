@@ -1263,7 +1263,9 @@ const PRASearchCardComp = () => {
                 <p>GST Value</p>
                 <p style={{ fontWeight: 'bold' }}>
                   {popupresp.length > 0
-                    ? Number(popupresp[0].praGst).toLocaleString('en-IN', {
+                    ? (
+                        Number(popupresp[0].praGst || 0) + Number(popupresp[0].praIgst || 0)
+                      ).toLocaleString('en-IN', {
                         style: 'currency',
                         currency: 'INR',
                       })
@@ -1285,7 +1287,9 @@ const PRASearchCardComp = () => {
                 <p>Tax Value</p>
                 <p style={{ fontWeight: 'bold' }}>
                   {popupresp.length > 0
-                    ? Number(popupresp[0].gst).toLocaleString('en-IN', {
+                    ? (
+                        Number(popupresp[0].gst || 0) + Number(popupresp[0].poIgst || 0)
+                      ).toLocaleString('en-IN', {
                         style: 'currency',
                         currency: 'INR',
                       })

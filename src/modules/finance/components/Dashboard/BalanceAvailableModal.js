@@ -15,21 +15,23 @@ const BalanceAvailable = ({ project }) => {
   }
 
 
-  const getUniqueFilters = (data, key) => {
-  const seen = new Set()
-  return data
-    .map(item => item?.[key])
-    .filter(val => val !== undefined && val !== null && !seen.has(val) && seen.add(val))
-    .map(val => ({ text: val, value: val }))
-}
-
-  const projectNameFilter = getUniqueFilters(project, 'projName')
-  const projectNoFilter = getUniqueFilters(project, 'projCode')
-  const poCodeFilter = getUniqueFilters(project,'poCode')
-  const vendorNameFilter = getUniqueFilters(project,'vendorName')
-  const praCodeFilter = getUniqueFilters(project,'praCode')
-  const statusFilter = getUniqueFilters(project,'status')
-
+  // PRA amounts are shown rounded to the nearest rupee (100.49 -> 100, 100.56 -> 101), no paise
+  const roundAmt = value =>
+    value === null || value === undefined || value === '' ? value : Math.round(Number(value))
+  // Every column (except S.No) filters on the value as shown in the cell, so rounded amounts,
+  // formatted dates and '-'/'OPEN' placeholders match what the user sees
+  const columnFilter = (key, display = value => value) => {
+    const shown = record => String(display(record?.[key]) ?? '-')
+    const seen = new Set()
+    return {
+      filters: (project || [])
+        .map(shown)
+        .filter(val => !seen.has(val) && seen.add(val))
+        .map(val => ({ text: val, value: val })),
+      filterSearch: true,
+      onFilter: (value, record) => shown(record) === value,
+    }
+  }
 
   const projectColumns = [
     {
@@ -42,70 +44,77 @@ const BalanceAvailable = ({ project }) => {
       title: 'Project No​',
       dataIndex: 'projCode',
       key: 'projCode',
-      filters: projectNoFilter,
-      onFilter: (value, record) => record?.projCode === value,
+      ...columnFilter('projCode'),
     },
     {
       title: 'Project Name',
       dataIndex: 'projName',
       key: 'projName',
-      filters: projectNameFilter,
-      onFilter: (value, record) => record?.projName === value,
+      ...columnFilter('projName'),
     },
     {
       title: 'Vendor Name​',
       dataIndex: 'vendorName',
       key: 'vendorName',
-      filters: vendorNameFilter,
-      onFilter: (value, record) => record?.vendorName === value,
+      ...columnFilter('vendorName'),
     },
     {
       title: 'PO No​',
       dataIndex: 'poCode',
       key: 'poCode',
-      filters: poCodeFilter,
-      onFilter: (value, record) => record?.poCode === value,
+      ...columnFilter('poCode'),
     },
     {
       title: 'PO Date​',
       dataIndex: 'poDate',
       key: 'poDate',
+      ...columnFilter('poDate'),
     },
     {
       title: 'PRA No​',
       dataIndex: 'praCode',
       key: 'praCode',
-      filters: praCodeFilter,
-      onFilter: (value, record) => record?.praCode === value,
+      ...columnFilter('praCode'),
     },
     {
       title: 'PRA Date',
       dataIndex: 'praDate',
       key: 'praDate',
+      ...columnFilter('praDate'),
+    },
+    {
+      title: 'Payment Term',
+      dataIndex: 'paymentTerms',
+      key: 'paymentTerms',
+      ...columnFilter('paymentTerms', value => value || '-'),
+      render: value => value || '-',
     },
     {
       title: 'PRA Amount',
       dataIndex: 'amountPayable',
       key: 'amountPayable',
+      ...columnFilter('amountPayable', roundAmt),
       align:'right',
+      render: value => roundAmt(value),
     },
     {
       title: 'Due On​',
       dataIndex: 'dueDate',
       key: 'dueDate',
+      ...columnFilter('dueDate'),
     },
     {
       title: 'Overdue Days​',
       dataIndex: 'overDue',
       key: 'overDue',
+      ...columnFilter('overDue'),
     },
     {
       title: 'PRA Status​',
       dataIndex: 'status',
       key: 'status',
+      ...columnFilter('status', value => value || 'OPEN'),
       render: value => value || 'OPEN',
-      filters: statusFilter,
-      onFilter: (value, record) => record?.status === value,
     },
   ]
 
@@ -150,7 +159,8 @@ const BalanceAvailable = ({ project }) => {
     'PO Date': escapeValue(row.poDate),
     'PRA No': escapeValue(row.praCode),
     'PRA Date': escapeValue(row.praDate),
-    'PRA Amount': escapeValue(row.amountPayable),
+    'Payment Term': escapeValue(row.paymentTerms || '-'),
+    'PRA Amount': escapeValue(roundAmt(row.amountPayable)),
     'Due On': escapeValue(row.dueDate),
     'Overdue Days': escapeValue(row.overDue),
     'PRA Status': escapeValue(row.status || 'OPEN'), // Manually map and escape 'Action'

@@ -15,20 +15,24 @@ const BalanceAvailable = ({ project }) => {
     setFilterData(filters)
   }
 
-  const getUniqueFilters = (data, key) => {
+  // PRA amounts are shown rounded to the nearest rupee (100.49 -> 100, 100.56 -> 101), no paise
+  const roundAmt = value =>
+    value === null || value === undefined || value === '' ? value : Math.round(Number(value))
+  const fmtDate = value => (value ? moment(value).format('DD-MMM-YYYY') : '-')
+  // Every column (except S.No) filters on the value as shown in the cell, so rounded amounts,
+  // formatted dates and '-'/'OPEN' placeholders match what the user sees
+  const columnFilter = (key, display = value => value) => {
+    const shown = record => String(display(record?.[key]) ?? '-')
     const seen = new Set()
-    return data
-      .map(item => item?.[key])
-      .filter(val => val !== undefined && val !== null && !seen.has(val) && seen.add(val))
-      .map(val => ({ text: val, value: val }))
+    return {
+      filters: (project || [])
+        .map(shown)
+        .filter(val => !seen.has(val) && seen.add(val))
+        .map(val => ({ text: val, value: val })),
+      filterSearch: true,
+      onFilter: (value, record) => shown(record) === value,
+    }
   }
-
-  const projectNameFilter = getUniqueFilters(project, 'projName')
-  const projectNoFilter = getUniqueFilters(project, 'projCode')
-  const poCodeFilter = getUniqueFilters(project, 'poCode')
-  const vendorNameFilter = getUniqueFilters(project, 'vendorName')
-  const praCodeFilter = getUniqueFilters(project, 'praCode')
-  const statusFilter = getUniqueFilters(project, 'status')
 
   const projectColumns = [
     {
@@ -41,92 +45,102 @@ const BalanceAvailable = ({ project }) => {
       title: 'Project No​',
       dataIndex: 'projCode',
       key: 'projCode',
-      filters: projectNoFilter,
-      onFilter: (value, record) => record?.projCode === value,
+      ...columnFilter('projCode'),
     },
     {
       title: 'Project Name',
       dataIndex: 'projName',
       key: 'projName',
-      filters: projectNameFilter,
-      onFilter: (value, record) => record?.projName === value,
+      ...columnFilter('projName'),
     },
     {
       title: 'Vendor Name​',
       dataIndex: 'vendorName',
       key: 'vendorName',
-      filters: vendorNameFilter,
-      onFilter: (value, record) => record?.vendorName === value,
+      ...columnFilter('vendorName'),
     },
     {
       title: 'PO No​',
       dataIndex: 'poCode',
       key: 'poCode',
-      filters: poCodeFilter,
-      onFilter: (value, record) => record?.poCode === value,
+      ...columnFilter('poCode'),
     },
     {
       title: 'PO Date​',
       dataIndex: 'poDate',
       key: 'poDate',
+      ...columnFilter('poDate', fmtDate),
       render: value => (value ? moment(value).format('DD-MMM-YYYY') : '-'),
     },
     {
       title: 'PRA No​',
       dataIndex: 'praCode',
       key: 'praCode',
-      filters: praCodeFilter,
-      onFilter: (value, record) => record?.praCode === value,
+      ...columnFilter('praCode'),
     },
     {
       title: 'PRA Date',
       dataIndex: 'praDate',
       key: 'praDate',
+      ...columnFilter('praDate', fmtDate),
       render: value => (value ? moment(value).format('DD-MMM-YYYY') : '-'),
+    },
+    {
+      title: 'Payment Term',
+      dataIndex: 'paymentTerms',
+      key: 'paymentTerms',
+      ...columnFilter('paymentTerms', value => value || '-'),
+      render: value => value || '-',
     },
     {
       title: 'PRA Amount',
       dataIndex: 'amountPayable',
       key: 'amountPayable',
+      ...columnFilter('amountPayable', roundAmt),
       align: 'right',
+      render: value => roundAmt(value),
     },
     {
       title: 'PRA Vendor Payment Due',
       dataIndex: 'amountDue',
       key: 'amountDue',
+      ...columnFilter('amountDue', value => roundAmt(value) || '-'),
       align: 'right',
-      render: value => value || '-',
+      render: value => roundAmt(value) || '-',
     },
     {
       title: 'Vendor Invoice Number',
       dataIndex: 'invoiceNo',
       key: 'invoiceNo',
+      ...columnFilter('invoiceNo', value => value || '-'),
       render: value => value || '-',
     },
     {
       title: 'Vendor Invoice Date',
       dataIndex: 'invoiceDate',
       key: 'invoiceDate',
+      ...columnFilter('invoiceDate', fmtDate),
       render: value => (value ? moment(value).format('DD-MMM-YYYY') : '-'),
     },
     {
       title: 'Due On​',
       dataIndex: 'dueDate',
       key: 'dueDate',
+      ...columnFilter('dueDate', fmtDate),
       render: value => (value ? moment(value).format('DD-MMM-YYYY') : '-'),
     },
     {
       title: 'Overdue Days​',
       dataIndex: 'overDue',
       key: 'overDue',
+      ...columnFilter('overDue'),
     },
     {
       title: 'PRA Status​',
       dataIndex: 'status',
       key: 'status',
+      ...columnFilter('status', value => value || 'OPEN'),
       render: value => value || 'OPEN',
-      filters: statusFilter,
-      onFilter: (value, record) => record?.status === value,
     },
   ]
 
@@ -152,8 +166,9 @@ const BalanceAvailable = ({ project }) => {
         'PO Date': escapeValue(row.poDate),
         'PRA No': escapeValue(row.praCode),
         'PRA Date': escapeValue(row.praDate),
-        'PRA Amount': escapeValue(row.amountPayable),
-        'PRA Vendor Payment Due': escapeValue(row.amountDue || '-'),
+        'Payment Term': escapeValue(row.paymentTerms || '-'),
+        'PRA Amount': escapeValue(roundAmt(row.amountPayable)),
+        'PRA Vendor Payment Due': escapeValue(roundAmt(row.amountDue) || '-'),
         'Vendor Invoice Number': escapeValue(row.invoiceNo || '-'),
         'Vendor Invoice Date': escapeValue(row.invoiceDate || '-'),
         'Due On': escapeValue(row.dueDate),

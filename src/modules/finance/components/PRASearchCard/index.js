@@ -235,7 +235,7 @@ const PRASearchCardComp = () => {
     if (numericFieldsFilled && remarksFilled) {
       setIsProcessing(true)
       try {
-        await indentFileUpload({
+        const response = await indentFileUpload({
           requestPath: 'udpatePraHdrSeq',
           requestData: {
             seq: currSeq,
@@ -253,6 +253,13 @@ const PRASearchCardComp = () => {
           },
         })
 
+        // Approval refused (e.g. PRA already closed on a stale screen): don't save amounts onto it
+        if (response?.responseCode !== '200') {
+          message.error(response?.responseMessage || 'Unable to approve PRA')
+          setApprvlRemarksCard(false)
+          getDetailData()
+          return
+        }
         saveData()
         setApprvlRemarksCard(false)
         getDetailData()

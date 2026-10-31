@@ -154,16 +154,12 @@ const AuthLayout = ({
           </div>
           <div className={style.containerInner}>{children}</div>
           <div style={{ position: 'fixed', bottom: 0, right: 0, textAlign: 'right', margin: '10px' }}>
-            <h6 style={{ margin: 0 }}>
-              Software rights owned by
-              <span style={{ color: '#ff5d22' }}> Smart</span>
-              <span style={{ color: 'deepskyblue' }}>Run</span> Tech Pvt. Ltd.,
-            </h6>
+            <h6 style={{ margin: 0 }}>Software rights owned by BGR NEO LIMITED</h6>
             <a
-              href="https://www.smartruntech.com/"
+              href="https://www.bgrneo.com/"
               style={{ color: 'inherit', textDecoration: 'none' }}
             >
-              www.smartruntech.com
+              www.bgrneo.com
             </a>
           </div>
 

@@ -8,7 +8,7 @@ import messageReturn from '_helpers/messageReturn'
 import { indentFileUpload } from '../../../../services/common/AppeovedDocumentService/adddocumentservice'
 
 // eslint-disable-next-line no-unused-vars
-const Poassign = ({ rowData, onClose, calldetailapi, isView }) => {
+const Poassign = ({ rowData, onClose, calldetailapi, isView, onSubmittingChange }) => {
   const tenantId = store.get('tenantId')
   const employeeId = store.get('employeeId')
   const Menulistdata = store.get('MenuListData')
@@ -412,6 +412,17 @@ const Poassign = ({ rowData, onClose, calldetailapi, isView }) => {
   ]
   const submitRequest = async () => {
     setQCBtn(true)
+    // tell the parent to show its full-screen loading - re-clicking the shield icon while this runs
+    // would remount this card with a fresh QC Request button and allow a duplicate submit
+    if (onSubmittingChange) onSubmittingChange(true)
+    try {
+      await raiseQcRequest()
+    } finally {
+      setQCBtn(false)
+      if (onSubmittingChange) onSubmittingChange(false)
+    }
+  }
+  const raiseQcRequest = async () => {
     const formValues = form.getFieldsValue()
     const updatedTableData = potabel.map(item => {
       return {
@@ -452,10 +463,16 @@ const Poassign = ({ rowData, onClose, calldetailapi, isView }) => {
         setSelectedRowKeys([])
         getPoDetails()
         calldetailapi()
+      } else {
+        // backend skips lines whose PO qty is already fully requested for QC
+        message.error(
+          'QC Request not raised for some lines - QC already requested for the full PO qty',
+        )
+        getPoDetails()
+        calldetailapi()
       }
     } else {
       messageReturn(405)
-      setQCBtn(false)
     }
   }
   return (
@@ -478,6 +495,7 @@ const Poassign = ({ rowData, onClose, calldetailapi, isView }) => {
               type="primary"
               text="QC Request"
               disable={QCBtn}
+              loading={QCBtn}
               onClick={submitRequest}
             />
           </div>

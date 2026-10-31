@@ -54,6 +54,7 @@ const Podetail = ({ isTailview }) => {
   const [assigncard, setAssignCard] = useState(false)
   const [filtersinfo, setfilterinfo] = useState(defaultfilterData)
   const [uniqueKey, setUniqueKey] = useState(0)
+  const [qcSubmitting, setQcSubmitting] = useState(false)
   const [uniqueKey1, setUniqueKey1] = useState(0)
   const [uniqueKey2, setUniqueKey2] = useState(0)
   const [uniqueKey3, setUniqueKey3] = useState(0)
@@ -868,6 +869,26 @@ const Podetail = ({ isTailview }) => {
   }
   return (
     <div className="my-3">
+      {/* full-screen loading while QC Request runs - blocks the whole page (incl. re-clicking the
+          shield icon, which would remount the QC card with a fresh button) until it completes */}
+      {qcSubmitting ? (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 2000,
+            background: 'rgba(255, 255, 255, 0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Spin size="large" tip="Raising QC Request, please wait..." />
+        </div>
+      ) : null}
       <Card style={{ width: '100%' }} title={!isTailview ? 'Purchase Detail' : null}>
         {!isTailview ? (
           <CommonFields2 onGetDetails={handleGetDetails} onClear={handleClear} getIndent="2" />
@@ -950,6 +971,7 @@ const Podetail = ({ isTailview }) => {
               rowData={rowData}
               onClose={handleClose}
               calldetailapi={callapi}
+              onSubmittingChange={setQcSubmitting}
             />
           ) : null}
           {pjsModalVisible ? (

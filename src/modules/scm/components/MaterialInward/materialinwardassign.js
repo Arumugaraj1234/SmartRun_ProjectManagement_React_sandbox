@@ -8,7 +8,7 @@ import messageReturn from '_helpers/messageReturn'
 import { indentFileUpload } from '../../../../services/common/AppeovedDocumentService/adddocumentservice'
 
 // eslint-disable-next-line no-unused-vars
-const MaterialInwardAssign = ({ rowData, onClose, projectCode }) => {
+const MaterialInwardAssign = ({ rowData, onClose, projectCode, onSubmittingChange }) => {
   const tenantId = store.get('tenantId')
   const employeeId = store.get('employeeId')
   const processDoc = store.get('processDoc')
@@ -277,6 +277,17 @@ const MaterialInwardAssign = ({ rowData, onClose, projectCode }) => {
   ]
   const submitRequest = async () => {
     setQCBtn(true)
+    // tell the parent to show its full-screen loading - re-clicking the shield icon while this runs
+    // would remount this card with a fresh QC Request button and allow a duplicate submit
+    if (onSubmittingChange) onSubmittingChange(true)
+    try {
+      await raiseQcRequest()
+    } finally {
+      setQCBtn(false)
+      if (onSubmittingChange) onSubmittingChange(false)
+    }
+  }
+  const raiseQcRequest = async () => {
     const formValues = form.getFieldsValue()
     const updatedTableData = miDtlTable.map(item => {
       return {
@@ -308,16 +319,12 @@ const MaterialInwardAssign = ({ rowData, onClose, projectCode }) => {
         setSelectedRowKeys([])
         getAssignDetails()
         // calldetailapi()
+      } else if (response?.responseMessage) {
+        message.error(response?.responseMessage)
       } else {
-        setQCBtn(false)
-        if (response?.responseMessage) {
-          message.error(response?.responseMessage)
-        } else {
-          messageReturn(405)
-        }
+        messageReturn(405)
       }
     } else {
-      setQCBtn(false)
       messageReturn(405)
     }
   }
@@ -340,6 +347,7 @@ const MaterialInwardAssign = ({ rowData, onClose, projectCode }) => {
             type="primary"
             text="QC Request"
             disable={QCBtn}
+            loading={QCBtn}
             onClick={submitRequest}
           />
         </div>

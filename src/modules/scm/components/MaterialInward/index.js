@@ -14,6 +14,7 @@ import {
   Space,
   Popconfirm,
   Skeleton,
+  Spin,
 } from 'antd'
 import store from 'store'
 import moment from 'moment'
@@ -143,6 +144,7 @@ const MaterialInward = () => {
   const [filtersinfo, setfilterinfo] = useState([])
   const [filtersinfo1, setfilterinfo1] = useState([])
   const [uniqueKey, setUniqueKey] = useState(0)
+  const [qcSubmitting, setQcSubmitting] = useState(false)
 
   console.log(vendorName, orderedQty, receivedQty, inspectedQty)
   const showModal = (record, index) => {
@@ -1729,6 +1731,26 @@ const MaterialInward = () => {
   }
   return (
     <div style={isMobile ? { width: tableWidth } : {}}>
+      {/* full-screen loading while QC Request runs - blocks the whole page (incl. re-clicking the
+          shield icon, which would remount the QC card with a fresh button) until it completes */}
+      {qcSubmitting ? (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 2000,
+            background: 'rgba(255, 255, 255, 0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Spin size="large" tip="Raising QC Request, please wait..." />
+        </div>
+      ) : null}
       <Form form={allqtyForm}>
         <Card
           style={{ width: '100%', marginTop: '13px' }}
@@ -1806,6 +1828,7 @@ const MaterialInward = () => {
               key={uniqueKey}
               onClose={handleclose}
               rowData={rowData}
+              onSubmittingChange={setQcSubmitting}
               // calldetailapi={callapi}
               projectCode={slctdProjectCode}
             />

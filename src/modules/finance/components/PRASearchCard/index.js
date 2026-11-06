@@ -92,6 +92,37 @@ const PRASearchCardComp = () => {
     getDetailData()
   }, [])
 
+  // Notification Center "View" on a PRA (DC077) lands here with the notification record in route
+  // state: the list is already filtered to that PRA (defaultfilterData), and here its Detail popup
+  // is opened once — only when this login has the next-stage approval button for it (docStatusMst
+  // is filled by retrievePRA only for the next row's approver designations, and never for closed
+  // PRAs). praAutoOpened in route state stops it reopening when the PRA tab is visited again.
+  const praAutoOpenDoneRef = useRef(false)
+  useEffect(() => {
+    const notifRecord = history?.location?.state?.record
+    if (
+      praAutoOpenDoneRef.current ||
+      !notifRecord ||
+      notifRecord.docTypeCode !== 'DC077' ||
+      history?.location?.state?.praAutoOpened ||
+      detailResp.length === 0
+    ) {
+      return
+    }
+    const row = detailResp.find(
+      item =>
+        (notifRecord.refId && String(item.praId) === String(notifRecord.refId)) ||
+        (notifRecord.refCode && item.praCode === notifRecord.refCode),
+    )
+    if (!row || !row.docStatusMst || row.docStatusMst.length === 0) return
+    praAutoOpenDoneRef.current = true
+    history.replace({
+      ...history.location,
+      state: { ...history.location.state, praAutoOpened: true },
+    })
+    handleDetail(row)
+  }, [detailResp])
+
   const addprevRemarksSubmit = () => {
     setPrevRemarksCard(true)
   }

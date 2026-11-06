@@ -153,16 +153,8 @@ const AuthLayout = ({
             </div>
           </div>
           <div className={style.containerInner}>{children}</div>
-          <div style={{ position: 'fixed', bottom: 0, right: 0, textAlign: 'right', margin: '10px' }}>
-            <h6 style={{ margin: 0 }}>Software rights owned by BGR NEO LIMITED</h6>
-            <a
-              href="https://www.bgrneo.com/"
-              style={{ color: 'inherit', textDecoration: 'none' }}
-            >
-              www.bgrneo.com
-            </a>
-          </div>
-
+          {/* Bottom-right "Software rights owned by ..." footer removed until the client confirms
+              the correct company name + website. */}
         </div>
       </Layout.Content>
     </Layout>

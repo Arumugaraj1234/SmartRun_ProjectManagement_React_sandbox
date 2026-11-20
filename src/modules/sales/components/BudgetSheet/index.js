@@ -325,24 +325,26 @@ const [paymentTermRows, setPaymentTermRows] = useState([ { ...emptyPaymentTerm }
     console.log(dateString)
   }
 
+  // Row errors block the upload: rows with errors cannot be saved, so the user must fix the Excel and upload again
   const showConfirm = e => {
     const contents = (
       <div>
-        {e.map(item => (
-          <p>{` ${item}`}</p>
-        ))}
+        <p>
+          <b>{`${e.length} row error(s) found. Please correct these rows in the Excel and upload again.`}</b>
+        </p>
+        <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+          {e.map(item => (
+            <p key={item} style={{ margin: '2px 0' }}>{item}</p>
+          ))}
+        </div>
       </div>
     )
-    Modal.confirm({
+    Modal.error({
+      title: 'Budget sheet not uploaded',
       content: contents,
-      html: true,
-      okText: 'Proceed',
-      cancelText: 'Cancel',
-      icon: null,
+      width: 600,
+      okText: 'Close',
       onOk() {
-        setIsTable(true)
-      },
-      onCancel() {
         handleClear()
       },
     })
@@ -367,14 +369,15 @@ const [paymentTermRows, setPaymentTermRows] = useState([ { ...emptyPaymentTerm }
         })
         if (response && response.responseData) {
           if (response.responseCode === '200') {
-            if (response.responseData[0].errorMsgs.length > 0) {
+            const hasRowErrors = response.responseData[0].errorMsgs.length > 0
+            if (hasRowErrors) {
               showConfirm(response.responseData[0].errorMsgs)
               setIsTable(false)
             } else {
               setIsTable(true)
             }
             // setErrorMsg(response.responseData[0].errorMsgs)
-            setTableData(response.responseData[0].list)
+            setTableData(hasRowErrors ? [] : response.responseData[0].list)
             console.log(response.responseData[0].list, 'set table data')
             setIsLoading(false)
             setIsLoad(false)
@@ -668,7 +671,16 @@ const [paymentTermRows, setPaymentTermRows] = useState([ { ...emptyPaymentTerm }
           setAddModal(false)
         } else {
           setIsDisable(false)
-          messageReturn(633)
+          // Backend rejects the upload when the session has no tenantId (blank tenant created duplicate budget sheets)
+          if (
+            response.responseMessage &&
+            (response.responseMessage.startsWith('Session details missing') ||
+              response.responseMessage.startsWith('Budget sheet not saved'))
+          ) {
+            message.error(response.responseMessage)
+          } else {
+            messageReturn(633)
+          }
         }
       }
     } else {

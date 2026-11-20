@@ -1,17 +1,25 @@
 import React, { useState, useEffect } from 'react'
 import { Button, message, Popover, Input } from 'antd'
-import { ImportOutlined, CheckOutlined, CloseOutlined, FileExcelOutlined } from '@ant-design/icons'
+import {
+  ImportOutlined,
+  CheckOutlined,
+  CloseOutlined,
+  FileExcelOutlined,
+  DownloadOutlined,
+} from '@ant-design/icons'
 import store from 'store'
 import moment from 'moment'
 import { useHistory } from 'react-router-dom'
 // import TableComponent from 'components/common/TableComponent'
-import { Table } from 'ant-table-extensions'
+import { Table, ExportTableButton } from 'ant-table-extensions'
 import ButtonComponent from 'components/shared/ButtonComponent'
 import InspectionReportService from 'services/Quality/InspectionReport'
 import ApproveOrReject from 'components/common/ApproveRejectBtnComponent'
 import ModalPopup from 'components/shared/ModalPopupComponent'
 import { useMediaQuery } from 'react-responsive'
 import { indentFileUpload } from 'services/common/AppeovedDocumentService/adddocumentservice'
+import serverApi from 'services/serverApi'
+import Papa from 'papaparse'
 import QualityReportComponet from '../QualityReportComponent'
 import currentDateTime from '../../../../currentDateTime'
 
@@ -43,6 +51,7 @@ const InspectionCall = () => {
   const [cancelpopoverVisible, setcancelPopoverVisible] = useState(false)
   const [showStaging, setShowStaging] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [downloadingAll, setDownloadingAll] = useState(false)
   const Tab = store.get('Tab')
   const QtyHdrId = store.get('QtyHdrId')
   const { docTypeCode, slaveId, processCode } = Tab
@@ -860,6 +869,64 @@ const InspectionCall = () => {
     )
     setOnloadtable(filteringdatas)
   }
+  // Rows exactly as the table shows them: search (onloadtable) + every active column filter
+  const getVisibleRows = () => {
+    const activeCols = onloadcolumns.filter(
+      col => col.onFilter && Array.isArray(filtersInfo?.[col.key]) && filtersInfo[col.key].length,
+    )
+    return onloadtable.filter(row =>
+      activeCols.every(col => filtersInfo[col.key].some(value => col.onFilter(value, row))),
+    )
+  }
+
+  // "Download All": one zip with InspectionReport.csv (filtered rows, same format as Export to CSV)
+  // + the latest design of each row's indent line (same file as the row's Drawing Detail)
+  const handleDownloadAll = async () => {
+    const rows = getVisibleRows()
+    if (!rows.length) {
+      message.info('No rows to download')
+      return
+    }
+    // Report CSV built exactly like the table's "Export to CSV" (ant-table-extensions): every column's
+    // title, raw record values, papaparse - only the rows differ (filtered, as on screen)
+    const exportCols = onloadcolumns.filter(col => col.dataIndex || col.key)
+    const csv = Papa.unparse(
+      [
+        exportCols.map(col => col.title),
+        ...rows.map(row => exportCols.map(col => row[col.dataIndex || col.key])),
+      ],
+      { greedy: true, header: false },
+    )
+    setDownloadingAll(true)
+    try {
+      const response = await serverApi.post(
+        'downloadQiDesignZip',
+        {
+          tenantId,
+          pmHdrId: ProjectID,
+          csv,
+          rows: rows.map(row => ({
+            indentDtlId: row.indentDtlId,
+            productCode: row.productCode,
+          })),
+        },
+        { responseType: 'blob', timeout: 0 },
+      )
+      const url = URL.createObjectURL(new Blob([response.data], { type: 'application/zip' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `InspectionReport_${moment().format('YYYY-MMM-DD-HHmmss')}.zip`)
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      message.error('Download failed. Please try again.')
+    } finally {
+      setDownloadingAll(false)
+    }
+  }
+
   const chagegeMaterialStaging = async () => {
     const props = {
       isQc: '',
@@ -890,23 +957,37 @@ const InspectionCall = () => {
         ) : null}
       </div>
       <div>
-        <Input.Search
-          style={{ margin: '0 0 10px 0', width: isMobile ? '100%' : '30%', float: 'right' }}
-          placeholder="Search here..."
-          enterButton
-          // onSearch={handleSearch}
-          onChange={e => handleSearch(e)}
-        />
-        <Table
-          dataSource={onloadtable}
-          exportableProps={{
-            fileName: `Inspection Call${currentDateTime}`,
-            btnProps: {
+        {/* Toolbar: Export to CSV (the same ExportTableButton + props the Table used to render itself),
+            then Download All, search on the right */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px' }}>
+          <ExportTableButton
+            dataSource={onloadtable}
+            columns={onloadcolumns}
+            fileName={`Inspection Call${currentDateTime}`}
+            btnProps={{
               type: 'primary',
               icon: <FileExcelOutlined />,
               children: <span>Export to CSV</span>,
-            },
-          }}
+            }}
+          />
+          <Button
+            type="primary"
+            icon={<DownloadOutlined />}
+            loading={downloadingAll}
+            onClick={handleDownloadAll}
+          >
+            Download All
+          </Button>
+          <Input.Search
+            style={{ marginLeft: 'auto', width: isMobile ? '100%' : '30%' }}
+            placeholder="Search here..."
+            enterButton
+            // onSearch={handleSearch}
+            onChange={e => handleSearch(e)}
+          />
+        </div>
+        <Table
+          dataSource={onloadtable}
           columns={onloadcolumns}
           onChange={FilterChange}
           pagination={{

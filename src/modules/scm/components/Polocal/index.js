@@ -94,6 +94,7 @@ const Polocal = ({ rowData, onClose, calldetailapi, isView }) => {
   const [otherValue, setOtherValue] = useState('0.000')
   const [gstValue, setGstValue] = useState('')
   const [pendingGstValue, setPendingGstValue] = useState('0.000')
+  const [praRefreshing, setPraRefreshing] = useState(false)
   const [apprvBtnEnabled, setApprvBtnEnabled] = useState(true)
   // const [IGstValue, setIGstValue] = useState('0.000')
 
@@ -739,14 +740,15 @@ const Polocal = ({ rowData, onClose, calldetailapi, isView }) => {
 
   // Term still has something left to raise a PRA for (shows the PRA button)
   const showPraButton = record =>
-    (record.isLast === '0' && Math.round(parseFloat(record.pendingAmount)) >= 1) ||
-    (record.isLast === '1' &&
-      (Math.round(parseFloat(pendingGstValue)) !== 0 ||
-        Math.round(parseFloat(transportValue)) !== 0 ||
-        Math.round(parseFloat(otherValue)) !== 0 ||
-        Math.round(parseFloat(pfValue)) !== 0 ||
-        Math.round(parseFloat(insuranceValue)) !== 0)) ||
-    Math.round(parseFloat(record.pendingAmount)) >= 1
+    !praRefreshing &&
+    ((record.isLast === '0' && Math.round(parseFloat(record.pendingAmount)) >= 1) ||
+      (record.isLast === '1' &&
+        (Math.round(parseFloat(pendingGstValue)) >= 1 ||
+          Math.round(parseFloat(transportValue)) >= 1 ||
+          Math.round(parseFloat(otherValue)) >= 1 ||
+          Math.round(parseFloat(pfValue)) >= 1 ||
+          Math.round(parseFloat(insuranceValue)) >= 1)) ||
+      Math.round(parseFloat(record.pendingAmount)) >= 1)
 
   // One row per PRA under each term, plus the PRA-button row while pending (see PoPaymentTermRows)
   const paymentTermRows = buildPaymentTermRows(paymentterms.slice(0, -1), showPraButton)
@@ -869,7 +871,10 @@ const Polocal = ({ rowData, onClose, calldetailapi, isView }) => {
 
   const handleCancelDtlsBtnInward = () => {
     setPaymentLoading(false)
-    getPoDetails()
+    // Hide the PRA button until the PO reload returns, so a just-created PRA's term can't be
+    // opened again from stale data on a slow network (duplicate PRAs, e.g. BGRN/2026/1096/680)
+    setPraRefreshing(true)
+    Promise.resolve(getPoDetails()).finally(() => setPraRefreshing(false))
   }
 
   const paymentcolumns = [

@@ -170,6 +170,9 @@ const PRASearchCardComp = () => {
       } else {
         messageReturn(606)
       }
+    } else if (response?.responseMessage) {
+      // e.g. backend refuses download before PM approval
+      message.error(response.responseMessage)
     }
   }
   const getPONoDetailList = async () => {
@@ -872,7 +875,8 @@ const PRASearchCardComp = () => {
               Detail
             </Button>
           </div>
-          {record.isLatest !== '0' && (
+          {/* PDF only from PM Approved onwards, or completed; never cancelled (backend flag) */}
+          {record.praDownloadEnable === '1' && (
             <div>
               <Button
                 type="primary"

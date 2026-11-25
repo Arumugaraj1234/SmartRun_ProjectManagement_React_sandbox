@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Button, message, Popover, Input } from 'antd'
+import { Button, message, Popover, Input, Spin } from 'antd'
 import {
   ImportOutlined,
   CheckOutlined,
@@ -51,6 +51,9 @@ const InspectionCall = () => {
   const [cancelpopoverVisible, setcancelPopoverVisible] = useState(false)
   const [showStaging, setShowStaging] = useState(false)
   const [loading, setLoading] = useState(false)
+  // own flag for QC Not req / Cancel submits - `loading` is also reset by the list refresh,
+  // which re-enabled the buttons while a submit was still running
+  const [nrSubmitting, setNrSubmitting] = useState(false)
   const [downloadingAll, setDownloadingAll] = useState(false)
   const Tab = store.get('Tab')
   const QtyHdrId = store.get('QtyHdrId')
@@ -286,38 +289,11 @@ const InspectionCall = () => {
   }
 
   const handleNotRequired = record => {
-    // handleQCInsapproval(record)
     handleinsertfunction(record)
   }
 
   const handleCancelRequired = record => {
     handleselectedfunction(record)
-  }
-
-  const handleQCInsapproval = async record => {
-    const props = {
-      currentseq: '2',
-      tenantId,
-      empId: employeID,
-      hdrId: record.qiHdrId,
-      remarks: '',
-      nrFlag: '1',
-      cancelFlag: '0',
-      pmId: processCode,
-      qHdrId: QtyHdrId,
-      poId: record?.poId,
-      pmHdrId: ProjectID,
-      qualityHdrId: QtyHdrId,
-    }
-    const httpapprovals = await InspectionReportService({
-      requestPath: 'updateQISeqAndStatus',
-      requestData: props,
-    })
-
-    if (httpapprovals.responseCode === '200') {
-      updateTailView()
-      getOnloadtabledata()
-    }
   }
 
   const handleSelectedQCInsapproval = async record => {
@@ -347,7 +323,8 @@ const InspectionCall = () => {
   }
 
   const handleinsertfunction = async record => {
-    setLoading(true)
+    if (nrSubmitting) return
+    setNrSubmitting(true)
     const newInsert = {
       caInternal: 0,
       caVendor: 0,
@@ -396,23 +373,28 @@ const InspectionCall = () => {
       qHdrId: QtyHdrId,
       poId: record?.poId,
     }
-    const httpget = await InspectionReportService({
-      requestPath: 'insertInspHdrAndDtl',
-      requestData: newInsert,
-    })
-
-    if (httpget.responseCode === '200') {
-      message.success(httpget.responseMessage)
-      const updatedrecord = { ...record, qiHdrId: httpget?.responseDataMessage }
-      await handleQCInsapproval(updatedrecord)
-      getOnloadtabledata()
-    } else {
-      message.error(httpget.responseMessage)
+    try {
+      // the server now saves AND completes "QC Not req" in this one call
+      const httpget = await InspectionReportService({
+        requestPath: 'insertInspHdrAndDtl',
+        requestData: newInsert,
+      })
+      if (httpget?.responseCode === '200') {
+        message.success(httpget.responseMessage)
+        updateTailView()
+      } else {
+        message.error(httpget?.responseMessage || 'QC Not req failed. Please refresh and check.')
+      }
+      // refresh in both cases so a stale row can't be clicked again
+      await getOnloadtabledata()
+    } finally {
+      setNrSubmitting(false)
     }
-    setLoading(false)
   }
 
   const handleselectedfunction = async record => {
+    if (nrSubmitting) return
+    setNrSubmitting(true)
     const newInsert = {
       caInternal: 0,
       caVendor: 0,
@@ -462,17 +444,21 @@ const InspectionCall = () => {
       qHdrId: QtyHdrId,
       poId: record?.poId,
     }
-    const httpget = await InspectionReportService({
-      requestPath: 'insertInspHdrAndDtl',
-      requestData: newInsert,
-    })
-    if (httpget.responseCode === '200') {
-      message.success(httpget.responseMessage)
-      const updatedrecord = { ...record, qiHdrId: httpget?.responseDataMessage }
-      handleSelectedQCInsapproval(updatedrecord)
-      getOnloadtabledata()
-    } else {
-      message.error(httpget.responseMessage)
+    try {
+      const httpget = await InspectionReportService({
+        requestPath: 'insertInspHdrAndDtl',
+        requestData: newInsert,
+      })
+      if (httpget?.responseCode === '200') {
+        message.success(httpget.responseMessage)
+        const updatedrecord = { ...record, qiHdrId: httpget?.responseDataMessage }
+        await handleSelectedQCInsapproval(updatedrecord)
+      } else {
+        message.error(httpget?.responseMessage || 'Cancel failed. Please refresh and check.')
+      }
+      await getOnloadtabledata()
+    } finally {
+      setNrSubmitting(false)
     }
   }
 
@@ -788,7 +774,7 @@ const InspectionCall = () => {
                         setPopoverVisible(false)
                         setQCBtn(true)
                       }}
-                      disabled={QCBtn}
+                      disabled={QCBtn || nrSubmitting}
                     >
                       Yes
                     </Button>
@@ -799,7 +785,7 @@ const InspectionCall = () => {
               onVisibleChange={visible => setPopoverVisible(visible ? index : null)}
               trigger="click"
             >
-              <Button disabled={loading} icon={<CheckOutlined />} type="primary" />
+              <Button disabled={loading || nrSubmitting} icon={<CheckOutlined />} type="primary" />
             </Popover>
           )}
           {record && record?.isnrFlag === 1 && record?.nrflag !== 1 && (
@@ -816,7 +802,7 @@ const InspectionCall = () => {
                         setcancelPopoverVisible(false)
                         setQCBtn(true)
                       }}
-                      disabled={QCBtn}
+                      disabled={QCBtn || nrSubmitting}
                     >
                       Yes
                     </Button>
@@ -827,7 +813,7 @@ const InspectionCall = () => {
               onVisibleChange={visible => setcancelPopoverVisible(visible ? index : null)}
               trigger="click"
             >
-              <Button disabled={loading} icon={<CloseOutlined />} type="primary" />
+              <Button disabled={loading || nrSubmitting} icon={<CloseOutlined />} type="primary" />
             </Popover>
           )}
           {record &&
@@ -946,6 +932,26 @@ const InspectionCall = () => {
   }
   return (
     <div className="my-3">
+      {/* full-screen wait while QC Not req / Cancel is saving - blocks clicks on other rows and
+          on the same row from a not-yet-refreshed list */}
+      {nrSubmitting ? (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 2000,
+            background: 'rgba(255, 255, 255, 0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Spin size="large" tip="Updating QC, please wait..." />
+        </div>
+      ) : null}
       <div className="d-flex justify-content-between pb-2">
         <h5>Inspection Report</h5>
         {showStaging === '1' ? (

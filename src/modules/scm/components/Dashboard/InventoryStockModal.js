@@ -348,7 +348,7 @@ const indentCode1 = []
   const handleExportCSV = () => {
     const cleanedData = cleanupDataSource(projectData)
     const csvData = convertToCSV(cleanedData)
-    downloadCSV(csvData, `Pending_Indent_Details-${currentDateTime}.csv`)
+    downloadCSV(csvData, `Inventory_Stock_${currentDateTime}.csv`)
   }
 
   const cleanupDataSource = dataSource => {

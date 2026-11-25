@@ -211,7 +211,7 @@ const BalanceAvailable = ({ project }) => {
   const handleExportCSV = () => {
     const cleanedData = cleanupDataSource(project)
     const csvData = convertToCSV(cleanedData)
-    downloadCSV(csvData, `Vendor_Payment_Staus_${currentDateTime}.csv`)
+    downloadCSV(csvData, `Vendor_Payment_Status_${currentDateTime}.csv`)
   }
 
   return (
